@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart'; // Para generar IDs únicos
-import 'package:drift/drift.dart' as drift; // Para usar 'Value'
+import 'package:uuid/uuid.dart';
+import 'package:drift/drift.dart' as drift;
 import '../../../core/database/database.dart';
-import '../../../providers.dart'; // Para acceder a la base de datos
+import '../../../providers.dart';
 
 class AddFeligresScreen extends ConsumerStatefulWidget {
   const AddFeligresScreen({super.key});
@@ -17,14 +17,11 @@ class _AddFeligresScreenState extends ConsumerState<AddFeligresScreen> {
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
 
-  // Función para guardar en la Base de Datos Local
-  Future<void> _guardarFeligres() async {
+  Future<void> _addFeligres() async {
     if (_formKey.currentState!.validate()) {
       final database = ref.read(databaseProvider);
-      final uuid = const Uuid()
-          .v4(); // Generamos un ID único universal (Ej: a1b2-c3d4...)
+      final uuid = const Uuid().v4();
 
-      // Insertamos en la tabla 'Feligreses'
       await database
           .into(database.feligreses)
           .insert(
@@ -32,17 +29,15 @@ class _AddFeligresScreenState extends ConsumerState<AddFeligresScreen> {
               id: drift.Value(uuid),
               nombre: drift.Value(_nombreController.text),
               telefono: drift.Value(_telefonoController.text),
-              syncStatus: const drift.Value(
-                0,
-              ), // 0 = Pendiente de subir a la nube
+              syncStatus: const drift.Value(0),
             ),
           );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('¡Feligrés guardado localmente!')),
-        );
-        Navigator.pop(context); // Volver atrás
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('¡Feligrés guardado!')));
+        Navigator.pop(context);
       }
     }
   }
@@ -82,9 +77,9 @@ class _AddFeligresScreenState extends ConsumerState<AddFeligresScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _guardarFeligres,
+                  onPressed: _addFeligres,
                   icon: const Icon(Icons.save),
-                  label: const Text('GUARDAR EN DISPOSITIVO'),
+                  label: const Text('GUARDAR'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,

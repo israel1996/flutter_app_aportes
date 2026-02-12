@@ -8,54 +8,48 @@ import '../../tithes/screens/add_aporte_screen.dart';
 import '../../tithes/screens/history_screen.dart';
 import '../../auth/providers/auth_provider.dart';
 
-// We change to ConsumerWidget to "consume" the database stream
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. We ask the database for the live stream of members
     final database = ref.watch(databaseProvider);
     final stream = database.watchAllFeligreses();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Church Dashboard'),
+        title: const Text('Mis Aportes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          // SYNC BUTTON
+          // Sync Button
           IconButton(
-            icon: const Icon(Icons.sync), // Changed icon to 'sync'
-            tooltip: 'Sync Data',
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar',
             onPressed: () async {
               final database = ref.read(databaseProvider);
               final syncService = SyncService(database);
 
-              // Show "Processing" snackbar
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Row(
                     children: [
                       CircularProgressIndicator(color: Colors.white),
                       SizedBox(width: 20),
-                      Text('Synchronizing Cloud & Local...'),
+                      Text('Sincronizando...'),
                     ],
                   ),
-                  duration: Duration(minutes: 1), // Keep it open
+                  duration: Duration(minutes: 1),
                 ),
               );
 
               try {
-                // RUN THE FULL SYNC
                 await syncService.syncAll();
 
                 if (context.mounted) {
-                  // Hide previous snackbar
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                  // Show Success
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Sync Complete! Data is up to date.'),
+                      content: Text('Sincronización completa'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -65,7 +59,7 @@ class HomeScreen extends ConsumerWidget {
                   ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Sync Error: $e'),
+                      content: Text('Error de sincronización: $e'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -73,7 +67,7 @@ class HomeScreen extends ConsumerWidget {
               }
             },
           ),
-          // LOGOUT BUTTON
+          // Logout Button
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
@@ -84,14 +78,12 @@ class HomeScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // --- TOP SECTION: BUTTONS ---
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
                 const Icon(Icons.church, size: 50, color: Colors.indigo),
                 const SizedBox(height: 10),
-                // --- FINANCIAL SUMMARY CARD ---
                 StreamBuilder<double>(
                   stream: ref.watch(databaseProvider).watchTotalIncome(),
                   builder: (context, snapshot) {
@@ -104,7 +96,7 @@ class HomeScreen extends ConsumerWidget {
                         child: Column(
                           children: [
                             const Text(
-                              'Recaudación Total',
+                              'Total',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 16,
@@ -136,7 +128,7 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                     icon: const Icon(Icons.person_add),
-                    label: const Text('Register Member'),
+                    label: const Text('Registrar Feligres'),
                   ),
                 ),
                 SizedBox(
@@ -152,7 +144,7 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                     icon: const Icon(Icons.monetization_on),
-                    label: const Text('Register Tithe/Offering'),
+                    label: const Text('Registrar Aporte'),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -183,31 +175,28 @@ class HomeScreen extends ConsumerWidget {
           const Padding(
             padding: EdgeInsets.all(8.0),
             child: Text(
-              "Recent Members (Local DB)",
+              "Feligreses Recientes",
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
             ),
           ),
 
-          // --- BOTTOM SECTION: THE LIST ---
           Expanded(
             child: StreamBuilder<List<Feligrese>>(
               stream: stream,
               builder: (context, snapshot) {
-                // Case 1: Loading
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                // Case 2: Error
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
-
-                // Case 3: Data received
                 final feligreses = snapshot.data ?? [];
 
                 if (feligreses.isEmpty) {
-                  return const Center(child: Text('No members yet. Add one!'));
+                  return const Center(
+                    child: Text('No hay feligreses registrados!'),
+                  );
                 }
 
                 return ListView.builder(
@@ -216,21 +205,13 @@ class HomeScreen extends ConsumerWidget {
                     final person = feligreses[index];
                     return ListTile(
                       leading: CircleAvatar(
-                        child: Text(
-                          person.nombre[0].toUpperCase(),
-                        ), // First letter of name
+                        child: Text(person.nombre[0].toUpperCase()),
                       ),
                       title: Text(person.nombre),
-                      subtitle: Text(person.telefono ?? 'No phone'),
+                      subtitle: Text(person.telefono ?? 'Sin telefono'),
                       trailing: person.syncStatus == 0
-                          ? const Icon(
-                              Icons.cloud_off,
-                              color: Colors.orange,
-                            ) // Not synced
-                          : const Icon(
-                              Icons.cloud_done,
-                              color: Colors.green,
-                            ), // Synced
+                          ? const Icon(Icons.cloud_off, color: Colors.orange)
+                          : const Icon(Icons.cloud_done, color: Colors.green),
                     );
                   },
                 );

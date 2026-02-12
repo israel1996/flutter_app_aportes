@@ -16,16 +16,13 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
   final _formKey = GlobalKey<FormState>();
   final _montoController = TextEditingController();
 
-  // State variables
   String? _selectedFeligresId;
-  String _tipoAporte = 'Diezmo'; // Default value
+  String _tipoAporte = 'Diezmo';
 
-  // Dropdown options
   final List<String> _tipos = ['Diezmo', 'Ofrenda', 'Pro-Templo', 'Misiones'];
 
   @override
   Widget build(BuildContext context) {
-    // 1. We get the database connection
     final database = ref.watch(databaseProvider);
 
     return Scaffold(
@@ -43,8 +40,6 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
               ),
               const SizedBox(height: 10),
 
-              // 2. THE DROPDOWN OF MEMBERS (Async)
-              // We use a StreamBuilder to listen to the list of members live
               StreamBuilder<List<Feligrese>>(
                 stream: database.watchAllFeligreses(),
                 builder: (context, snapshot) {
@@ -86,7 +81,6 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
 
               const SizedBox(height: 20),
 
-              // 3. AMOUNT FIELD
               TextFormField(
                 controller: _montoController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -107,7 +101,6 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
 
               const SizedBox(height: 20),
 
-              // 4. TYPE SELECTOR (Chips)
               const Text(
                 'Tipo de Aporte:',
                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -132,14 +125,13 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
 
               const Spacer(),
 
-              // 5. SAVE BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: _guardarAporte,
+                  onPressed: _addAporte,
                   icon: const Icon(Icons.save_alt),
-                  label: const Text('GUARDAR APORTE'),
+                  label: const Text('GUARDAR'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green[700],
                     foregroundColor: Colors.white,
@@ -153,12 +145,11 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
     );
   }
 
-  Future<void> _guardarAporte() async {
+  Future<void> _addAporte() async {
     if (_formKey.currentState!.validate()) {
       final database = ref.read(databaseProvider);
       final uuid = const Uuid().v4();
 
-      // Insert into 'Aportes' table
       await database
           .into(database.aportes)
           .insert(
@@ -168,7 +159,7 @@ class _AddAporteScreenState extends ConsumerState<AddAporteScreen> {
               monto: drift.Value(double.parse(_montoController.text)),
               tipo: drift.Value(_tipoAporte),
               fecha: drift.Value(DateTime.now()),
-              syncStatus: const drift.Value(0), // 0 = Not Synced yet
+              syncStatus: const drift.Value(0),
             ),
           );
 

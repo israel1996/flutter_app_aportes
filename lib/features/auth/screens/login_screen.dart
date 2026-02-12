@@ -22,8 +22,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
-      // No need to navigate manually.
-      // The 'main.dart' listener will detect the login and switch screens automatically.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -55,7 +53,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const Icon(Icons.church, size: 64, color: Colors.indigo),
                   const SizedBox(height: 16),
                   const Text(
-                    'Ministerio Digital',
+                    'Mis Aportes',
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),

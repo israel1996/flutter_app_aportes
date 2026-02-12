@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // For date and money formatting
+import 'package:intl/intl.dart';
 import '../../../providers.dart';
 import '../../../core/database/database.dart';
 
@@ -59,7 +59,7 @@ class HistoryScreen extends ConsumerWidget {
                   ),
                 ),
                 title: Text(
-                  item.feligres.nombre, // We can see the name now!
+                  item.feligres.nombre,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 subtitle: Text(
@@ -77,7 +77,6 @@ class HistoryScreen extends ConsumerWidget {
                         color: Colors.green,
                       ),
                     ),
-                    // Small icon to show sync status
                     Icon(
                       item.aporte.syncStatus == 0
                           ? Icons.cloud_off

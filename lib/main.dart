@@ -7,8 +7,6 @@ import 'features/auth/screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize the Cloud Connection
   await Supabase.initialize(
     url: 'https://khfuugwqxwvzkewuudjl.supabase.co',
     anonKey: 'sb_publishable_iLhG2G-qh2__Ns_xY2H4lA_9H6jzwTN',
@@ -21,24 +19,22 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the authentication state live
     final authStateAsync = ref.watch(authStateProvider);
 
     return MaterialApp(
-      title: 'Gestión de Diezmos',
+      title: 'Gestión de Aportes',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      // LOGIC TO SWITCH SCREENS
       home: authStateAsync.when(
         data: (state) {
           final session = state.session;
           if (session != null) {
-            return const HomeScreen(); // Has session -> Go Home
+            return const HomeScreen();
           } else {
-            return const LoginScreen(); // No session -> Go Login
+            return const LoginScreen();
           }
         },
         loading: () =>
