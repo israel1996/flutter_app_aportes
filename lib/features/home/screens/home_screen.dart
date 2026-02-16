@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/auth/screens/login_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers.dart';
 import '../../../core/database/database.dart';
@@ -7,12 +8,103 @@ import '../../sync/services/sync_service.dart';
 import '../../tithes/screens/add_aporte_screen.dart';
 import '../../tithes/screens/history_screen.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/data/local_auth_service.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndSetupPin();
+    });
+  }
+
+  Future<void> _checkAndSetupPin() async {
+    final authService = LocalAuthService();
+    final hasPin = await authService.hasPinConfigured();
+
+    if (!hasPin && mounted) {
+      _showSetupPinDialog();
+    }
+  }
+
+  void _showSetupPinDialog() {
+    final pinController = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text(
+            'Configurar PIN de Seguridad',
+            style: TextStyle(color: Colors.indigo),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Para acceder a tus datos sin internet en el futuro, por favor crea un PIN de acceso de 4 dígitos para este dispositivo.',
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: pinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Nuevo PIN',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () async {
+                if (pinController.text.length >= 4) {
+                  await LocalAuthService().setPin(pinController.text);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('PIN configurado exitosamente'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('El PIN debe tener al menos 4 dígitos.'),
+                    ),
+                  );
+                }
+              },
+              child: const Text('GUARDAR PIN'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);
     final stream = database.watchAllFeligreses();
 
@@ -70,8 +162,18 @@ class HomeScreen extends ConsumerWidget {
           // Logout Button
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () {
-              ref.read(authServiceProvider).signOut();
+            tooltip: 'Cerrar Sesión',
+            onPressed: () async {
+              final authService = ref.read(authServiceProvider);
+
+              if (authService.currentUser == null) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              } else {
+                await authService.signOut();
+              }
             },
           ),
         ],

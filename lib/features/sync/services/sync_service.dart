@@ -9,33 +9,29 @@ class SyncService {
 
   SyncService(this.localDb) : cloudDb = Supabase.instance.client;
 
-  // --- MAIN FUNCTION: SYNC EVERYTHING ---
   Future<void> syncAll() async {
-    // 1. First, send our changes (Push)
+    final session = cloudDb.auth.currentSession;
+    if (session == null || session.isExpired) {
+      throw Exception(
+        "Modo Offline activo. Por favor, cierra sesión y vuelve a iniciar sesión para sincronizar.",
+      );
+    }
     await pushLocalChanges();
-
-    // 2. Then, download external changes (Pull)
     await pullFromCloud();
   }
 
-  // --- PART A: PUSH (Local -> Cloud) ---
   Future<void> pushLocalChanges() async {
-    // 1. Get Pending Members
     final pendingMembers = await (localDb.select(
       localDb.feligreses,
     )..where((tbl) => tbl.syncStatus.equals(0))).get();
 
     for (var person in pendingMembers) {
       try {
-        // Upsert to Supabase (User .upsert to avoid errors if ID exists)
         await cloudDb.from('feligreses').upsert({
           'id': person.id,
           'nombre': person.nombre,
           'telefono': person.telefono,
-          // We can add 'updated_at': DateTime.now().toIso8601String(),
         });
-
-        // Mark as Synced locally
         await (localDb.update(localDb.feligreses)
               ..where((tbl) => tbl.id.equals(person.id)))
             .write(FeligresesCompanion(syncStatus: const drift.Value(1)));
