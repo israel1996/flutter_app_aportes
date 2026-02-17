@@ -8,7 +8,6 @@ import '../../sync/services/sync_service.dart';
 import '../../tithes/screens/add_aporte_screen.dart';
 import '../../tithes/screens/history_screen.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../auth/data/local_auth_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -19,91 +18,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndSetupPin();
-    });
-  }
-
-  Future<void> _checkAndSetupPin() async {
-    final authService = LocalAuthService();
-    final hasPin = await authService.hasPinConfigured();
-
-    if (!hasPin && mounted) {
-      _showSetupPinDialog();
-    }
-  }
-
-  void _showSetupPinDialog() {
-    final pinController = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Text(
-            'Configurar PIN de Seguridad',
-            style: TextStyle(color: Colors.indigo),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Para acceder a tus datos sin internet en el futuro, por favor crea un PIN de acceso de 4 dígitos para este dispositivo.',
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: pinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Nuevo PIN',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.indigo,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (pinController.text.length >= 4) {
-                  await LocalAuthService().setPin(pinController.text);
-
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('PIN configurado exitosamente'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('El PIN debe tener al menos 4 dígitos.'),
-                    ),
-                  );
-                }
-              },
-              child: const Text('GUARDAR PIN'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);
     final stream = database.watchAllFeligreses();
@@ -113,7 +27,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('Mis Aportes'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          // Sync Button
           IconButton(
             icon: const Icon(Icons.sync),
             tooltip: 'Sincronizar',
@@ -159,20 +72,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               }
             },
           ),
-          // Logout Button
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar Sesión',
             onPressed: () async {
               final authService = ref.read(authServiceProvider);
+              try {
+                await authService.signOut();
+              } catch (e) {
+                debugPrint(
+                  "No se pudo cerrar sesión en Supabase (probablemente sin conexión)",
+                );
+              }
 
-              if (authService.currentUser == null) {
-                Navigator.pushReplacement(
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
                 );
-              } else {
-                await authService.signOut();
               }
             },
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/auth/data/offline_login_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
-import '../data/local_auth_service.dart';
 import '../../home/screens/home_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -19,144 +19,76 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _login() async {
     setState(() => _isLoading = true);
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
     try {
       final authService = ref.read(authServiceProvider);
-      await authService.signIn(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-    } on AuthException catch (e) {
-      final errorMessage = e.message.toLowerCase();
+      await authService.signIn(email, password);
 
-      if (errorMessage.contains('network') ||
-          errorMessage.contains('host lookup') ||
-          errorMessage.contains('fetch') ||
-          errorMessage.contains('xmlhttprequest') ||
-          errorMessage.contains('socket')) {
-        if (mounted) _showOfflineDialog("Sin conexión a Internet");
+      await OfflineLoginService().saveCredentials(email, password);
+
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
+      }
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('network') ||
+          msg.contains('socket') ||
+          msg.contains('host')) {
+        await _attemptOfflineLogin(email, password);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Error: ${e.message}'),
-              backgroundColor: Colors.red.shade700,
+              backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
-      if (mounted) {
-        _showOfflineDialog(e.toString());
-      }
+      await _attemptOfflineLogin(email, password);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _showOfflineDialog(String error) async {
-    final hasPin = await LocalAuthService().hasPinConfigured();
-    final pinController = TextEditingController();
+  Future<void> _attemptOfflineLogin(String email, String password) async {
+    final isValid = await OfflineLoginService().validateOffline(
+      email,
+      password,
+    );
 
-    if (!hasPin) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Acceso sin conexión no disponible. Debes iniciar sesión con internet al menos una vez para configurar tu dispositivo.',
-            ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
+    if (isValid && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sin internet. Accediendo con credenciales guardadas...',
           ),
-        );
-      }
-      return;
-    }
-
-    final isLocked = await LocalAuthService().isLockedOut();
-
-    if (isLocked) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Dispositivo bloqueado. Demasiados intentos fallidos. Por favor, conéctese a internet e inicie sesión con su correo electrónico.',
-            ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
-          ),
-        );
-      }
-      return;
-    }
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Error de Conexión'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('No se pudo conectar al servidor.'),
-              Text(
-                'Error: $error',
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Ingrese el PIN de emergencia para acceder localmente:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: pinController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'PIN Local',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final isCorrect = await LocalAuthService().verifyPin(
-                  pinController.text,
-                );
-
-                if (isCorrect) {
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    );
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('⚠ Accediendo en MODO OFFLINE'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                  }
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('PIN Incorrecto')),
-                    );
-                  }
-                }
-              },
-              child: const Text('ENTRAR OFFLINE'),
-            ),
-          ],
+          backgroundColor: Colors.orange,
         ),
       );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
+      );
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sin internet y credenciales no válidas.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
