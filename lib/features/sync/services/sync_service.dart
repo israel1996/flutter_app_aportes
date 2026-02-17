@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:drift/drift.dart' as drift; // Alias for Drift helpers
-import '../../../core/database/database.dart'; // Check your path
+import 'package:drift/drift.dart' as drift;
+import '../../../core/database/database.dart';
 
 class SyncService {
   final AppDatabase localDb;

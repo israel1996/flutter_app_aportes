@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/features/auth/screens/login_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,36 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndSync();
+    });
+  }
+
+  Future<void> _checkAndSync() async {
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasInternet =
+        connectivity.contains(ConnectivityResult.mobile) ||
+        connectivity.contains(ConnectivityResult.wifi) ||
+        connectivity.contains(ConnectivityResult.ethernet);
+
+    if (!hasInternet) return;
+    final authService = ref.read(authServiceProvider);
+    if (authService.currentUser == null) return;
+    debugPrint("🚀 Home cargado: Verificando datos pendientes...");
+    try {
+      final database = ref.read(databaseProvider);
+      final syncService = SyncService(database);
+
+      await syncService.syncAll();
+      debugPrint("✅ Sincronización completa.");
+    } catch (e) {
+      debugPrint("❌ Error de sincronización: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);

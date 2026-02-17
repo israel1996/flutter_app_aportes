@@ -1,4 +1,6 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' as drift;
@@ -16,6 +18,19 @@ class _AddFeligresScreenState extends ConsumerState<AddFeligresScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
+
+  Future<void> _trySyncAfterSave(WidgetRef ref) async {
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasInternet =
+        connectivity.contains(ConnectivityResult.mobile) ||
+        connectivity.contains(ConnectivityResult.wifi);
+
+    if (hasInternet) {
+      debugPrint("Nuevo registro: Intentando sincronización automática...");
+      final database = ref.read(databaseProvider);
+      await SyncService(database).syncAll();
+    }
+  }
 
   Future<void> _addFeligres() async {
     if (_formKey.currentState!.validate()) {
@@ -38,6 +53,7 @@ class _AddFeligresScreenState extends ConsumerState<AddFeligresScreen> {
           context,
         ).showSnackBar(const SnackBar(content: Text('¡Feligrés guardado!')));
         Navigator.pop(context);
+        _trySyncAfterSave(ref);
       }
     }
   }
