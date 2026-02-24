@@ -31,6 +31,27 @@ class $FeligresesTable extends Feligreses
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _fechaNacimientoMeta = const VerificationMeta(
+    'fechaNacimiento',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaNacimiento =
+      GeneratedColumn<DateTime>(
+        'fecha_nacimiento',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _generoMeta = const VerificationMeta('genero');
+  @override
+  late final GeneratedColumn<String> genero = GeneratedColumn<String>(
+    'genero',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _telefonoMeta = const VerificationMeta(
     'telefono',
   );
@@ -41,6 +62,16 @@ class $FeligresesTable extends Feligreses
     true,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
+  );
+  static const VerificationMeta _activoMeta = const VerificationMeta('activo');
+  @override
+  late final GeneratedColumn<int> activo = GeneratedColumn<int>(
+    'activo',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
   );
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
@@ -55,7 +86,15 @@ class $FeligresesTable extends Feligreses
     defaultValue: const Constant(0),
   );
   @override
-  List<GeneratedColumn> get $columns => [id, nombre, telefono, syncStatus];
+  List<GeneratedColumn> get $columns => [
+    id,
+    nombre,
+    fechaNacimiento,
+    genero,
+    telefono,
+    activo,
+    syncStatus,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -81,10 +120,31 @@ class $FeligresesTable extends Feligreses
     } else if (isInserting) {
       context.missing(_nombreMeta);
     }
+    if (data.containsKey('fecha_nacimiento')) {
+      context.handle(
+        _fechaNacimientoMeta,
+        fechaNacimiento.isAcceptableOrUnknown(
+          data['fecha_nacimiento']!,
+          _fechaNacimientoMeta,
+        ),
+      );
+    }
+    if (data.containsKey('genero')) {
+      context.handle(
+        _generoMeta,
+        genero.isAcceptableOrUnknown(data['genero']!, _generoMeta),
+      );
+    }
     if (data.containsKey('telefono')) {
       context.handle(
         _telefonoMeta,
         telefono.isAcceptableOrUnknown(data['telefono']!, _telefonoMeta),
+      );
+    }
+    if (data.containsKey('activo')) {
+      context.handle(
+        _activoMeta,
+        activo.isAcceptableOrUnknown(data['activo']!, _activoMeta),
       );
     }
     if (data.containsKey('sync_status')) {
@@ -110,10 +170,22 @@ class $FeligresesTable extends Feligreses
         DriftSqlType.string,
         data['${effectivePrefix}nombre'],
       )!,
+      fechaNacimiento: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_nacimiento'],
+      ),
+      genero: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}genero'],
+      ),
       telefono: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}telefono'],
       ),
+      activo: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}activo'],
+      )!,
       syncStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sync_status'],
@@ -130,12 +202,18 @@ class $FeligresesTable extends Feligreses
 class Feligrese extends DataClass implements Insertable<Feligrese> {
   final String id;
   final String nombre;
+  final DateTime? fechaNacimiento;
+  final String? genero;
   final String? telefono;
+  final int activo;
   final int syncStatus;
   const Feligrese({
     required this.id,
     required this.nombre,
+    this.fechaNacimiento,
+    this.genero,
     this.telefono,
+    required this.activo,
     required this.syncStatus,
   });
   @override
@@ -143,9 +221,16 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['nombre'] = Variable<String>(nombre);
+    if (!nullToAbsent || fechaNacimiento != null) {
+      map['fecha_nacimiento'] = Variable<DateTime>(fechaNacimiento);
+    }
+    if (!nullToAbsent || genero != null) {
+      map['genero'] = Variable<String>(genero);
+    }
     if (!nullToAbsent || telefono != null) {
       map['telefono'] = Variable<String>(telefono);
     }
+    map['activo'] = Variable<int>(activo);
     map['sync_status'] = Variable<int>(syncStatus);
     return map;
   }
@@ -154,9 +239,16 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     return FeligresesCompanion(
       id: Value(id),
       nombre: Value(nombre),
+      fechaNacimiento: fechaNacimiento == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaNacimiento),
+      genero: genero == null && nullToAbsent
+          ? const Value.absent()
+          : Value(genero),
       telefono: telefono == null && nullToAbsent
           ? const Value.absent()
           : Value(telefono),
+      activo: Value(activo),
       syncStatus: Value(syncStatus),
     );
   }
@@ -169,7 +261,10 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     return Feligrese(
       id: serializer.fromJson<String>(json['id']),
       nombre: serializer.fromJson<String>(json['nombre']),
+      fechaNacimiento: serializer.fromJson<DateTime?>(json['fechaNacimiento']),
+      genero: serializer.fromJson<String?>(json['genero']),
       telefono: serializer.fromJson<String?>(json['telefono']),
+      activo: serializer.fromJson<int>(json['activo']),
       syncStatus: serializer.fromJson<int>(json['syncStatus']),
     );
   }
@@ -179,7 +274,10 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'nombre': serializer.toJson<String>(nombre),
+      'fechaNacimiento': serializer.toJson<DateTime?>(fechaNacimiento),
+      'genero': serializer.toJson<String?>(genero),
       'telefono': serializer.toJson<String?>(telefono),
+      'activo': serializer.toJson<int>(activo),
       'syncStatus': serializer.toJson<int>(syncStatus),
     };
   }
@@ -187,19 +285,32 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
   Feligrese copyWith({
     String? id,
     String? nombre,
+    Value<DateTime?> fechaNacimiento = const Value.absent(),
+    Value<String?> genero = const Value.absent(),
     Value<String?> telefono = const Value.absent(),
+    int? activo,
     int? syncStatus,
   }) => Feligrese(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
+    fechaNacimiento: fechaNacimiento.present
+        ? fechaNacimiento.value
+        : this.fechaNacimiento,
+    genero: genero.present ? genero.value : this.genero,
     telefono: telefono.present ? telefono.value : this.telefono,
+    activo: activo ?? this.activo,
     syncStatus: syncStatus ?? this.syncStatus,
   );
   Feligrese copyWithCompanion(FeligresesCompanion data) {
     return Feligrese(
       id: data.id.present ? data.id.value : this.id,
       nombre: data.nombre.present ? data.nombre.value : this.nombre,
+      fechaNacimiento: data.fechaNacimiento.present
+          ? data.fechaNacimiento.value
+          : this.fechaNacimiento,
+      genero: data.genero.present ? data.genero.value : this.genero,
       telefono: data.telefono.present ? data.telefono.value : this.telefono,
+      activo: data.activo.present ? data.activo.value : this.activo,
       syncStatus: data.syncStatus.present
           ? data.syncStatus.value
           : this.syncStatus,
@@ -211,41 +322,64 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     return (StringBuffer('Feligrese(')
           ..write('id: $id, ')
           ..write('nombre: $nombre, ')
+          ..write('fechaNacimiento: $fechaNacimiento, ')
+          ..write('genero: $genero, ')
           ..write('telefono: $telefono, ')
+          ..write('activo: $activo, ')
           ..write('syncStatus: $syncStatus')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, nombre, telefono, syncStatus);
+  int get hashCode => Object.hash(
+    id,
+    nombre,
+    fechaNacimiento,
+    genero,
+    telefono,
+    activo,
+    syncStatus,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Feligrese &&
           other.id == this.id &&
           other.nombre == this.nombre &&
+          other.fechaNacimiento == this.fechaNacimiento &&
+          other.genero == this.genero &&
           other.telefono == this.telefono &&
+          other.activo == this.activo &&
           other.syncStatus == this.syncStatus);
 }
 
 class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   final Value<String> id;
   final Value<String> nombre;
+  final Value<DateTime?> fechaNacimiento;
+  final Value<String?> genero;
   final Value<String?> telefono;
+  final Value<int> activo;
   final Value<int> syncStatus;
   final Value<int> rowid;
   const FeligresesCompanion({
     this.id = const Value.absent(),
     this.nombre = const Value.absent(),
+    this.fechaNacimiento = const Value.absent(),
+    this.genero = const Value.absent(),
     this.telefono = const Value.absent(),
+    this.activo = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FeligresesCompanion.insert({
     required String id,
     required String nombre,
+    this.fechaNacimiento = const Value.absent(),
+    this.genero = const Value.absent(),
     this.telefono = const Value.absent(),
+    this.activo = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -253,14 +387,20 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   static Insertable<Feligrese> custom({
     Expression<String>? id,
     Expression<String>? nombre,
+    Expression<DateTime>? fechaNacimiento,
+    Expression<String>? genero,
     Expression<String>? telefono,
+    Expression<int>? activo,
     Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (nombre != null) 'nombre': nombre,
+      if (fechaNacimiento != null) 'fecha_nacimiento': fechaNacimiento,
+      if (genero != null) 'genero': genero,
       if (telefono != null) 'telefono': telefono,
+      if (activo != null) 'activo': activo,
       if (syncStatus != null) 'sync_status': syncStatus,
       if (rowid != null) 'rowid': rowid,
     });
@@ -269,14 +409,20 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   FeligresesCompanion copyWith({
     Value<String>? id,
     Value<String>? nombre,
+    Value<DateTime?>? fechaNacimiento,
+    Value<String?>? genero,
     Value<String?>? telefono,
+    Value<int>? activo,
     Value<int>? syncStatus,
     Value<int>? rowid,
   }) {
     return FeligresesCompanion(
       id: id ?? this.id,
       nombre: nombre ?? this.nombre,
+      fechaNacimiento: fechaNacimiento ?? this.fechaNacimiento,
+      genero: genero ?? this.genero,
       telefono: telefono ?? this.telefono,
+      activo: activo ?? this.activo,
       syncStatus: syncStatus ?? this.syncStatus,
       rowid: rowid ?? this.rowid,
     );
@@ -291,8 +437,17 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     if (nombre.present) {
       map['nombre'] = Variable<String>(nombre.value);
     }
+    if (fechaNacimiento.present) {
+      map['fecha_nacimiento'] = Variable<DateTime>(fechaNacimiento.value);
+    }
+    if (genero.present) {
+      map['genero'] = Variable<String>(genero.value);
+    }
     if (telefono.present) {
       map['telefono'] = Variable<String>(telefono.value);
+    }
+    if (activo.present) {
+      map['activo'] = Variable<int>(activo.value);
     }
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
@@ -308,7 +463,10 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     return (StringBuffer('FeligresesCompanion(')
           ..write('id: $id, ')
           ..write('nombre: $nombre, ')
+          ..write('fechaNacimiento: $fechaNacimiento, ')
+          ..write('genero: $genero, ')
           ..write('telefono: $telefono, ')
+          ..write('activo: $activo, ')
           ..write('syncStatus: $syncStatus, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -369,7 +527,8 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
     aliasedName,
     false,
     type: DriftSqlType.dateTime,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    clientDefault: () => DateTime.now(),
   );
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
@@ -438,8 +597,6 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
         _fechaMeta,
         fecha.isAcceptableOrUnknown(data['fecha']!, _fechaMeta),
       );
-    } else if (isInserting) {
-      context.missing(_fechaMeta);
     }
     if (data.containsKey('sync_status')) {
       context.handle(
@@ -634,14 +791,13 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     required String feligresId,
     required double monto,
     required String tipo,
-    required DateTime fecha,
+    this.fecha = const Value.absent(),
     this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        feligresId = Value(feligresId),
        monto = Value(monto),
-       tipo = Value(tipo),
-       fecha = Value(fecha);
+       tipo = Value(tipo);
   static Insertable<Aporte> custom({
     Expression<String>? id,
     Expression<String>? feligresId,
@@ -740,7 +896,10 @@ typedef $$FeligresesTableCreateCompanionBuilder =
     FeligresesCompanion Function({
       required String id,
       required String nombre,
+      Value<DateTime?> fechaNacimiento,
+      Value<String?> genero,
       Value<String?> telefono,
+      Value<int> activo,
       Value<int> syncStatus,
       Value<int> rowid,
     });
@@ -748,7 +907,10 @@ typedef $$FeligresesTableUpdateCompanionBuilder =
     FeligresesCompanion Function({
       Value<String> id,
       Value<String> nombre,
+      Value<DateTime?> fechaNacimiento,
+      Value<String?> genero,
       Value<String?> telefono,
+      Value<int> activo,
       Value<int> syncStatus,
       Value<int> rowid,
     });
@@ -796,8 +958,23 @@ class $$FeligresesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get fechaNacimiento => $composableBuilder(
+    column: $table.fechaNacimiento,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get genero => $composableBuilder(
+    column: $table.genero,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get telefono => $composableBuilder(
     column: $table.telefono,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get activo => $composableBuilder(
+    column: $table.activo,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -851,8 +1028,23 @@ class $$FeligresesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get fechaNacimiento => $composableBuilder(
+    column: $table.fechaNacimiento,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get genero => $composableBuilder(
+    column: $table.genero,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get telefono => $composableBuilder(
     column: $table.telefono,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get activo => $composableBuilder(
+    column: $table.activo,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -877,8 +1069,19 @@ class $$FeligresesTableAnnotationComposer
   GeneratedColumn<String> get nombre =>
       $composableBuilder(column: $table.nombre, builder: (column) => column);
 
+  GeneratedColumn<DateTime> get fechaNacimiento => $composableBuilder(
+    column: $table.fechaNacimiento,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get genero =>
+      $composableBuilder(column: $table.genero, builder: (column) => column);
+
   GeneratedColumn<String> get telefono =>
       $composableBuilder(column: $table.telefono, builder: (column) => column);
+
+  GeneratedColumn<int> get activo =>
+      $composableBuilder(column: $table.activo, builder: (column) => column);
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
@@ -941,13 +1144,19 @@ class $$FeligresesTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> nombre = const Value.absent(),
+                Value<DateTime?> fechaNacimiento = const Value.absent(),
+                Value<String?> genero = const Value.absent(),
                 Value<String?> telefono = const Value.absent(),
+                Value<int> activo = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion(
                 id: id,
                 nombre: nombre,
+                fechaNacimiento: fechaNacimiento,
+                genero: genero,
                 telefono: telefono,
+                activo: activo,
                 syncStatus: syncStatus,
                 rowid: rowid,
               ),
@@ -955,13 +1164,19 @@ class $$FeligresesTableTableManager
               ({
                 required String id,
                 required String nombre,
+                Value<DateTime?> fechaNacimiento = const Value.absent(),
+                Value<String?> genero = const Value.absent(),
                 Value<String?> telefono = const Value.absent(),
+                Value<int> activo = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion.insert(
                 id: id,
                 nombre: nombre,
+                fechaNacimiento: fechaNacimiento,
+                genero: genero,
                 telefono: telefono,
+                activo: activo,
                 syncStatus: syncStatus,
                 rowid: rowid,
               ),
@@ -1027,7 +1242,7 @@ typedef $$AportesTableCreateCompanionBuilder =
       required String feligresId,
       required double monto,
       required String tipo,
-      required DateTime fecha,
+      Value<DateTime> fecha,
       Value<int> syncStatus,
       Value<int> rowid,
     });
@@ -1282,7 +1497,7 @@ class $$AportesTableTableManager
                 required String feligresId,
                 required double monto,
                 required String tipo,
-                required DateTime fecha,
+                Value<DateTime> fecha = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AportesCompanion.insert(
