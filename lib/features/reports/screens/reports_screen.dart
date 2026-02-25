@@ -108,7 +108,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  // --- TAB 1: GENERAL REPORTS (BAR CHART) ---
   Widget _buildGeneralReportTab(List<AporteConFeligres> aportes) {
     if (aportes.isEmpty) {
       return const Center(
@@ -119,30 +118,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
     }
 
-    // 1. Calculate the total for the top card
     final total = aportes.fold(0.0, (sum, item) => sum + item.aporte.monto);
 
-    // 2. Group the data by Month (1 = Jan, 12 = Dec)
     List<double> monthlyTotals = List.filled(12, 0.0);
     for (var item in aportes) {
       final month = item.aporte.fecha.month;
       monthlyTotals[month - 1] += item.aporte.monto;
     }
 
-    // 3. Find the maximum value to scale the Y-Axis of the chart properly
     double maxY = monthlyTotals.reduce(
       (curr, next) => curr > next ? curr : next,
     );
-    maxY = maxY == 0
-        ? 100
-        : maxY * 1.2; // Add 20% padding to the top of the chart
+    maxY = maxY == 0 ? 100 : maxY * 1.2;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // TOTAL INCOME CARD
           Card(
             color: Colors.indigo.shade50,
             elevation: 2,
@@ -170,13 +163,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // THE BAR CHART
           Expanded(
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
                 maxY: maxY,
-                // Tooltip when the user taps on a bar
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
                     getTooltipColor: (group) => Colors.blueGrey.shade800,
@@ -193,7 +184,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  // Bottom Labels (Months)
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -228,7 +218,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       },
                     ),
                   ),
-                  // Left Labels (Money Amount)
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -246,7 +235,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       },
                     ),
                   ),
-                  // Hide top and right labels
                   topTitles: const AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
@@ -261,10 +249,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   getDrawingHorizontalLine: (value) =>
                       FlLine(color: Colors.grey.shade300, strokeWidth: 1),
                 ),
-                borderData: FlBorderData(
-                  show: false,
-                ), // Hide the chart box outline
-                // Draw the actual bars
+                borderData: FlBorderData(show: false),
                 barGroups: List.generate(12, (index) {
                   return BarChartGroupData(
                     x: index,
@@ -289,7 +274,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  // --- AGE CALCULATION HELPER ---
   int _calculateAge(DateTime birthDate) {
     final today = DateTime.now();
     int age = today.year - birthDate.year;
@@ -300,7 +284,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return age;
   }
 
-  // --- TAB 2: DEMOGRAPHICS (PIE CHART) ---
   Widget _buildDemographicsTab(List<AporteConFeligres> aportes) {
     if (aportes.isEmpty) {
       return const Center(
@@ -311,13 +294,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
     }
 
-    // 1. Initialize category totals
     double ninosTotal = 0;
     double caballerosTotal = 0;
     double damasTotal = 0;
     double otrosTotal = 0;
 
-    // 2. Process data
     for (var item in aportes) {
       final feligres = item.feligres;
       final amount = item.aporte.monto;
@@ -335,7 +316,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             otrosTotal += amount;
         }
       } else {
-        // Fallback if no birthdate is provided but gender is known
         if (feligres.genero == 'Masculino')
           caballerosTotal += amount;
         else if (feligres.genero == 'Femenino')
@@ -347,7 +327,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     final totalAmount = ninosTotal + caballerosTotal + damasTotal + otrosTotal;
 
-    // 3. Helper to create pie chart sections
     List<PieChartSectionData> getSections() {
       return [
         if (ninosTotal > 0)
@@ -402,7 +381,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ];
     }
 
-    // 4. Build the UI
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -413,7 +391,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           const SizedBox(height: 30),
 
-          // The Pie Chart
           Expanded(
             child: PieChart(
               PieChartData(
@@ -426,7 +403,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
           const SizedBox(height: 20),
 
-          // The Legend
           Card(
             elevation: 2,
             child: Padding(
@@ -451,7 +427,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  // --- HELPER TO BUILD LEGEND ITEMS ---
   Widget _buildLegendRow(Color color, String label, double amount) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -474,35 +449,29 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  // --- TAB 3: SPECIFIC MEMBER HISTORY ---
   Widget _buildMemberReportTab(List<AporteConFeligres> aportes) {
-    // 1. Extract a unique list of members
     final uniqueMembers = aportes.map((a) => a.feligres).toSet().toList();
 
-    // 2. Filter contributions only for the selected member
     final memberAportes = _selectedReportFeligresId == null
         ? <AporteConFeligres>[]
         : aportes
               .where((a) => a.feligres.id == _selectedReportFeligresId)
               .toList();
 
-    // 3. Calculate the personal total
     final memberTotal = memberAportes.fold(
       0.0,
       (sum, item) => sum + item.aporte.monto,
     );
 
-    // 4. PREPARE DATA FOR THE TIMELINE (Grouped by month)
     List<double> monthlyData = List.filled(12, 0.0);
     for (var item in memberAportes) {
       monthlyData[item.aporte.fecha.month - 1] += item.aporte.monto;
     }
 
-    // Scale the Y-axis of the chart
     double maxY = 10;
     if (memberAportes.isNotEmpty) {
       maxY = monthlyData.reduce((curr, next) => curr > next ? curr : next);
-      maxY = maxY == 0 ? 10 : maxY * 1.2; // 20% extra padding at the top
+      maxY = maxY == 0 ? 10 : maxY * 1.2;
     }
 
     return Padding(
@@ -510,9 +479,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ---------------------------------------------------------
-          // SEARCH FIELD
-          // ---------------------------------------------------------
           Autocomplete<Feligrese>(
             displayStringForOption: (Feligrese option) => option.nombre,
             optionsBuilder: (TextEditingValue textEditingValue) {
@@ -555,9 +521,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // ---------------------------------------------------------
-          // RESULTS VIEW
-          // ---------------------------------------------------------
           if (_selectedReportFeligresId == null)
             const Expanded(
               child: Center(
@@ -568,7 +531,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
             )
           else ...[
-            // TOTAL CARD
             Card(
               color: Colors.green.shade50,
               elevation: 2,
@@ -589,9 +551,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             ),
             const SizedBox(height: 15),
 
-            // ---------------------------------------------------------
-            // TIMELINE CHART
-            // ---------------------------------------------------------
             if (memberAportes.isNotEmpty) ...[
               const Text(
                 'Tendencia de Aportes a lo largo del Año',
@@ -600,7 +559,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
               const SizedBox(height: 15),
               SizedBox(
-                height: 180, // Fixed height for the chart
+                height: 180,
                 child: LineChart(
                   LineChartData(
                     gridData: FlGridData(
@@ -642,7 +601,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                             int index = value.toInt();
                             if (index >= 0 && index < 12) {
                               return SideTitleWidget(
-                                meta: meta, // Using the corrected format
+                                meta: meta,
                                 child: Text(months[index], style: style),
                               );
                             }
@@ -687,18 +646,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         spots: List.generate(12, (index) {
                           return FlSpot(index.toDouble(), monthlyData[index]);
                         }),
-                        isCurved: true, // Makes the line smooth and elegant
+                        isCurved: true,
                         color: Colors.indigo,
                         barWidth: 3,
                         isStrokeCapRound: true,
-                        dotData: const FlDotData(
-                          show: true,
-                        ), // Shows the dots on each month
+                        dotData: const FlDotData(show: true),
                         belowBarData: BarAreaData(
                           show: true,
-                          color: Colors.indigo.withOpacity(
-                            0.15,
-                          ), // Shading effect under the line
+                          color: Colors.indigo.withOpacity(0.15),
                         ),
                       ),
                     ],
@@ -712,10 +667,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               ),
               const Divider(),
             ],
-
-            // ---------------------------------------------------------
-            // HISTORY LIST
-            // ---------------------------------------------------------
             Expanded(
               child: memberAportes.isEmpty
                   ? const Center(child: Text('No hay registros detallados.'))
