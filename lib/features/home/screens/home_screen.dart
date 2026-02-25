@@ -96,10 +96,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar Sesión',
             onPressed: () async {
+              final database = ref.read(databaseProvider);
+
+              final hasPending = await database.hasPendingSyncs();
+
+              if (hasPending) {
+                if (context.mounted) {
+                  final proceed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.orange,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(child: Text('Datos sin sincronizar')),
+                        ],
+                      ),
+                      content: const Text(
+                        'Tienes registros locales que no se han guardado en la nube.\n\nSi cierras sesión ahora, estos datos se eliminarán permanentemente por seguridad.\n\n¿Deseas intentar sincronizar primero o cerrar sesión y perder los datos?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancelar y Sincronizar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                          child: const Text('Cerrar y Perder Datos'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (proceed != true) {
+                    return;
+                  }
+                }
+              }
+
               final authService = ref.read(authServiceProvider);
               try {
+                await database.clearAllData();
                 await authService.signOut();
-              } catch (_) {}
+              } catch (e) {
+                debugPrint('Logout error: $e');
+              }
+
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,

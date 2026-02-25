@@ -96,4 +96,22 @@ class AppDatabase extends _$AppDatabase {
 
     return query.watchSingle().map((row) => row.read(sumExpr) ?? 0.0);
   }
+
+  Future<void> clearAllData() async {
+    await transaction(() async {
+      await delete(aportes).go();
+      await delete(feligreses).go();
+    });
+  }
+
+  Future<bool> hasPendingSyncs() async {
+    final pendingAportes = await (select(
+      aportes,
+    )..where((a) => a.syncStatus.equals(0))).get();
+    final pendingFeligreses = await (select(
+      feligreses,
+    )..where((f) => f.syncStatus.equals(0))).get();
+
+    return pendingAportes.isNotEmpty || pendingFeligreses.isNotEmpty;
+  }
 }
