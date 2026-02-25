@@ -1,14 +1,14 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_app_aportes/features/auth/screens/login_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../providers.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/database/database.dart';
-import '../../members/screens/add_feligres_screen.dart';
+import '../../../providers.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../auth/screens/login_screen.dart';
 import '../../sync/services/sync_service.dart';
 import '../../tithes/screens/add_aporte_screen.dart';
-import '../../tithes/screens/history_screen.dart';
-import '../../auth/providers/auth_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -34,68 +34,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         connectivity.contains(ConnectivityResult.ethernet);
 
     if (!hasInternet) return;
+
     final authService = ref.read(authServiceProvider);
     if (authService.currentUser == null) return;
-    debugPrint("🚀 Home cargado: Verificando datos pendientes...");
+
     try {
       final database = ref.read(databaseProvider);
-      final syncService = SyncService(database);
-
-      await syncService.syncAll();
-      debugPrint("✅ Sincronización completa.");
+      await SyncService(database).syncAll();
+      debugPrint("✅ Auto-Sync inicial completado.");
     } catch (e) {
-      debugPrint("❌ Error de sincronización: $e");
+      debugPrint("❌ Auto-Sync falló: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);
-    final stream = database.watchAllFeligreses();
+    final historyStream = database.watchHistory();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis Aportes'),
+        title: const Text(
+          'Dashboard Principal',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        elevation: 2,
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),
-            tooltip: 'Sincronizar',
+            tooltip: 'Sincronizar Manualmente',
             onPressed: () async {
-              final database = ref.read(databaseProvider);
-              final syncService = SyncService(database);
-
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Row(
-                    children: [
-                      CircularProgressIndicator(color: Colors.white),
-                      SizedBox(width: 20),
-                      Text('Sincronizando...'),
-                    ],
-                  ),
-                  duration: Duration(minutes: 1),
-                ),
+                const SnackBar(content: Text('Sincronizando con la nube...')),
               );
-
               try {
-                await syncService.syncAll();
-
+                await SyncService(database).syncAll();
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Sincronización completa'),
+                      content: Text('✅ Sincronización completa'),
                       backgroundColor: Colors.green,
                     ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Error de sincronización: $e'),
+                      content: Text('Error: $e'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -110,12 +97,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               final authService = ref.read(authServiceProvider);
               try {
                 await authService.signOut();
-              } catch (e) {
-                debugPrint(
-                  "No se pudo cerrar sesión en Supabase (probablemente sin conexión)",
-                );
-              }
-
+              } catch (_) {}
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(
                   context,
@@ -127,146 +109,273 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20.0),
+      body: StreamBuilder<List<AporteConFeligres>>(
+        stream: historyStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final allAportes = snapshot.data ?? [];
+
+          final now = DateTime.now();
+          final aportesMes = allAportes
+              .where(
+                (a) =>
+                    a.aporte.fecha.year == now.year &&
+                    a.aporte.fecha.month == now.month,
+              )
+              .toList();
+
+          final double totalMes = aportesMes.fold(
+            0.0,
+            (sum, item) => sum + item.aporte.monto,
+          );
+          final double diezPorciento = totalMes * 0.10;
+          final double primerRestante = totalMes - diezPorciento;
+          final double cincoPorciento = primerRestante * 0.05;
+          final double saldoFinal = primerRestante - cincoPorciento;
+
+          final top5 = List<AporteConFeligres>.from(aportesMes)
+            ..sort((a, b) => b.aporte.monto.compareTo(a.aporte.monto));
+          final top5List = top5.take(5).toList();
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.church, size: 50, color: Colors.indigo),
-                const SizedBox(height: 10),
-                StreamBuilder<double>(
-                  stream: ref.watch(databaseProvider).watchTotalIncome(),
-                  builder: (context, snapshot) {
-                    final total = snapshot.data ?? 0.0;
-                    return Card(
-                      color: Colors.indigo,
-                      margin: const EdgeInsets.all(20),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          children: [
-                            const Text(
-                              'Total',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.indigo,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AddAporteScreen(),
                             ),
-                            Text(
-                              '\$${total.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                          );
+                        },
+                        icon: const Icon(Icons.add_circle),
+                        label: const Text(
+                          'Registrar Aporte',
+                          style: TextStyle(fontSize: 16),
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddFeligresScreen(),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.person_add),
-                    label: const Text('Registrar Feligres'),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Módulo de reportes en construcción',
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.bar_chart),
+                        label: const Text('Ver Reportes'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Módulo de exportación en construcción',
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.import_export),
+                        label: const Text('Exportar Datos'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 25),
+
+                Text(
+                  'Resumen: ${DateFormat('MMMM yyyy', 'es').format(now).toUpperCase()}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      // Navigate to the new screen
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AddAporteScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.monetization_on),
-                    label: const Text('Registrar Aporte'),
+                const SizedBox(height: 10),
+                Card(
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 60,
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HistoryScreen(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        _buildMathRow(
+                          'Ingreso Total del Mes:',
+                          totalMes,
+                          isBold: true,
+                          size: 18,
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.history),
-                    label: const Text(
-                      'Ver Historial Completo',
-                      style: TextStyle(fontSize: 18),
+                        const Divider(height: 30),
+                        _buildMathRow(
+                          'Retención (10% del Total):',
+                          diezPorciento,
+                          color: Colors.red.shade700,
+                        ),
+                        _buildMathRow(
+                          'Fondo (5% del Restante):',
+                          cincoPorciento,
+                          color: Colors.orange.shade800,
+                        ),
+                        const Divider(height: 30),
+                        _buildMathRow(
+                          'Saldo Final Disponible:',
+                          saldoFinal,
+                          isBold: true,
+                          size: 22,
+                          color: Colors.green.shade700,
+                        ),
+                      ],
                     ),
                   ),
                 ),
+                const SizedBox(height: 30),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '🏆 Top 5 Aportes del Mes',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (top5List.isNotEmpty)
+                      Text(
+                        'De ${aportesMes.length} registros',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                if (top5List.isEmpty)
+                  Card(
+                    color: Colors.grey.shade100,
+                    child: const Padding(
+                      padding: EdgeInsets.all(30.0),
+                      child: Center(
+                        child: Text(
+                          'No hay aportes registrados este mes.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: top5List.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = top5List[index];
+                        final isFirst = index == 0;
+
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: isFirst
+                                ? Colors.amber
+                                : Colors.indigo.shade100,
+                            foregroundColor: isFirst
+                                ? Colors.white
+                                : Colors.indigo,
+                            child: isFirst
+                                ? const Icon(Icons.star)
+                                : Text('${index + 1}'),
+                          ),
+                          title: Text(
+                            item.feligres.nombre,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${item.aporte.tipo} • ${DateFormat('dd MMM', 'es').format(item.aporte.fecha)}',
+                          ),
+                          trailing: Text(
+                            '\$${item.aporte.monto.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                const SizedBox(height: 40),
               ],
             ),
-          ),
+          );
+        },
+      ),
+    );
+  }
 
-          const Divider(thickness: 2),
-          const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text(
-              "Feligreses Recientes",
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+  Widget _buildMathRow(
+    String label,
+    double amount, {
+    bool isBold = false,
+    double size = 14,
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: size - 2,
             ),
           ),
-
-          Expanded(
-            child: StreamBuilder<List<Feligrese>>(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                final feligreses = snapshot.data ?? [];
-
-                if (feligreses.isEmpty) {
-                  return const Center(
-                    child: Text('No hay feligreses registrados!'),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: feligreses.length,
-                  itemBuilder: (context, index) {
-                    final person = feligreses[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        child: Text(person.nombre[0].toUpperCase()),
-                      ),
-                      title: Text(person.nombre),
-                      subtitle: Text(person.telefono ?? 'Sin telefono'),
-                      trailing: person.syncStatus == 0
-                          ? const Icon(Icons.cloud_off, color: Colors.orange)
-                          : const Icon(Icons.cloud_done, color: Colors.green),
-                    );
-                  },
-                );
-              },
+          Text(
+            '\$${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: size,
+              color: color ?? Colors.black87,
             ),
           ),
         ],

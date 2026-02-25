@@ -4,9 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('es', null);
   await Supabase.initialize(
     url: 'https://khfuugwqxwvzkewuudjl.supabase.co',
     anonKey: 'sb_publishable_iLhG2G-qh2__Ns_xY2H4lA_9H6jzwTN',
