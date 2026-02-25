@@ -31,6 +31,9 @@ class SyncService {
           'id': person.id,
           'nombre': person.nombre,
           'telefono': person.telefono,
+          'genero': person.genero,
+          'fechanacimiento': person.fechaNacimiento?.toIso8601String(),
+          'activo': person.activo,
         });
         await (localDb.update(localDb.feligreses)
               ..where((tbl) => tbl.id.equals(person.id)))
