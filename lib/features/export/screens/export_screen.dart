@@ -1,10 +1,9 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_saver/file_saver.dart';
+import 'package:excel/excel.dart'; // The new Excel package
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -20,64 +19,90 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   DateTimeRange? _selectedDateRange;
   bool _isExporting = false;
 
-  // --- LOGIC TO GENERATE AND SAVE THE EXCEL (CSV) FILE ---
-  Future<void> _exportToCSV(List<AporteConFeligres> aportes) async {
+  // --- LOGIC TO GENERATE AND SAVE A BEAUTIFUL .XLSX FILE ---
+  Future<void> _exportToExcel(List<AporteConFeligres> aportes) async {
     setState(() => _isExporting = true);
 
     try {
-      // 1. Build the CSV string manually
-      final StringBuffer csvBuffer = StringBuffer();
-      // Added a special character (BOM) so Excel reads accents correctly
-      csvBuffer.write('\uFEFF');
-      csvBuffer.writeln("Fecha;Feligrés;Tipo de Aporte;Monto (\$);");
+      // 1. Create a new Excel Document
+      var excel = Excel.createExcel();
 
-      // 2. Loop through the data
+      // Rename the default sheet
+      String sheetName = 'Reporte Financiero';
+      excel.rename('Sheet1', sheetName);
+      Sheet sheetObject = excel[sheetName];
+
+      // 2. Add the Headers
+      sheetObject.appendRow([
+        TextCellValue("Fecha"),
+        TextCellValue("Feligrés"),
+        TextCellValue("Tipo de Aporte"),
+        TextCellValue("Monto (\$)"),
+      ]);
+
+      // 3. Loop through the data and add it to the sheet
       double total = 0;
       for (var item in aportes) {
-        final date = DateFormat('dd/MM/yyyy HH:mm').format(item.aporte.fecha);
-        final name = item.feligres.nombre.replaceAll(';', ',');
-        final type = item.aporte.tipo.replaceAll(';', ',');
-        final amount = item.aporte.monto.toStringAsFixed(2);
-
-        csvBuffer.writeln("$date;$name;$type;$amount;");
+        sheetObject.appendRow([
+          TextCellValue(
+            DateFormat('dd/MM/yyyy HH:mm').format(item.aporte.fecha),
+          ),
+          TextCellValue(item.feligres.nombre),
+          TextCellValue(item.aporte.tipo),
+          DoubleCellValue(
+            item.aporte.monto,
+          ), // Saves as a real number in Excel!
+        ]);
         total += item.aporte.monto;
       }
 
-      csvBuffer.writeln(";;TOTAL:;${total.toStringAsFixed(2)};");
+      // Add a blank row, then the Total row
+      sheetObject.appendRow([
+        TextCellValue(""),
+        TextCellValue(""),
+        TextCellValue(""),
+        TextCellValue(""),
+      ]);
+      sheetObject.appendRow([
+        TextCellValue(""),
+        TextCellValue(""),
+        TextCellValue("TOTAL:"),
+        DoubleCellValue(total),
+      ]);
 
-      // 3. Convert the string into pure data bytes (Web & Desktop safe)
-      Uint8List fileBytes = Uint8List.fromList(
-        utf8.encode(csvBuffer.toString()),
-      );
-      final String fileName =
-          "Reporte_Aportes_${DateFormat('yyyyMMdd').format(DateTime.now())}";
+      // 4. Convert the Excel file to bytes
+      List<int>? fileBytesList = excel.save();
 
-      // 4. Trigger the Save/Download dialog across all platforms
-      if (kIsWeb) {
-        await FileSaver.instance.saveFile(
-          name: fileName,
-          bytes: fileBytes,
-          fileExtension: 'csv',
-          mimeType: MimeType.csv,
-        );
-      } else {
-        // Lógica para Windows y Android (Abre el menú "Guardar como...")
-        await FileSaver.instance.saveAs(
-          name: fileName,
-          bytes: fileBytes,
-          fileExtension:
-              'csv', // Recuerda cambiar a fileExtension si tu versión lo requiere
-          mimeType: MimeType.csv,
-        );
-      }
+      if (fileBytesList != null) {
+        Uint8List fileBytes = Uint8List.fromList(fileBytesList);
+        final String fileName =
+            "Reporte_Aportes_${DateFormat('yyyyMMdd').format(DateTime.now())}";
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Archivo exportado con éxito'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // 5. Trigger the Save/Download dialog across all platforms
+        if (kIsWeb) {
+          await FileSaver.instance.saveFile(
+            name: fileName,
+            bytes: fileBytes,
+            fileExtension: 'xlsx',
+            mimeType: MimeType.microsoftExcel,
+          );
+        } else {
+          await FileSaver.instance.saveAs(
+            name: fileName,
+            bytes: fileBytes,
+            fileExtension: 'xlsx',
+            mimeType: MimeType.microsoftExcel,
+          );
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Archivo Excel exportado con éxito'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -114,7 +139,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
 
           var aportes = snapshot.data ?? [];
 
-          // Filter by selected dates if applicable
           if (_selectedDateRange != null) {
             aportes = aportes.where((a) {
               return a.aporte.fecha.isAfter(
@@ -131,24 +155,25 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.table_view, size: 80, color: Colors.indigo),
+                const Icon(
+                  Icons.table_chart,
+                  size: 80,
+                  color: Colors.green,
+                ), // Changed to green Excel color
                 const SizedBox(height: 20),
                 const Text(
-                  'Generar Reporte Excel (CSV)',
+                  'Generar Reporte Excel',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Exporte los registros financieros para abrirlos en Excel. Puede filtrar por fechas antes de exportar.',
+                  'Exporte los registros financieros en formato .xlsx. Las columnas estarán separadas y los montos listos para sumar.',
                   style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 40),
 
-                // ---------------------------------------------------------
-                // DATE FILTER BUTTON
-                // ---------------------------------------------------------
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -184,9 +209,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
 
                 const Spacer(),
 
-                // ---------------------------------------------------------
-                // EXPORT BUTTON
-                // ---------------------------------------------------------
                 Text(
                   'Se exportarán ${aportes.length} registros',
                   textAlign: TextAlign.center,
@@ -200,7 +222,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                   ),
                   onPressed: (_isExporting || aportes.isEmpty)
                       ? null
-                      : () => _exportToCSV(aportes),
+                      : () => _exportToExcel(aportes),
                   icon: _isExporting
                       ? const SizedBox(
                           width: 20,
@@ -212,7 +234,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                         )
                       : const Icon(Icons.download),
                   label: const Text(
-                    'Descargar Archivo',
+                    'Descargar Archivo Excel',
                     style: TextStyle(fontSize: 16),
                   ),
                 ),
