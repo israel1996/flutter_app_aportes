@@ -56,12 +56,6 @@ class AppDatabase extends _$AppDatabase {
     return update(feligreses).replace(entry);
   }
 
-  Future<int> deleteFeligres(String id) async {
-    return (update(feligreses)..where((tbl) => tbl.id.equals(id))).write(
-      const FeligresesCompanion(activo: Value(0), syncStatus: Value(0)),
-    );
-  }
-
   Stream<List<AporteConFeligres>> watchHistory() {
     final query = select(aportes).join([
       innerJoin(feligreses, feligreses.id.equalsExp(aportes.feligresId)),

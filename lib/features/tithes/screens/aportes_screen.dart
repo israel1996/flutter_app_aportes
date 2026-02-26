@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../widgets/add_aporte_sheet.dart';
+import '../widgets/edit_aporte_sheet.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -117,6 +118,16 @@ class AportesScreen extends ConsumerWidget {
                   ],
                 ),
                 child: ListTile(
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (context) => EditAporteSheet(
+                        aporteItem: item,
+                      ), // Pass the contribution item!
+                    );
+                  },
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 12,
