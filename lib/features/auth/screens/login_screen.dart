@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/auth_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -11,26 +11,20 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+
   bool _isLoading = false;
-  bool _obscureText = true;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor, llene todos los campos'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    final authService = ref.read(authServiceProvider);
 
     try {
+      final authService = ref.read(authServiceProvider);
       await authService.signIn(
         _emailController.text.trim(),
         _passwordController.text.trim(),
@@ -38,7 +32,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error al iniciar sesión: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } finally {
@@ -59,28 +57,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          child: Padding(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? [const Color(0xFF1A1A2E), const Color(0xFF16213E)]
+                : [Colors.grey.shade100, Colors.white],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(32.0),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? const Color(0xFF00C9FF).withOpacity(0.1)
+                          : Colors.black.withOpacity(0.05),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                  border: isDark
+                      ? Border.all(
+                          color: const Color(0xFF00C9FF).withOpacity(0.2),
+                          width: 1,
+                        )
+                      : null,
+                ),
+                child: Form(
+                  key: _formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: colorScheme.primary.withOpacity(0.1),
                           shape: BoxShape.circle,
+                          color: isDark
+                              ? const Color(0xFF00C9FF).withOpacity(0.1)
+                              : colorScheme.primary.withOpacity(0.1),
+                          boxShadow: isDark
+                              ? [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF00C9FF,
+                                    ).withOpacity(0.2),
+                                    blurRadius: 20,
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: Icon(
-                          Icons.church,
+                          Icons.lock_person_outlined,
                           size: 48,
-                          color: colorScheme.primary,
+                          color: isDark
+                              ? const Color(0xFF00C9FF)
+                              : colorScheme.primary,
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -95,40 +138,69 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Inicie sesión para continuar',
-                        style: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.6),
+                        'Ingrese sus credenciales para continuar',
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 14,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 32),
 
-                      TextField(
+                      TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo Electrónico',
-                          prefixIcon: Icon(Icons.email_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: _obscureText,
                         decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureText
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscureText = !_obscureText),
+                          labelText: 'Correo Electrónico',
+                          prefixIcon: Icon(
+                            Icons.email_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'El correo es obligatorio';
+                          if (!value.contains('@'))
+                            return 'Ingrese un correo válido';
+                          return null;
+                        },
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 16),
+
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: Icon(
+                            Icons.lock_outline,
+                            color: colorScheme.primary,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () {
+                              setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              );
+                            },
+                          ),
+                        ),
+                        validator: (value) => value!.isEmpty
+                            ? 'La contraseña es obligatoria'
+                            : null,
+                      ),
+                      const SizedBox(height: 32),
 
                       SizedBox(
                         width: double.infinity,
@@ -143,8 +215,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       const Color(0xFF92FE9D),
                                     ]
                                   : [
-                                      const Color(0xFF3F51B5),
-                                      const Color(0xFF5C6BC0),
+                                      colorScheme.primary,
+                                      colorScheme.secondary,
                                     ],
                             ),
                             boxShadow: isDark
@@ -152,7 +224,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     BoxShadow(
                                       color: const Color(
                                         0xFF00C9FF,
-                                      ).withOpacity(0.3),
+                                      ).withOpacity(0.4),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
@@ -169,11 +241,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
                             child: _isLoading
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white,
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 3,
+                                    ),
                                   )
                                 : Text(
-                                    'INGRESAR',
+                                    'INICIAR SESIÓN',
                                     style: GoogleFonts.montserrat(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
