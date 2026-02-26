@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:excel/excel.dart'; // The new Excel package
+import 'package:excel/excel.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -19,20 +20,15 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   DateTimeRange? _selectedDateRange;
   bool _isExporting = false;
 
-  // --- LOGIC TO GENERATE AND SAVE A BEAUTIFUL .XLSX FILE ---
   Future<void> _exportToExcel(List<AporteConFeligres> aportes) async {
     setState(() => _isExporting = true);
 
     try {
-      // 1. Create a new Excel Document
       var excel = Excel.createExcel();
-
-      // Rename the default sheet
       String sheetName = 'Reporte Financiero';
       excel.rename('Sheet1', sheetName);
       Sheet sheetObject = excel[sheetName];
 
-      // 2. Add the Headers
       sheetObject.appendRow([
         TextCellValue("Fecha"),
         TextCellValue("Feligrés"),
@@ -40,23 +36,19 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         TextCellValue("Monto (\$)"),
       ]);
 
-      // 3. Loop through the data and add it to the sheet
       double total = 0;
       for (var item in aportes) {
         sheetObject.appendRow([
           TextCellValue(
-            DateFormat('dd/MM/yyyy HH:mm').format(item.aporte.fecha),
+            DateFormat('dd/MM/yyyy HH:mm', 'es').format(item.aporte.fecha),
           ),
           TextCellValue(item.feligres.nombre),
           TextCellValue(item.aporte.tipo),
-          DoubleCellValue(
-            item.aporte.monto,
-          ), // Saves as a real number in Excel!
+          DoubleCellValue(item.aporte.monto),
         ]);
         total += item.aporte.monto;
       }
 
-      // Add a blank row, then the Total row
       sheetObject.appendRow([
         TextCellValue(""),
         TextCellValue(""),
@@ -70,7 +62,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         DoubleCellValue(total),
       ]);
 
-      // 4. Convert the Excel file to bytes
       List<int>? fileBytesList = excel.save();
 
       if (fileBytesList != null) {
@@ -78,7 +69,6 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         final String fileName =
             "Reporte_Aportes_${DateFormat('yyyyMMdd').format(DateTime.now())}";
 
-        // 5. Trigger the Save/Download dialog across all platforms
         if (kIsWeb) {
           await FileSaver.instance.saveFile(
             name: fileName,
@@ -114,9 +104,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isExporting = false);
-      }
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
@@ -124,126 +112,228 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   Widget build(BuildContext context) {
     final database = ref.watch(databaseProvider);
     final historyStream = database.watchHistory();
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Exportar Datos'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-      ),
-      body: StreamBuilder<List<AporteConFeligres>>(
-        stream: historyStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    return StreamBuilder<List<AporteConFeligres>>(
+      stream: historyStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          var aportes = snapshot.data ?? [];
+        var aportes = snapshot.data ?? [];
 
-          if (_selectedDateRange != null) {
-            aportes = aportes.where((a) {
-              return a.aporte.fecha.isAfter(
-                    _selectedDateRange!.start.subtract(const Duration(days: 1)),
-                  ) &&
-                  a.aporte.fecha.isBefore(
-                    _selectedDateRange!.end.add(const Duration(days: 1)),
-                  );
-            }).toList();
-          }
+        if (_selectedDateRange != null) {
+          aportes = aportes.where((a) {
+            return a.aporte.fecha.isAfter(
+                  _selectedDateRange!.start.subtract(const Duration(days: 1)),
+                ) &&
+                a.aporte.fecha.isBefore(
+                  _selectedDateRange!.end.add(const Duration(days: 1)),
+                );
+          }).toList();
+        }
 
-          return Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.table_chart,
-                  size: 80,
-                  color: Colors.green,
-                ), // Changed to green Excel color
-                const SizedBox(height: 20),
-                const Text(
-                  'Generar Reporte Excel',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Exporte los registros financieros en formato .xlsx. Las columnas estarán separadas y los montos listos para sumar.',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 40),
-
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 20),
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
-                  onPressed: () async {
-                    final picked = await showDateRangePicker(
-                      context: context,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime.now(),
-                      initialDateRange: _selectedDateRange,
-                    );
-                    if (picked != null) {
-                      setState(() {
-                        _selectedDateRange = picked;
-                      });
-                    }
-                  },
-                  icon: const Icon(Icons.date_range),
-                  label: Text(
-                    _selectedDateRange == null
-                        ? 'Filtrar por Fecha (Opcional)'
-                        : 'Del ${DateFormat('dd/MM/yyyy').format(_selectedDateRange!.start)} al ${DateFormat('dd/MM/yyyy').format(_selectedDateRange!.end)}',
-                  ),
-                ),
-                if (_selectedDateRange != null)
-                  TextButton(
-                    onPressed: () => setState(() => _selectedDateRange = null),
-                    child: const Text(
-                      'Quitar Filtro',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.table_chart_rounded,
+                          size: 64,
+                          color: isDark
+                              ? const Color(0xFF92FE9D)
+                              : Colors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Exportar a Excel',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Descargue un reporte financiero detallado en formato .xlsx. Seleccione un rango de fechas si es necesario.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 40),
 
-                const Spacer(),
-
-                Text(
-                  'Se exportarán ${aportes.length} registros',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.green.shade700,
-                  ),
-                  onPressed: (_isExporting || aportes.isEmpty)
-                      ? null
-                      : () => _exportToExcel(aportes),
-                  icon: _isExporting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 24,
                           ),
-                        )
-                      : const Icon(Icons.download),
-                  label: const Text(
-                    'Descargar Archivo Excel',
-                    style: TextStyle(fontSize: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: BorderSide(
+                            color: colorScheme.primary.withOpacity(0.5),
+                          ),
+                        ),
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            initialDateRange: _selectedDateRange,
+                            builder: (context, child) =>
+                                Theme(data: Theme.of(context), child: child!),
+                          );
+                          if (picked != null) {
+                            setState(() => _selectedDateRange = picked);
+                          }
+                        },
+                        icon: Icon(
+                          Icons.date_range,
+                          color: colorScheme.primary,
+                        ),
+                        label: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _selectedDateRange == null
+                                ? 'Filtrar por Fecha (Opcional)'
+                                : 'Del ${DateFormat('dd/MM/yyyy').format(_selectedDateRange!.start)} al ${DateFormat('dd/MM/yyyy').format(_selectedDateRange!.end)}',
+                            style: GoogleFonts.poppins(
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      if (_selectedDateRange != null) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _selectedDateRange = null),
+                          child: Text(
+                            'Quitar Filtro',
+                            style: GoogleFonts.poppins(color: Colors.redAccent),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 40),
+
+                      Text(
+                        'Se exportarán ${aportes.length} registros',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: LinearGradient(
+                              colors: isDark
+                                  ? [
+                                      const Color(0xFF00C9FF),
+                                      const Color(0xFF92FE9D),
+                                    ]
+                                  : [
+                                      Colors.green.shade600,
+                                      Colors.teal.shade500,
+                                    ],
+                            ),
+                            boxShadow: isDark
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF92FE9D,
+                                      ).withOpacity(0.4),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: ElevatedButton.icon(
+                            onPressed: (_isExporting || aportes.isEmpty)
+                                ? null
+                                : () => _exportToExcel(aportes),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: _isExporting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.download,
+                                    color: Colors.white,
+                                  ),
+                            label: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'DESCARGAR REPORTE',
+                                style: GoogleFonts.montserrat(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

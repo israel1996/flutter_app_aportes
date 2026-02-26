@@ -7,6 +7,7 @@ import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../export/screens/export_screen.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../../providers.dart';
@@ -150,6 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const DashboardSummary(),
       const FeligresesScreen(),
       const AportesScreen(),
+      const ExportScreen(),
     ];
 
     return Scaffold(
@@ -219,6 +221,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     colorScheme,
                     isDark,
                   ),
+                  _buildNavItem(
+                    3,
+                    Icons.file_download_outlined,
+                    'Exportar',
+                    colorScheme,
+                    isDark,
+                  ),
 
                   const Spacer(),
 
@@ -260,7 +269,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ? 'SUMMARY'
                             : _selectedIndex == 1
                             ? 'FELIGRESES'
-                            : 'APORTES',
+                            : _selectedIndex == 2
+                            ? 'APORTES'
+                            : _selectedIndex == 3
+                            ? 'EXPORTAR'
+                            : '',
                         style: GoogleFonts.poppins(
                           color: Colors.grey,
                           fontSize: 16,
@@ -371,6 +384,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 NavigationDestination(
                   icon: Icon(Icons.account_balance_wallet_outlined),
                   label: 'Aportes',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.file_download_outlined),
+                  label: 'Exportar',
                 ),
               ],
             ),
