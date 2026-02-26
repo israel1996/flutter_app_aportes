@@ -149,12 +149,16 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Nuevo Feligrés',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
+                  // 1. Wrap the title in Expanded
+                  Expanded(
+                    child: Text(
+                      'Nuevo Feligrés',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
@@ -180,6 +184,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       value: _selectedGender,
                       decoration: const InputDecoration(
                         labelText: 'Género *',

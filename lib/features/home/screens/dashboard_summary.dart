@@ -68,7 +68,7 @@ class DashboardSummary extends ConsumerWidget {
                       if (constraints.maxWidth < 600) {
                         return Column(
                           children: [
-                            _buildTotalCard(),
+                            _buildTotalCard(total: totalAportes),
                             const SizedBox(height: 16),
                             _buildMembersCard(members.length.toString()),
                             const SizedBox(height: 16),
@@ -320,9 +320,6 @@ class DashboardSummary extends ConsumerWidget {
   }
 }
 
-// ---------------------------------------------------
-// CUSTOM GRADIENT CARD WIDGET
-// ---------------------------------------------------
 class GradientSummaryCard extends StatelessWidget {
   final String title;
   final String value;
@@ -348,9 +345,7 @@ class GradientSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: gradient.colors.last.withOpacity(
-              0.4,
-            ), // Dynamic glowing shadow
+            color: gradient.colors.last.withOpacity(0.4),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -362,24 +357,34 @@ class GradientSummaryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  color: Colors.white70,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              // Use Expanded and overflow to prevent the title from breaking
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Icon(icon, color: Colors.white70, size: 20),
             ],
           ),
           const SizedBox(height: 15),
-          Text(
-            value,
-            style: GoogleFonts.montserrat(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
+          // Use FittedBox to automatically shrink the huge numbers if the screen gets too small
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: GoogleFonts.montserrat(
+                color: Colors.white,
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(height: 5),
@@ -389,6 +394,7 @@ class GradientSummaryCard extends StatelessWidget {
               color: Colors.white.withOpacity(0.8),
               fontSize: 12,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

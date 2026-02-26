@@ -154,16 +154,18 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Registrar Aporte',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
+                  Expanded(
+                    child: Text(
+                      'Registrar Aporte',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   IconButton(
@@ -174,12 +176,12 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
               ),
               const SizedBox(height: 20),
 
-              // DYNAMIC INPUT: Feligrés Dropdown (Loads from SQLite)
               StreamBuilder<List<Feligrese>>(
                 stream: database.watchAllFeligreses(),
                 builder: (context, snapshot) {
                   final members = snapshot.data ?? [];
                   return DropdownButtonFormField<String>(
+                    isExpanded: true,
                     value: _selectedFeligresId,
                     decoration: const InputDecoration(
                       labelText: 'Feligrés *',
@@ -202,12 +204,12 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
               ),
               const SizedBox(height: 16),
 
-              // DUAL INPUTS: Tipo & Monto
               Row(
                 children: [
                   Expanded(
                     flex: 3,
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       value: _selectedTipo,
                       decoration: const InputDecoration(
                         labelText: 'Tipo *',
