@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app_aportes/features/reports/screens/reports_screen.dart';
+import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/database/database.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../../../providers.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/login_screen.dart';
-import '../../sync/services/sync_service.dart';
-import '../../tithes/screens/add_aporte_screen.dart';
-import '../../export/screens/export_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -20,413 +15,310 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndSync();
-    });
-  }
+  int _selectedIndex = 0;
 
-  Future<void> _checkAndSync() async {
-    final connectivity = await Connectivity().checkConnectivity();
-    final hasInternet =
-        connectivity.contains(ConnectivityResult.mobile) ||
-        connectivity.contains(ConnectivityResult.wifi) ||
-        connectivity.contains(ConnectivityResult.ethernet);
+  Future<void> _handleSecureLogout() async {
+    final database = ref.read(databaseProvider);
+    final hasPending = await database.hasPendingSyncs();
 
-    if (!hasInternet) return;
+    if (hasPending && mounted) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 10),
+              Expanded(child: Text('Datos sin sincronizar')),
+            ],
+          ),
+          content: const Text(
+            'Tienes registros locales que no se han guardado en la nube.\n\nSi cierras sesión ahora, estos datos se eliminarán permanentemente por seguridad.\n\n¿Deseas intentar sincronizar primero o cerrar sesión y perder los datos?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar y Sincronizar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Cerrar y Perder Datos'),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true) return;
+    }
 
     final authService = ref.read(authServiceProvider);
-    if (authService.currentUser == null) return;
-
     try {
-      final database = ref.read(databaseProvider);
-      await SyncService(database).syncAll();
-      debugPrint("✅ Auto-Sync inicial completado.");
+      await database.clearAllData();
+      await authService.signOut();
     } catch (e) {
-      debugPrint("❌ Auto-Sync falló: $e");
+      debugPrint('Logout error: $e');
+    }
+
+    if (mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final database = ref.watch(databaseProvider);
-    final historyStream = database.watchHistory();
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final isDesktop = MediaQuery.of(context).size.width > 800;
+
+    final List<Widget> pages = [
+      const Center(child: Text('Dashboard Component Will Go Here')), // Phase 3
+      const Center(child: Text('Feligreses Component Will Go Here')),
+      const Center(child: Text('Aportes Component Will Go Here')),
+    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Dashboard Principal',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        elevation: 2,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'Sincronizar Manualmente',
-            onPressed: () async {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sincronizando con la nube...')),
-              );
-              try {
-                await SyncService(database).syncAll();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('✅ Sincronización completa'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar Sesión',
-            onPressed: () async {
-              final database = ref.read(databaseProvider);
-
-              final hasPending = await database.hasPendingSyncs();
-
-              if (hasPending) {
-                if (context.mounted) {
-                  final proceed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Row(
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.orange,
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Datos sin sincronizar')),
-                        ],
-                      ),
-                      content: const Text(
-                        'Tienes registros locales que no se han guardado en la nube.\n\nSi cierras sesión ahora, estos datos se eliminarán permanentemente por seguridad.\n\n¿Deseas intentar sincronizar primero o cerrar sesión y perder los datos?',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancelar y Sincronizar'),
+      body: Row(
+        children: [
+          if (isDesktop)
+            Container(
+              width: 260,
+              color: colorScheme.surface,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 30),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.church,
+                          color: colorScheme.primary,
+                          size: 32,
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
+                        const SizedBox(width: 12),
+                        Text(
+                          'DASHBOARD',
+                          style: GoogleFonts.montserrat(
+                            color: colorScheme.onSurface,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
                           ),
-                          child: const Text('Cerrar y Perder Datos'),
                         ),
                       ],
                     ),
-                  );
+                  ),
+                  const SizedBox(height: 40),
 
-                  if (proceed != true) {
-                    return;
-                  }
-                }
-              }
+                  Padding(
+                    padding: const EdgeInsets.only(left: 24, bottom: 10),
+                    child: Text(
+                      'MAIN',
+                      style: GoogleFonts.poppins(
+                        color: Colors.grey,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
 
-              final authService = ref.read(authServiceProvider);
-              try {
-                await database.clearAllData();
-                await authService.signOut();
-              } catch (e) {
-                debugPrint('Logout error: $e');
-              }
+                  _buildNavItem(
+                    0,
+                    Icons.grid_view_rounded,
+                    'Resumen',
+                    colorScheme,
+                    isDark,
+                  ),
+                  _buildNavItem(
+                    1,
+                    Icons.people_alt_outlined,
+                    'Feligreses',
+                    colorScheme,
+                    isDark,
+                  ),
+                  _buildNavItem(
+                    2,
+                    Icons.account_balance_wallet_outlined,
+                    'Aportes',
+                    colorScheme,
+                    isDark,
+                  ),
 
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
+                  const Spacer(),
+
+                  Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: OutlinedButton.icon(
+                      onPressed: _handleSecureLogout,
+                      icon: const Icon(Icons.logout, color: Colors.redAccent),
+                      label: const Text(
+                        'Cerrar Sesión',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.redAccent),
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          Expanded(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32.0,
+                    vertical: 24.0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _selectedIndex == 0
+                            ? 'SUMMARY'
+                            : _selectedIndex == 1
+                            ? 'FELIGRESES'
+                            : 'APORTES',
+                        style: GoogleFonts.poppins(
+                          color: Colors.grey,
+                          fontSize: 16,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
+                      Row(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                isDark ? Icons.light_mode : Icons.dark_mode,
+                              ),
+                              color: isDark
+                                  ? Colors.yellow
+                                  : colorScheme.primary,
+                              onPressed: () {
+                                ref
+                                    .read(themeModeProvider.notifier)
+                                    .toggleTheme();
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+
+                          CircleAvatar(
+                            backgroundColor: colorScheme.primary.withOpacity(
+                              0.2,
+                            ),
+                            child: Icon(
+                              Icons.person,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    child: pages[_selectedIndex],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      body: StreamBuilder<List<AporteConFeligres>>(
-        stream: historyStream,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
 
-          final allAportes = snapshot.data ?? [];
-
-          final now = DateTime.now();
-          final aportesMes = allAportes
-              .where(
-                (a) =>
-                    a.aporte.fecha.year == now.year &&
-                    a.aporte.fecha.month == now.month,
-              )
-              .toList();
-
-          final double totalMes = aportesMes.fold(
-            0.0,
-            (sum, item) => sum + item.aporte.monto,
-          );
-          final double diezPorciento = totalMes * 0.10;
-          final double primerRestante = totalMes - diezPorciento;
-          final double cincoPorciento = primerRestante * 0.05;
-          final double saldoFinal = primerRestante - cincoPorciento;
-
-          final top5 = List<AporteConFeligres>.from(aportesMes)
-            ..sort((a, b) => b.aporte.monto.compareTo(a.aporte.monto));
-          final top5List = top5.take(5).toList();
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: Colors.indigo,
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const AddAporteScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.add_circle),
-                        label: const Text(
-                          'Registrar Aporte',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    ),
-                  ],
+      bottomNavigationBar: isDesktop
+          ? null
+          : NavigationBar(
+              backgroundColor: colorScheme.surface,
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) =>
+                  setState(() => _selectedIndex = index),
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.grid_view_rounded),
+                  label: 'Resumen',
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ReportsScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.bar_chart),
-                        label: const Text('Ver Reportes'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const ExportScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.import_export),
-                        label: const Text('Exportar Datos'),
-                      ),
-                    ),
-                  ],
+                NavigationDestination(
+                  icon: Icon(Icons.people_alt_outlined),
+                  label: 'Feligreses',
                 ),
-                const SizedBox(height: 25),
-
-                Text(
-                  'Resumen: ${DateFormat('MMMM yyyy', 'es').format(now).toUpperCase()}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                NavigationDestination(
+                  icon: Icon(Icons.account_balance_wallet_outlined),
+                  label: 'Aportes',
                 ),
-                const SizedBox(height: 10),
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      children: [
-                        _buildMathRow(
-                          'Ingreso Total del Mes:',
-                          totalMes,
-                          isBold: true,
-                          size: 18,
-                        ),
-                        const Divider(height: 30),
-                        _buildMathRow(
-                          'Retención (10% del Total):',
-                          diezPorciento,
-                          color: Colors.red.shade700,
-                        ),
-                        _buildMathRow(
-                          'Fondo (5% del Restante):',
-                          cincoPorciento,
-                          color: Colors.orange.shade800,
-                        ),
-                        const Divider(height: 30),
-                        _buildMathRow(
-                          'Saldo Final Disponible:',
-                          saldoFinal,
-                          isBold: true,
-                          size: 22,
-                          color: Colors.green.shade700,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 30),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      '🏆 Top 5 Aportes del Mes',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (top5List.isNotEmpty)
-                      Text(
-                        'De ${aportesMes.length} registros',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                if (top5List.isEmpty)
-                  Card(
-                    color: Colors.grey.shade100,
-                    child: const Padding(
-                      padding: EdgeInsets.all(30.0),
-                      child: Center(
-                        child: Text(
-                          'No hay aportes registrados este mes.',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: top5List.length,
-                      separatorBuilder: (context, index) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final item = top5List[index];
-                        final isFirst = index == 0;
-
-                        return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: isFirst
-                                ? Colors.amber
-                                : Colors.indigo.shade100,
-                            foregroundColor: isFirst
-                                ? Colors.white
-                                : Colors.indigo,
-                            child: isFirst
-                                ? const Icon(Icons.star)
-                                : Text('${index + 1}'),
-                          ),
-                          title: Text(
-                            item.feligres.nombre,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            '${item.aporte.tipo} • ${DateFormat('dd MMM', 'es').format(item.aporte.fecha)}',
-                          ),
-                          trailing: Text(
-                            '\$${item.aporte.monto.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                const SizedBox(height: 40),
               ],
             ),
-          );
-        },
-      ),
     );
   }
 
-  Widget _buildMathRow(
-    String label,
-    double amount, {
-    bool isBold = false,
-    double size = 14,
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: size - 2,
+  Widget _buildNavItem(
+    int index,
+    IconData icon,
+    String title,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    bool isSelected = _selectedIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _selectedIndex = index),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? colorScheme.primary.withOpacity(0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border(left: BorderSide(color: colorScheme.primary, width: 4))
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? colorScheme.primary : Colors.grey,
+              size: 22,
             ),
-          ),
-          Text(
-            '\$${amount.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: size,
-              color: color ?? Colors.black87,
+            const SizedBox(width: 15),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                color: isSelected ? colorScheme.onSurface : Colors.grey,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

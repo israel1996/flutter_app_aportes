@@ -28,6 +28,8 @@ class MyApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Gestión de Aportes',
       debugShowCheckedModeBanner: false,
+      theme: lightTheme,
+      darkTheme: darkTheme,
       themeMode: themeMode,
       home: authStateAsync.when(
         data: (state) {
