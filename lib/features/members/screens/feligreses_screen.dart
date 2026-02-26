@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/members/widgets/add_feligres_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -15,17 +16,12 @@ class FeligresesScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor:
-          Colors.transparent, // Allows the main Dashboard color to show through
-      // NEON GRADIENT FLOATING BUTTON
+      backgroundColor: Colors.transparent,
       floatingActionButton: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: isDark
-                ? [
-                    const Color(0xFF00C9FF),
-                    const Color(0xFF92FE9D),
-                  ] // Cyan/Green Neon
+                ? [const Color(0xFF00C9FF), const Color(0xFF92FE9D)]
                 : [colorScheme.primary, colorScheme.secondary],
           ),
           shape: BoxShape.circle,
@@ -41,7 +37,12 @@ class FeligresesScreen extends ConsumerWidget {
         ),
         child: FloatingActionButton(
           onPressed: () {
-            // TODO: Open registration form
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => const AddFeligresSheet(),
+            );
           },
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -49,7 +50,6 @@ class FeligresesScreen extends ConsumerWidget {
         ),
       ),
 
-      // DYNAMIC LIST
       body: StreamBuilder<List<Feligrese>>(
         stream: database.watchAllFeligreses(),
         builder: (context, snapshot) {
