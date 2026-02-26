@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../widgets/add_aporte_sheet.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -42,7 +43,12 @@ class AportesScreen extends ConsumerWidget {
         ),
         child: FloatingActionButton(
           onPressed: () {
-            // TODO: Open contribution registration form
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => const AddAporteSheet(),
+            );
           },
           backgroundColor: Colors.transparent,
           elevation: 0,
