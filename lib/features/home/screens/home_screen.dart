@@ -4,6 +4,7 @@ import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
+import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -148,7 +149,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final List<Widget> pages = [
       const DashboardSummary(),
       const FeligresesScreen(),
-      const Center(child: Text('Aportes Component Will Go Here')),
+      const AportesScreen(),
     ];
 
     return Scaffold(
