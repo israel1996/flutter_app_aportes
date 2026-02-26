@@ -5,6 +5,7 @@ import 'features/home/screens/home_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'core/theme/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,14 +23,12 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authStateAsync = ref.watch(authStateProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
       title: 'Gestión de Aportes',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
+      themeMode: themeMode,
       home: authStateAsync.when(
         data: (state) {
           final session = state.session;

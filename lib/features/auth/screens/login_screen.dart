@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_app_aportes/features/auth/data/offline_login_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
-import '../../home/screens/home_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,140 +14,178 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscureText = true;
 
   Future<void> _login() async {
-    setState(() => _isLoading = true);
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Por favor, llene todos los campos'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    setState(() => _isLoading = true);
+    final authService = ref.read(authServiceProvider);
 
     try {
-      final authService = ref.read(authServiceProvider);
-      await authService.signIn(email, password);
-
-      await OfflineLoginService().saveCredentials(email, password);
-
+      await authService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+    } catch (e) {
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
-    } on AuthException catch (e) {
-      final msg = e.message.toLowerCase();
-      if (msg.contains('network') ||
-          msg.contains('socket') ||
-          msg.contains('host')) {
-        await _attemptOfflineLogin(email, password);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.message}'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      await _attemptOfflineLogin(email, password);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _attemptOfflineLogin(String email, String password) async {
-    final isValid = await OfflineLoginService().validateOffline(
-      email,
-      password,
-    );
-
-    if (isValid && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sin internet. Accediendo con credenciales guardadas...',
-          ),
-          backgroundColor: Colors.orange,
-        ),
-      );
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sin internet y credenciales no válidas.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.indigo.shade50,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.church, size: 64, color: Colors.indigo),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Mis Aportes',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Contraseña',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo,
-                        foregroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(32.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.church,
+                          size: 48,
+                          color: colorScheme.primary,
+                        ),
                       ),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('INGRESAR'),
-                    ),
+                      const SizedBox(height: 24),
+
+                      Text(
+                        'Bienvenido',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Inicie sesión para continuar',
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Correo Electrónico',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: _obscureText,
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureText
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscureText = !_obscureText),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: LinearGradient(
+                              colors: isDark
+                                  ? [
+                                      const Color(0xFF00C9FF),
+                                      const Color(0xFF92FE9D),
+                                    ]
+                                  : [
+                                      const Color(0xFF3F51B5),
+                                      const Color(0xFF5C6BC0),
+                                    ],
+                            ),
+                            boxShadow: isDark
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF00C9FF,
+                                      ).withOpacity(0.3),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: _isLoading
+                                ? const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  )
+                                : Text(
+                                    'INGRESAR',
+                                    style: GoogleFonts.montserrat(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
