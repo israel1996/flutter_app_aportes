@@ -45,7 +45,7 @@ class AppDatabase extends _$AppDatabase {
   int get schemaVersion => 2;
 
   Stream<List<Feligrese>> watchAllFeligreses() {
-    return (select(feligreses)..where((tbl) => tbl.activo.equals(1))).watch();
+    return select(feligreses).watch();
   }
 
   Future<int> insertFeligres(FeligresesCompanion entry) {
