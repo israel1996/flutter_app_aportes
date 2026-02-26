@@ -1,5 +1,8 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
+import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
+import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -16,6 +19,71 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
+  bool _isSyncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndSync();
+    });
+  }
+
+  Future<void> _checkAndSync() async {
+    setState(() => _isSyncing = true);
+
+    try {
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasInternet =
+          connectivity.contains(ConnectivityResult.mobile) ||
+          connectivity.contains(ConnectivityResult.wifi) ||
+          connectivity.contains(ConnectivityResult.ethernet);
+
+      if (!hasInternet) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Modo Offline: Sin conexión a Internet'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      final authService = ref.read(authServiceProvider);
+      if (authService.currentUser == null) return;
+
+      debugPrint("🚀 Home cargado: Verificando datos pendientes...");
+
+      final database = ref.read(databaseProvider);
+      final syncService = SyncService(database);
+
+      await syncService.syncAll();
+      debugPrint("✅ Sincronización completa.");
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Datos sincronizados con la nube'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ Error de sincronización: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al sincronizar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
 
   Future<void> _handleSecureLogout() async {
     final database = ref.read(databaseProvider);
@@ -77,7 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
     final List<Widget> pages = [
-      const Center(child: Text('Dashboard Component Will Go Here')), // Phase 3
+      const DashboardSummary(),
       const Center(child: Text('Feligreses Component Will Go Here')),
       const Center(child: Text('Aportes Component Will Go Here')),
     ];
@@ -198,9 +266,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-
                       Row(
                         children: [
+                          Container(
+                            margin: const EdgeInsets.only(right: 16),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                            ),
+                            child: IconButton(
+                              icon: _isSyncing
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Icon(
+                                      Icons.sync,
+                                      color: colorScheme.primary,
+                                    ),
+                              onPressed: _isSyncing ? null : _checkAndSync,
+                            ),
+                          ),
+
                           Container(
                             decoration: BoxDecoration(
                               color: colorScheme.surface,
@@ -220,9 +316,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ? Colors.yellow
                                   : colorScheme.primary,
                               onPressed: () {
-                                ref
-                                    .read(themeModeProvider.notifier)
-                                    .toggleTheme();
+                                ref.read(themeModeProvider.notifier).state =
+                                    isDark ? ThemeMode.light : ThemeMode.dark;
                               },
                             ),
                           ),
