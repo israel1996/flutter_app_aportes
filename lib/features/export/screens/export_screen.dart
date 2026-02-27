@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:excel/excel.dart';
@@ -86,22 +87,15 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Archivo Excel exportado con éxito'),
-              backgroundColor: Colors.green,
-            ),
+          CustomSnackBar.showSuccess(
+            context,
+            'Archivo Excel exportado con éxito',
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al exportar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        CustomSnackBar.showError(context, 'Error al exportar: $e');
       }
     } finally {
       if (mounted) setState(() => _isExporting = false);

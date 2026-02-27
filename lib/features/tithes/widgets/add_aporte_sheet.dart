@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,11 +56,9 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   Future<void> _saveAporte() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedFeligresId == null || _selectedTipo == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Seleccione el feligrés y el tipo de aporte'),
-          backgroundColor: Colors.orange,
-        ),
+      CustomSnackBar.showWarning(
+        context,
+        'Seleccione el feligrés y el tipo de aporte',
       );
       return;
     }
@@ -103,21 +102,11 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
       // 3. Close & Show Success
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Aporte registrado exitosamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, 'Aporte registrado exitosamente');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar localmente: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        CustomSnackBar.showError(context, 'Error al guardar localmente: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

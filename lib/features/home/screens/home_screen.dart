@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
@@ -21,20 +22,35 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   bool _isSyncing = false;
+
+  late AnimationController _syncAnimationController;
 
   @override
   void initState() {
     super.initState();
+    _syncAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndSync();
     });
   }
 
+  @override
+  void dispose() {
+    _syncAnimationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkAndSync() async {
     setState(() => _isSyncing = true);
+    _syncAnimationController.repeat();
 
     try {
       final connectivity = await Connectivity().checkConnectivity();
@@ -45,11 +61,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       if (!hasInternet) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Modo Offline: Sin conexión a Internet'),
-              backgroundColor: Colors.orange,
-            ),
+          CustomSnackBar.showWarning(
+            context,
+            'Modo Offline: Sin conexión a Internet',
           );
         }
         return;
@@ -67,25 +81,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       debugPrint("✅ Sincronización completa.");
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Datos sincronizados con la nube'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
       }
     } catch (e) {
       debugPrint("❌ Error de sincronización: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al sincronizar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        CustomSnackBar.showError(context, 'Error al sincronizar: $e');
       }
     } finally {
-      if (mounted) setState(() => _isSyncing = false);
+      if (mounted) {
+        setState(() => _isSyncing = false);
+        _syncAnimationController.stop();
+      }
     }
   }
 
@@ -158,7 +165,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final isDesktop = MediaQuery.of(context).size.width > 800;
 
-        // 1. Conditionally add the 5th page for superadmins
         final List<Widget> pages = [
           const DashboardSummary(),
           const FeligresesScreen(),
@@ -167,7 +173,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (isSuperAdmin) const AdminUsersScreen(),
         ];
 
-        // Ensure selected index doesn't crash if a superadmin logs out and a normal user logs in
         if (_selectedIndex >= pages.length) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             setState(() => _selectedIndex = 0);
@@ -300,7 +305,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           // 3. Dynamic Title Updates
                           Text(
                             _selectedIndex == 0
-                                ? 'SUMMARY'
+                                ? 'RESUMEN'
                                 : _selectedIndex == 1
                                 ? 'FELIGRESES'
                                 : _selectedIndex == 2
@@ -332,19 +337,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   ],
                                 ),
                                 child: IconButton(
-                                  icon: _isSyncing
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : Icon(
-                                          Icons.sync,
-                                          color: colorScheme.primary,
-                                        ),
-                                  onPressed: _isSyncing ? null : _checkAndSync,
+                                  icon: RotationTransition(
+                                    turns: _syncAnimationController,
+                                    child: Icon(
+                                      Icons.sync,
+                                      // Glows Cyan when syncing, normal color when idle
+                                      color: _isSyncing
+                                          ? const Color(0xFF00C9FF)
+                                          : colorScheme.primary,
+                                    ),
+                                  ),
+                                  // The fix: We pass a function instead of 'null' to prevent the grey box
+                                  onPressed: () {
+                                    if (!_isSyncing) {
+                                      _checkAndSync();
+                                    }
+                                  },
                                 ),
                               ),
 
@@ -377,13 +385,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                               const SizedBox(width: 16),
 
-                              CircleAvatar(
-                                backgroundColor: colorScheme.primary
-                                    .withOpacity(0.2),
-                                child: Icon(
-                                  Icons.person,
-                                  color: colorScheme.primary,
+                              PopupMenuButton<String>(
+                                onSelected: (value) {
+                                  if (value == 'logout') {
+                                    _handleSecureLogout();
+                                  }
+                                },
+                                color: colorScheme.surface,
+                                offset: const Offset(0, 50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(
+                                    color: isDark
+                                        ? Colors.redAccent.withOpacity(0.2)
+                                        : Colors.black.withOpacity(0.05),
+                                  ),
                                 ),
+                                child: CircleAvatar(
+                                  backgroundColor: colorScheme.primary
+                                      .withOpacity(0.2),
+                                  child: Icon(
+                                    Icons.person,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'logout',
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.logout,
+                                          color: Colors.redAccent,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Cerrar Sesión',
+                                          style: GoogleFonts.poppins(
+                                            color: Colors.redAccent,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

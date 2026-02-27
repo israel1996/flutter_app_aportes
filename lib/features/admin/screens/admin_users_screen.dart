@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -43,11 +44,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           .eq('id', userId);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Estado actualizado a $nuevoEstado'),
-            backgroundColor: Colors.green,
-          ),
+        CustomSnackBar.showSuccess(
+          context,
+          'Estado actualizado a $nuevoEstado',
         );
       }
       _fetchUsuarios(); // Refresh list
