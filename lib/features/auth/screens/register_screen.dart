@@ -1,40 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
-import 'package:flutter_app_aportes/features/auth/screens/register_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends ConsumerStatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
-  Future<void> _login() async {
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
       final authService = ref.read(authServiceProvider);
-      await authService.signIn(
+      await authService.signUp(
         _emailController.text.trim(),
         _passwordController.text.trim(),
+        _nameController.text.trim(),
       );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Registro exitoso. Por favor, inicia sesión.'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al iniciar sesión: $e'),
+            content: Text('Error al registrar: $e'),
             backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
           ),
@@ -47,8 +61,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -74,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+              constraints: const BoxConstraints(maxWidth: 450),
               child: Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
@@ -101,18 +117,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // --- GLOWING ICON ---
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isDark
-                              ? const Color(0xFF00C9FF).withOpacity(0.1)
-                              : colorScheme.primary.withOpacity(0.1),
+                              ? const Color(0xFF92FE9D).withOpacity(0.1)
+                              : Colors.green.withOpacity(0.1),
                           boxShadow: isDark
                               ? [
                                   BoxShadow(
                                     color: const Color(
-                                      0xFF00C9FF,
+                                      0xFF92FE9D,
                                     ).withOpacity(0.2),
                                     blurRadius: 20,
                                   ),
@@ -120,17 +137,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : null,
                         ),
                         child: Icon(
-                          Icons.lock_person_outlined,
+                          Icons.person_add_alt_1_outlined,
                           size: 48,
                           color: isDark
-                              ? const Color(0xFF00C9FF)
-                              : colorScheme.primary,
+                              ? const Color(0xFF92FE9D)
+                              : Colors.green,
                         ),
                       ),
                       const SizedBox(height: 24),
 
+                      // --- TITLE ---
                       Text(
-                        'Bienvenido',
+                        'Crear Cuenta',
                         style: GoogleFonts.montserrat(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
@@ -139,7 +157,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Ingrese sus credenciales para continuar',
+                        'Regístrese para administrar el sistema',
                         style: GoogleFonts.poppins(
                           color: Colors.grey,
                           fontSize: 14,
@@ -148,6 +166,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 32),
 
+                      // --- NAME INPUT ---
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Nombre Completo',
+                          prefixIcon: Icon(
+                            Icons.badge_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        validator: (value) =>
+                            value!.isEmpty ? 'El nombre es obligatorio' : null,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // --- EMAIL INPUT ---
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -171,6 +208,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
 
+                      // --- PASSWORD INPUT ---
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
@@ -190,19 +228,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   : Icons.visibility,
                               color: Colors.grey,
                             ),
-                            onPressed: () {
-                              setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              );
-                            },
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
-                        validator: (value) => value!.isEmpty
-                            ? 'La contraseña es obligatoria'
-                            : null,
+                        validator: (value) {
+                          if (value == null || value.isEmpty)
+                            return 'La contraseña es obligatoria';
+                          if (value.length < 6) return 'Mínimo 6 caracteres';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // --- CONFIRM PASSWORD INPUT ---
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        decoration: InputDecoration(
+                          labelText: 'Confirmar Contraseña',
+                          prefixIcon: Icon(
+                            Icons.lock_reset_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscureConfirmPassword =
+                                  !_obscureConfirmPassword,
+                            ),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value != _passwordController.text)
+                            return 'Las contraseñas no coinciden';
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 32),
 
+                      // --- GLOWING REGISTER BUTTON ---
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -233,7 +307,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 : null,
                           ),
                           child: ElevatedButton(
-                            onPressed: _isLoading ? null : _login,
+                            onPressed: _isLoading ? null : _register,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
@@ -251,7 +325,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                   )
                                 : Text(
-                                    'INICIAR SESIÓN',
+                                    'REGISTRARSE',
                                     style: GoogleFonts.montserrat(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold,
@@ -265,16 +339,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 24),
 
                       TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const RegisterScreen(),
-                            ),
-                          );
-                        },
+                        onPressed: () => Navigator.pop(context),
                         child: Text(
-                          '¿No tienes cuenta? Regístrate aquí',
+                          '¿Ya tienes cuenta? Inicia sesión aquí',
                           style: GoogleFonts.poppins(
                             color: isDark
                                 ? const Color(0xFF00C9FF)

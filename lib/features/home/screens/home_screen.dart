@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
@@ -142,255 +143,305 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final userRoleAsync = ref.watch(userRoleProvider);
 
-    final isDesktop = MediaQuery.of(context).size.width > 800;
+    return userRoleAsync.when(
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator(strokeWidth: 3)),
+      ),
+      error: (error, stack) =>
+          Scaffold(body: Center(child: Text('Error cargando rol: $error'))),
+      data: (role) {
+        final isSuperAdmin = role == 'superadmin';
 
-    final List<Widget> pages = [
-      const DashboardSummary(),
-      const FeligresesScreen(),
-      const AportesScreen(),
-      const ExportScreen(),
-    ];
+        final colorScheme = Theme.of(context).colorScheme;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final isDesktop = MediaQuery.of(context).size.width > 800;
 
-    return Scaffold(
-      body: Row(
-        children: [
-          if (isDesktop)
-            Container(
-              width: 260,
-              color: colorScheme.surface,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 30),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.church,
-                          color: colorScheme.primary,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'DASHBOARD',
-                          style: GoogleFonts.montserrat(
-                            color: colorScheme.onSurface,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
+        // 1. Conditionally add the 5th page for superadmins
+        final List<Widget> pages = [
+          const DashboardSummary(),
+          const FeligresesScreen(),
+          const AportesScreen(),
+          const ExportScreen(),
+          if (isSuperAdmin) const AdminUsersScreen(),
+        ];
 
-                  Padding(
-                    padding: const EdgeInsets.only(left: 24, bottom: 10),
-                    child: Text(
-                      'MAIN',
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
+        // Ensure selected index doesn't crash if a superadmin logs out and a normal user logs in
+        if (_selectedIndex >= pages.length) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() => _selectedIndex = 0);
+          });
+        }
 
-                  _buildNavItem(
-                    0,
-                    Icons.grid_view_rounded,
-                    'Resumen',
-                    colorScheme,
-                    isDark,
-                  ),
-                  _buildNavItem(
-                    1,
-                    Icons.people_alt_outlined,
-                    'Feligreses',
-                    colorScheme,
-                    isDark,
-                  ),
-                  _buildNavItem(
-                    2,
-                    Icons.account_balance_wallet_outlined,
-                    'Aportes',
-                    colorScheme,
-                    isDark,
-                  ),
-                  _buildNavItem(
-                    3,
-                    Icons.file_download_outlined,
-                    'Exportar',
-                    colorScheme,
-                    isDark,
-                  ),
-
-                  const Spacer(),
-
-                  Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: OutlinedButton.icon(
-                      onPressed: _handleSecureLogout,
-                      icon: const Icon(Icons.logout, color: Colors.redAccent),
-                      label: const Text(
-                        'Cerrar Sesión',
-                        style: TextStyle(color: Colors.redAccent),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.redAccent),
-                        minimumSize: const Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          Expanded(
-            child: Column(
-              children: [
+        return Scaffold(
+          body: Row(
+            children: [
+              if (isDesktop)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32.0,
-                    vertical: 24.0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  width: 260,
+                  color: colorScheme.surface,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _selectedIndex == 0
-                            ? 'SUMMARY'
-                            : _selectedIndex == 1
-                            ? 'FELIGRESES'
-                            : _selectedIndex == 2
-                            ? 'APORTES'
-                            : _selectedIndex == 3
-                            ? 'EXPORTAR'
-                            : '',
-                        style: GoogleFonts.poppins(
-                          color: Colors.grey,
-                          fontSize: 16,
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(height: 30),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.church,
+                              color: colorScheme.primary,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'DASHBOARD',
+                              style: GoogleFonts.montserrat(
+                                color: colorScheme.onSurface,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Row(
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(right: 16),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: IconButton(
-                              icon: _isSyncing
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Icon(
-                                      Icons.sync,
-                                      color: colorScheme.primary,
-                                    ),
-                              onPressed: _isSyncing ? null : _checkAndSync,
-                            ),
-                          ),
+                      const SizedBox(height: 40),
 
-                          Container(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                isDark ? Icons.light_mode : Icons.dark_mode,
-                              ),
-                              color: isDark
-                                  ? Colors.yellow
-                                  : colorScheme.primary,
-                              onPressed: () {
-                                ref.read(themeModeProvider.notifier).state =
-                                    isDark ? ThemeMode.light : ThemeMode.dark;
-                              },
-                            ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 24, bottom: 10),
+                        child: Text(
+                          'MAIN',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey,
+                            fontSize: 12,
                           ),
-                          const SizedBox(width: 16),
+                        ),
+                      ),
 
-                          CircleAvatar(
-                            backgroundColor: colorScheme.primary.withOpacity(
-                              0.2,
-                            ),
-                            child: Icon(
-                              Icons.person,
-                              color: colorScheme.primary,
+                      _buildNavItem(
+                        0,
+                        Icons.grid_view_rounded,
+                        'Resumen',
+                        colorScheme,
+                        isDark,
+                      ),
+                      _buildNavItem(
+                        1,
+                        Icons.people_alt_outlined,
+                        'Feligreses',
+                        colorScheme,
+                        isDark,
+                      ),
+                      _buildNavItem(
+                        2,
+                        Icons.account_balance_wallet_outlined,
+                        'Aportes',
+                        colorScheme,
+                        isDark,
+                      ),
+                      _buildNavItem(
+                        3,
+                        Icons.file_download_outlined,
+                        'Exportar',
+                        colorScheme,
+                        isDark,
+                      ),
+
+                      // 2. Conditionally add the 5th sidebar item
+                      if (isSuperAdmin)
+                        _buildNavItem(
+                          4,
+                          Icons.admin_panel_settings,
+                          'Usuarios',
+                          colorScheme,
+                          isDark,
+                        ),
+
+                      const Spacer(),
+
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: OutlinedButton.icon(
+                          onPressed: _handleSecureLogout,
+                          icon: const Icon(
+                            Icons.logout,
+                            color: Colors.redAccent,
+                          ),
+                          label: const Text(
+                            'Cerrar Sesión',
+                            style: TextStyle(color: Colors.redAccent),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.redAccent),
+                            minimumSize: const Size(double.infinity, 50),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                    child: pages[_selectedIndex],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32.0,
+                        vertical: 24.0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // 3. Dynamic Title Updates
+                          Text(
+                            _selectedIndex == 0
+                                ? 'SUMMARY'
+                                : _selectedIndex == 1
+                                ? 'FELIGRESES'
+                                : _selectedIndex == 2
+                                ? 'APORTES'
+                                : _selectedIndex == 3
+                                ? 'EXPORTAR'
+                                : _selectedIndex == 4
+                                ? 'PANEL DE APROBACIÓN'
+                                : '',
+                            style: GoogleFonts.poppins(
+                              color: Colors.grey,
+                              fontSize: 16,
+                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              Container(
+                                margin: const EdgeInsets.only(right: 16),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: IconButton(
+                                  icon: _isSyncing
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.sync,
+                                          color: colorScheme.primary,
+                                        ),
+                                  onPressed: _isSyncing ? null : _checkAndSync,
+                                ),
+                              ),
 
-      bottomNavigationBar: isDesktop
-          ? null
-          : NavigationBar(
-              backgroundColor: colorScheme.surface,
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: (index) =>
-                  setState(() => _selectedIndex = index),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.grid_view_rounded),
-                  label: 'Resumen',
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: IconButton(
+                                  icon: Icon(
+                                    isDark ? Icons.light_mode : Icons.dark_mode,
+                                  ),
+                                  color: isDark
+                                      ? Colors.yellow
+                                      : colorScheme.primary,
+                                  onPressed: () {
+                                    ref
+                                        .read(themeModeProvider.notifier)
+                                        .state = isDark
+                                        ? ThemeMode.light
+                                        : ThemeMode.dark;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+
+                              CircleAvatar(
+                                backgroundColor: colorScheme.primary
+                                    .withOpacity(0.2),
+                                child: Icon(
+                                  Icons.person,
+                                  color: colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                        // Safe index lookup
+                        child: _selectedIndex < pages.length
+                            ? pages[_selectedIndex]
+                            : pages[0],
+                      ),
+                    ),
+                  ],
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.people_alt_outlined),
-                  label: 'Feligreses',
+              ),
+            ],
+          ),
+
+          bottomNavigationBar: isDesktop
+              ? null
+              : NavigationBar(
+                  backgroundColor: colorScheme.surface,
+                  selectedIndex: _selectedIndex < pages.length
+                      ? _selectedIndex
+                      : 0,
+                  onDestinationSelected: (index) =>
+                      setState(() => _selectedIndex = index),
+                  destinations: [
+                    const NavigationDestination(
+                      icon: Icon(Icons.grid_view_rounded),
+                      label: 'Resumen',
+                    ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.people_alt_outlined),
+                      label: 'Feligreses',
+                    ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.account_balance_wallet_outlined),
+                      label: 'Aportes',
+                    ),
+                    const NavigationDestination(
+                      icon: Icon(Icons.file_download_outlined),
+                      label: 'Exportar',
+                    ),
+                    // 4. Conditionally add the 5th mobile navigation item
+                    if (isSuperAdmin)
+                      const NavigationDestination(
+                        icon: Icon(Icons.admin_panel_settings),
+                        label: 'Usuarios',
+                      ),
+                  ],
                 ),
-                NavigationDestination(
-                  icon: Icon(Icons.account_balance_wallet_outlined),
-                  label: 'Aportes',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.file_download_outlined),
-                  label: 'Exportar',
-                ),
-              ],
-            ),
+        );
+      },
     );
   }
 
