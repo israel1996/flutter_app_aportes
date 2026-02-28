@@ -33,6 +33,11 @@ class AuthService {
           throw Exception(
             'Su cuenta ha sido desactivada. Contacte al administrador.',
           );
+        } else if (estado == 'solicita_reseteo') {
+          await signOut();
+          throw Exception(
+            'Has solicitado un cambio de clave. Espera a que el administrador te asigne la clave temporal.',
+          );
         }
       } catch (e) {
         if (e.toString().contains('Su cuenta')) {

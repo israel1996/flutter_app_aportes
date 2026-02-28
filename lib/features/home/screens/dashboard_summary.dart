@@ -16,7 +16,6 @@ class DashboardSummary extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final panelColor = Theme.of(context).colorScheme.surface;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
-    final textSecondary = isDark ? Colors.white54 : Colors.black54;
 
     return StreamBuilder<List<AporteConFeligres>>(
       stream: database.watchHistory(),

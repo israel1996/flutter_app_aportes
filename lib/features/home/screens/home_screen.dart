@@ -10,6 +10,7 @@ import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart'
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../export/screens/export_screen.dart';
+import '../../auth/screens/force_password_screen.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../../providers.dart';
@@ -159,6 +160,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       error: (error, stack) =>
           Scaffold(body: Center(child: Text('Error cargando rol: $error'))),
       data: (role) {
+        if (role == 'requiere_cambio_clave') {
+          return const ForcePasswordScreen();
+        }
         final isSuperAdmin = role == 'superadmin';
 
         final colorScheme = Theme.of(context).colorScheme;

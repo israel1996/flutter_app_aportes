@@ -58,7 +58,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -69,8 +68,12 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               itemCount: _usuarios.length,
               itemBuilder: (context, index) {
                 final user = _usuarios[index];
+
+                // Define the states
                 final isPending = user['estado'] == 'pendiente';
                 final isActive = user['estado'] == 'activo';
+                final isResetRequested =
+                    user['estado'] == 'solicita_reseteo'; // NEW STATE!
 
                 // Prevent superadmin from locking themselves out
                 if (user['rol'] == 'superadmin') return const SizedBox.shrink();
@@ -82,11 +85,19 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
+                        // Make it glow red if a reset is requested!
+                        color: isResetRequested
+                            ? Colors.redAccent.withOpacity(0.4)
+                            : Colors.black.withOpacity(0.1),
+                        blurRadius: isResetRequested ? 15 : 8,
                       ),
                     ],
-                    border: isPending
+                    border: isResetRequested
+                        ? Border.all(
+                            color: Colors.redAccent,
+                            width: 2,
+                          ) // Bold Red Border
+                        : isPending
                         ? Border.all(
                             color: Colors.orangeAccent.withOpacity(0.5),
                             width: 2,
@@ -99,23 +110,47 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       vertical: 12,
                     ),
                     leading: CircleAvatar(
-                      backgroundColor: isPending
+                      backgroundColor: isResetRequested
+                          ? Colors.redAccent.withOpacity(0.2)
+                          : isPending
                           ? Colors.orange.withOpacity(0.2)
                           : (isActive
                                 ? Colors.green.withOpacity(0.2)
-                                : Colors.red.withOpacity(0.2)),
+                                : Colors.grey.withOpacity(0.2)),
                       child: Icon(
-                        isPending
+                        isResetRequested
+                            ? Icons
+                                  .lock_reset // Special key alert icon
+                            : isPending
                             ? Icons.hourglass_empty
                             : (isActive ? Icons.check : Icons.block),
-                        color: isPending
+                        color: isResetRequested
+                            ? Colors.redAccent
+                            : isPending
                             ? Colors.orange
-                            : (isActive ? Colors.green : Colors.red),
+                            : (isActive ? Colors.green : Colors.grey),
                       ),
                     ),
-                    title: Text(
-                      user['nombre'] ?? 'Sin nombre',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+                    title: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (isResetRequested)
+                          Text(
+                            '¡SOLICITA CAMBIO DE CLAVE!',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        Text(
+                          user['nombre'] ?? 'Sin nombre',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Text(
                       user['email'],
@@ -127,7 +162,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (!isActive) // Show Approve Button
+                        // Show Approve Button for Pending users
+                        if (isPending)
                           IconButton(
                             tooltip: 'Aprobar Acceso',
                             icon: const Icon(
@@ -138,13 +174,81 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             onPressed: () =>
                                 _cambiarEstado(user['id'], 'activo'),
                           ),
-                        if (isActive || isPending) // Show Block Button
+
+                        // Show Reset Password Button (For Active OR Reset Requested users)
+                        if (isActive || isResetRequested)
+                          IconButton(
+                            tooltip: 'Restablecer Contraseña (Iglesia2026)',
+                            // Make the icon pulse or stand out if requested
+                            icon: Icon(
+                              Icons.lock_reset,
+                              color: isResetRequested
+                                  ? Colors.redAccent
+                                  : Colors.blueAccent,
+                              size: isResetRequested ? 32 : 28,
+                            ),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('¿Restablecer Contraseña?'),
+                                  content: Text(
+                                    'Esto cambiará la contraseña de ${user['nombre']} a "Iglesia2026" y le obligará a cambiarla al iniciar sesión. ¿Continuar?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text(
+                                        'Restablecer',
+                                        style: TextStyle(
+                                          color: Colors.blueAccent,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                try {
+                                  await _supabase.rpc(
+                                    'admin_reset_password',
+                                    params: {
+                                      'target_user_id': user['id'],
+                                      'new_password': 'Iglesia2026',
+                                    },
+                                  );
+                                  if (mounted)
+                                    CustomSnackBar.showSuccess(
+                                      context,
+                                      'Contraseña restablecida a Iglesia2026',
+                                    );
+                                  _fetchUsuarios(); // Refresh list to remove the red glow!
+                                } catch (e) {
+                                  if (mounted)
+                                    CustomSnackBar.showError(
+                                      context,
+                                      'Error: $e',
+                                    );
+                                }
+                              }
+                            },
+                          ),
+
+                        // Block Button (Hide it if they just requested a reset to keep UI clean)
+                        if ((isActive || isPending) && !isResetRequested)
                           IconButton(
                             tooltip: 'Desactivar/Bloquear',
                             icon: const Icon(
                               Icons.cancel,
-                              color: Colors.redAccent,
-                              size: 28,
+                              color: Colors.grey,
+                              size: 24,
                             ),
                             onPressed: () =>
                                 _cambiarEstado(user['id'], 'inactivo'),

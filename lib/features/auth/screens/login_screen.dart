@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/auth/screens/register_screen.dart';
+import 'package:flutter_app_aportes/features/auth/widgets/recovery_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -195,6 +196,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         validator: (value) => value!.isEmpty
                             ? 'La contraseña es obligatoria'
                             : null,
+                      ),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () {
+                            // OPEN THE NEW VERIFICATION DIALOG!
+                            showDialog(
+                              context: context,
+                              barrierDismissible:
+                                  false, // Prevents closing by tapping outside
+                              builder: (context) => const RecoveryDialog(),
+                            );
+                          },
+                          child: Text(
+                            '¿Olvidaste tu contraseña?',
+                            style: GoogleFonts.poppins(
+                              color: isDark
+                                  ? const Color(0xFF00C9FF)
+                                  : colorScheme.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 32),
 
