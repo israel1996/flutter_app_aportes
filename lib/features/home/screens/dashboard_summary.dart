@@ -25,7 +25,11 @@ class DashboardSummary extends ConsumerWidget {
           builder: (context, membersSnapshot) {
             // 1. Calculate Real Data
             final aportes = historySnapshot.data ?? [];
-            final members = membersSnapshot.data ?? [];
+            final allMembers = membersSnapshot.data ?? [];
+
+            final activeMembers = allMembers
+                .where((m) => m.activo == 1)
+                .toList();
 
             double totalAportes = 0;
             final now = DateTime.now();
@@ -69,7 +73,7 @@ class DashboardSummary extends ConsumerWidget {
                           children: [
                             _buildTotalCard(total: totalAportes),
                             const SizedBox(height: 16),
-                            _buildMembersCard(members.length.toString()),
+                            _buildMembersCard(activeMembers.length.toString()),
                             const SizedBox(height: 16),
                             _buildActivityCard(aportesEsteMes.toString()),
                           ],
@@ -80,7 +84,9 @@ class DashboardSummary extends ConsumerWidget {
                           Expanded(child: _buildTotalCard(total: totalAportes)),
                           const SizedBox(width: 20),
                           Expanded(
-                            child: _buildMembersCard(members.length.toString()),
+                            child: _buildMembersCard(
+                              activeMembers.length.toString(),
+                            ),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
@@ -361,9 +367,17 @@ class GradientSummaryCard extends StatelessWidget {
                 child: Text(
                   title,
                   style: GoogleFonts.poppins(
-                    color: Colors.white70,
+                    color: Colors.white, // Changed to pure white
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600, // Slightly bolder
+                    shadows: [
+                      // Added shadow for contrast
+                      Shadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -373,7 +387,6 @@ class GradientSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 15),
-          // Use FittedBox to automatically shrink the huge numbers if the screen gets too small
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -383,6 +396,13 @@ class GradientSummaryCard extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
             ),
           ),
