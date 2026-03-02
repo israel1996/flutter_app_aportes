@@ -423,10 +423,20 @@ class DashboardSummary extends ConsumerWidget {
             isStacked
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(child: Text('No hay aportes este mes.')),
+                    child: Center(
+                      child: Text(
+                        'No hay aportes este mes.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
                   )
                 : const Expanded(
-                    child: Center(child: Text('No hay aportes este mes.')),
+                    child: Center(
+                      child: Text(
+                        'No hay aportes este mes.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
                   )
           else
             ...top5.asMap().entries.map((entry) {
@@ -532,7 +542,7 @@ class DashboardSummary extends ConsumerWidget {
               child: Center(
                 child: Text(
                   'No hay datos registrados',
-                  style: GoogleFonts.poppins(color: Colors.grey),
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
                 ),
               ),
             )
