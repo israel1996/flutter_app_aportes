@@ -57,6 +57,43 @@ class DashboardSummary extends ConsumerWidget {
               maxY = maxY == 0 ? 10 : maxY * 1.2;
             }
 
+            if (aportes.isNotEmpty) {
+              maxY = monthlyData.reduce(
+                (curr, next) => curr > next ? curr : next,
+              );
+              maxY = maxY == 0 ? 10 : maxY * 1.2;
+            }
+
+            // --- 1. NEW LOGIC: TOP 5 CONTRIBUTORS (THIS MONTH) ---
+            final Map<String, double> top5Map = {};
+            for (var a in aportes) {
+              if (a.aporte.fecha.year == now.year &&
+                  a.aporte.fecha.month == now.month) {
+                final key = '${a.feligres.nombre} - ${a.aporte.tipo}';
+                top5Map[key] = (top5Map[key] ?? 0) + a.aporte.monto;
+              }
+            }
+            final top5List = top5Map.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            final top5 = top5List.take(5).toList();
+
+            // --- 2. NEW LOGIC: TOTAL BY GENDER ---
+            double totalMasculino = 0;
+            double totalFemenino = 0;
+
+            for (var a in aportes) {
+              // Only add if the contribution is from the current year and month
+              if (a.aporte.fecha.year == now.year &&
+                  a.aporte.fecha.month == now.month) {
+                final genero = a.feligres.genero?.toLowerCase() ?? '';
+                if (genero == 'masculino' || genero == 'm') {
+                  totalMasculino += a.aporte.monto;
+                } else if (genero == 'femenino' || genero == 'f') {
+                  totalFemenino += a.aporte.monto;
+                }
+              }
+            }
+
             return SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,6 +132,73 @@ class DashboardSummary extends ConsumerWidget {
                             ),
                           ),
                         ],
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  // ---------------------------------------------------
+                  // 4. TOP 5 AND DEMOGRAPHICS ROW
+                  // ---------------------------------------------------
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isStacked = constraints.maxWidth < 800;
+
+                      if (isStacked) {
+                        return Column(
+                          children: [
+                            _buildTop5Card(
+                              top5,
+                              panelColor,
+                              textPrimary,
+                              isDark,
+                              Theme.of(context).colorScheme,
+                              isStacked,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildGenderPieChart(
+                              totalMasculino,
+                              totalFemenino,
+                              panelColor,
+                              textPrimary,
+                              isDark,
+                              isStacked,
+                            ),
+                          ],
+                        );
+                      }
+                      return SizedBox(
+                        height:
+                            460, // <-- Altura fija y segura para igualar ambos cuadros
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              flex: 5,
+                              child: _buildTop5Card(
+                                top5,
+                                panelColor,
+                                textPrimary,
+                                isDark,
+                                Theme.of(context).colorScheme,
+                                isStacked,
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 4,
+                              child: _buildGenderPieChart(
+                                totalMasculino,
+                                totalFemenino,
+                                panelColor,
+                                textPrimary,
+                                isDark,
+                                isStacked,
+                              ),
+                            ),
+                          ],
+                        ),
                       );
                     },
                   ),
@@ -275,6 +379,272 @@ class DashboardSummary extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+
+  // --- HELPER: TOP 5 CARD ---
+  // --- HELPER: TOP 5 CARD ---
+  Widget _buildTop5Card(
+    List<MapEntry<String, double>> top5,
+    Color panelColor,
+    Color textPrimary,
+    bool isDark,
+    ColorScheme colorScheme,
+    bool isStacked, // <-- Nuevo parámetro
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Top 5 Aportes (Mes Actual)',
+            style: GoogleFonts.poppins(
+              color: textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          if (top5.isEmpty)
+            // Centrado inteligente dependiendo de la pantalla
+            isStacked
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: Center(child: Text('No hay aportes este mes.')),
+                  )
+                : const Expanded(
+                    child: Center(child: Text('No hay aportes este mes.')),
+                  )
+          else
+            ...top5.asMap().entries.map((entry) {
+              int index = entry.key;
+              String nameAndType = entry.value.key;
+              double amount = entry.value.value;
+
+              Color rankColor = index == 0
+                  ? Colors.amber
+                  : (index == 1
+                        ? Colors.grey.shade400
+                        : (index == 2
+                              ? Colors.brown.shade300
+                              : colorScheme.primary));
+
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: rankColor.withOpacity(0.2),
+                  child: Text(
+                    '#${index + 1}',
+                    style: TextStyle(
+                      color: rankColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  nameAndType.split(' - ').first,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1, // <-- PREVIENE DESBORDAMIENTO VERTICAL
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  nameAndType.split(' - ').last,
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                  maxLines: 1, // <-- PREVIENE DESBORDAMIENTO VERTICAL
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Text(
+                  '\$${amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.greenAccent,
+                    fontSize: 16,
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  // --- HELPER: GENDER PIE CHART ---
+  Widget _buildGenderPieChart(
+    double masculino,
+    double femenino,
+    Color panelColor,
+    Color textPrimary,
+    bool isDark,
+    bool isStacked, // <-- Nuevo parámetro
+  ) {
+    final double total = masculino + femenino;
+    final double pctMasc = total == 0 ? 0 : (masculino / total) * 100;
+    final double pctFem = total == 0 ? 0 : (femenino / total) * 100;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Aportes por Género (Mes Actual)',
+            style: GoogleFonts.poppins(
+              color: textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          if (!isStacked)
+            const Spacer(), // <-- Centra dinámicamente el gráfico hacia abajo
+          if (isStacked) const SizedBox(height: 30),
+
+          if (total == 0)
+            SizedBox(
+              height: 200,
+              child: Center(
+                child: Text(
+                  'No hay datos registrados',
+                  style: GoogleFonts.poppins(color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              height: 200,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  PieChart(
+                    PieChartData(
+                      sectionsSpace: 4,
+                      centerSpaceRadius: 60,
+                      sections: [
+                        if (masculino > 0)
+                          PieChartSectionData(
+                            value: masculino,
+                            color: const Color(0xFF00C9FF),
+                            title:
+                                '${pctMasc.toStringAsFixed(1)}%\n\$${masculino.toStringAsFixed(2)}',
+                            radius: 45,
+                            titleStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        if (femenino > 0)
+                          PieChartSectionData(
+                            value: femenino,
+                            color: const Color(0xFFFF007F),
+                            title:
+                                '${pctFem.toStringAsFixed(1)}%\n\$${femenino.toStringAsFixed(2)}',
+                            radius: 45,
+                            titleStyle: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Total',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      Text(
+                        '\$${total.toStringAsFixed(0)}',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 30), // <-- Espaciado adicional solicitado
+          // <-- FITTEDBOX: PREVIENE EL DESBORDAMIENTO HORIZONTAL REDUCIENDO LA LETRA SI ES NECESARIO
+          Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildLegendItem(
+                    'Hombres',
+                    const Color(0xFF00C9FF),
+                    masculino,
+                  ),
+                  const SizedBox(width: 24),
+                  _buildLegendItem(
+                    'Mujeres',
+                    const Color(0xFFFF007F),
+                    femenino,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (!isStacked)
+            const Spacer(), // <-- Empuja el gráfico hacia arriba, logrando el centrado perfecto
+        ],
+      ),
+    );
+  }
+
+  // Updated legend to accept and display the amount
+  Widget _buildLegendItem(String title, Color color, double amount) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '$title: \$${amount.toStringAsFixed(2)}',
+          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 
