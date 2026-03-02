@@ -94,6 +94,45 @@ class DashboardSummary extends ConsumerWidget {
               }
             }
 
+            // --- 3. NEW LOGIC: TOTAL BY AGE BRACKETS (CURRENT MONTH) ---
+            double ninos = 0; // 0-11
+            double adolescentes = 0; // 12-17
+            double jovenes = 0; // 18-29
+            double adultos = 0; // 30-59
+            double mayores = 0; // 60+
+
+            for (var a in aportes) {
+              // Only process contributions from the current month
+              if (a.aporte.fecha.year == now.year &&
+                  a.aporte.fecha.month == now.month) {
+                // We extract the date directly. No parsing needed!
+                final birthDate = a.feligres.fechaNacimiento;
+
+                // If the user has a birthdate, calculate exact age
+                if (birthDate != null) {
+                  int age = now.year - birthDate.year;
+                  if (now.month < birthDate.month ||
+                      (now.month == birthDate.month &&
+                          now.day < birthDate.day)) {
+                    age--;
+                  }
+
+                  // Group the contribution amounts
+                  if (age <= 11) {
+                    ninos += a.aporte.monto;
+                  } else if (age <= 17) {
+                    adolescentes += a.aporte.monto;
+                  } else if (age <= 29) {
+                    jovenes += a.aporte.monto;
+                  } else if (age <= 59) {
+                    adultos += a.aporte.monto;
+                  } else {
+                    mayores += a.aporte.monto;
+                  }
+                }
+              }
+            }
+
             return SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,6 +240,20 @@ class DashboardSummary extends ConsumerWidget {
                         ),
                       );
                     },
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  _buildAgeBracketChart(
+                    ninos,
+                    adolescentes,
+                    jovenes,
+                    adultos,
+                    mayores,
+                    panelColor,
+                    textPrimary,
+                    isDark,
+                    Theme.of(context).colorScheme,
                   ),
 
                   const SizedBox(height: 40),
@@ -703,6 +756,196 @@ class DashboardSummary extends ConsumerWidget {
       icon: Icons.trending_up,
     );
   }
+}
+
+// --- HELPER: AGE BRACKETS BAR CHART ---
+Widget _buildAgeBracketChart(
+  double ninos,
+  double adolescentes,
+  double jovenes,
+  double adultos,
+  double mayores,
+  Color panelColor,
+  Color textPrimary,
+  bool isDark,
+  ColorScheme colorScheme,
+) {
+  // Find the maximum value to scale the Y-axis properly
+  final double maxVal = [
+    ninos,
+    adolescentes,
+    jovenes,
+    adultos,
+    mayores,
+  ].reduce((a, b) => a > b ? a : b);
+  final double chartMaxY = maxVal == 0 ? 100 : maxVal * 1.2;
+
+  return Container(
+    height: 400,
+    width: double.infinity,
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: panelColor,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+          blurRadius: 15,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Aportes por Grupos de Edad (Mes Actual)',
+          style: GoogleFonts.poppins(
+            color: textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 30),
+        Expanded(
+          child: BarChart(
+            BarChartData(
+              alignment: BarChartAlignment.spaceAround,
+              maxY: chartMaxY,
+              barTouchData: BarTouchData(
+                enabled: true,
+                touchTooltipData: BarTouchTooltipData(
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    return BarTooltipItem(
+                      '\$${rod.toY.toStringAsFixed(2)}',
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              titlesData: FlTitlesData(
+                show: true,
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      const style = TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      );
+                      String text;
+                      switch (value.toInt()) {
+                        case 0:
+                          text = 'Niños\n(0-11)';
+                          break;
+                        case 1:
+                          text = 'Adolesc.\n(12-17)';
+                          break;
+                        case 2:
+                          text = 'Jóvenes\n(18-29)';
+                          break;
+                        case 3:
+                          text = 'Adultos\n(30-59)';
+                          break;
+                        case 4:
+                          text = 'Mayores\n(60+)';
+                          break;
+                        default:
+                          text = '';
+                          break;
+                      }
+                      return SideTitleWidget(
+                        meta: meta,
+                        space: 12, // Space between chart and text
+                        child: Text(
+                          text,
+                          style: style,
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
+                    reservedSize:
+                        45, // Gives enough space for the two lines of text
+                  ),
+                ),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 45,
+                    getTitlesWidget: (value, meta) {
+                      if (value == 0 || value >= chartMaxY)
+                        return const SizedBox.shrink();
+                      return Text(
+                        '\$${value.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                getDrawingHorizontalLine: (value) => FlLine(
+                  color: isDark ? Colors.white10 : Colors.black12,
+                  strokeWidth: 1,
+                  dashArray: [5, 5],
+                ),
+              ),
+              borderData: FlBorderData(show: false),
+              barGroups: [
+                _buildBarGroup(0, ninos, const Color(0xFF92FE9D)), // Green
+                _buildBarGroup(
+                  1,
+                  adolescentes,
+                  const Color(0xFF00C9FF),
+                ), // Cyan
+                _buildBarGroup(
+                  2,
+                  jovenes,
+                  const Color(0xFF4FACFE),
+                ), // Deep Blue
+                _buildBarGroup(3, adultos, const Color(0xFF89216B)), // Purple
+                _buildBarGroup(4, mayores, const Color(0xFFFF007F)), // Pink
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// Mini helper to generate the actual bars cleanly
+BarChartGroupData _buildBarGroup(int x, double y, Color color) {
+  return BarChartGroupData(
+    x: x,
+    barRods: [
+      BarChartRodData(
+        toY: y,
+        color: color,
+        width: 24, // Thickness of the bars
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(8),
+          topRight: Radius.circular(8),
+        ),
+      ),
+    ],
+  );
 }
 
 class GradientSummaryCard extends StatelessWidget {
