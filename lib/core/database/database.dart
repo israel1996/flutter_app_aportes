@@ -13,6 +13,16 @@ class Feligreses extends Table {
   TextColumn get telefono => text().nullable()();
   IntColumn get activo => integer().withDefault(const Constant(1))();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
+  TextColumn get cedula => text().nullable()();
+  TextColumn get estadoCivil => text().nullable()();
+  BoolColumn get poseeDiscapacidad =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get bautizadoAgua =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get bautizadoEspiritu =>
+      boolean().withDefault(const Constant(false))();
+  TextColumn get tipoFeligres =>
+      text().withDefault(const Constant('feligres'))();
 
   @override
   Set<Column> get primaryKey => {id};

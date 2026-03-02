@@ -85,6 +85,83 @@ class $FeligresesTable extends Feligreses
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _cedulaMeta = const VerificationMeta('cedula');
+  @override
+  late final GeneratedColumn<String> cedula = GeneratedColumn<String>(
+    'cedula',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _estadoCivilMeta = const VerificationMeta(
+    'estadoCivil',
+  );
+  @override
+  late final GeneratedColumn<String> estadoCivil = GeneratedColumn<String>(
+    'estado_civil',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _poseeDiscapacidadMeta = const VerificationMeta(
+    'poseeDiscapacidad',
+  );
+  @override
+  late final GeneratedColumn<bool> poseeDiscapacidad = GeneratedColumn<bool>(
+    'posee_discapacidad',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("posee_discapacidad" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _bautizadoAguaMeta = const VerificationMeta(
+    'bautizadoAgua',
+  );
+  @override
+  late final GeneratedColumn<bool> bautizadoAgua = GeneratedColumn<bool>(
+    'bautizado_agua',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("bautizado_agua" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _bautizadoEspirituMeta = const VerificationMeta(
+    'bautizadoEspiritu',
+  );
+  @override
+  late final GeneratedColumn<bool> bautizadoEspiritu = GeneratedColumn<bool>(
+    'bautizado_espiritu',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("bautizado_espiritu" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _tipoFeligresMeta = const VerificationMeta(
+    'tipoFeligres',
+  );
+  @override
+  late final GeneratedColumn<String> tipoFeligres = GeneratedColumn<String>(
+    'tipo_feligres',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('feligres'),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -94,6 +171,12 @@ class $FeligresesTable extends Feligreses
     telefono,
     activo,
     syncStatus,
+    cedula,
+    estadoCivil,
+    poseeDiscapacidad,
+    bautizadoAgua,
+    bautizadoEspiritu,
+    tipoFeligres,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -153,6 +236,57 @@ class $FeligresesTable extends Feligreses
         syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
       );
     }
+    if (data.containsKey('cedula')) {
+      context.handle(
+        _cedulaMeta,
+        cedula.isAcceptableOrUnknown(data['cedula']!, _cedulaMeta),
+      );
+    }
+    if (data.containsKey('estado_civil')) {
+      context.handle(
+        _estadoCivilMeta,
+        estadoCivil.isAcceptableOrUnknown(
+          data['estado_civil']!,
+          _estadoCivilMeta,
+        ),
+      );
+    }
+    if (data.containsKey('posee_discapacidad')) {
+      context.handle(
+        _poseeDiscapacidadMeta,
+        poseeDiscapacidad.isAcceptableOrUnknown(
+          data['posee_discapacidad']!,
+          _poseeDiscapacidadMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bautizado_agua')) {
+      context.handle(
+        _bautizadoAguaMeta,
+        bautizadoAgua.isAcceptableOrUnknown(
+          data['bautizado_agua']!,
+          _bautizadoAguaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('bautizado_espiritu')) {
+      context.handle(
+        _bautizadoEspirituMeta,
+        bautizadoEspiritu.isAcceptableOrUnknown(
+          data['bautizado_espiritu']!,
+          _bautizadoEspirituMeta,
+        ),
+      );
+    }
+    if (data.containsKey('tipo_feligres')) {
+      context.handle(
+        _tipoFeligresMeta,
+        tipoFeligres.isAcceptableOrUnknown(
+          data['tipo_feligres']!,
+          _tipoFeligresMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -190,6 +324,30 @@ class $FeligresesTable extends Feligreses
         DriftSqlType.int,
         data['${effectivePrefix}sync_status'],
       )!,
+      cedula: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cedula'],
+      ),
+      estadoCivil: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}estado_civil'],
+      ),
+      poseeDiscapacidad: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}posee_discapacidad'],
+      )!,
+      bautizadoAgua: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}bautizado_agua'],
+      )!,
+      bautizadoEspiritu: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}bautizado_espiritu'],
+      )!,
+      tipoFeligres: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tipo_feligres'],
+      )!,
     );
   }
 
@@ -207,6 +365,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
   final String? telefono;
   final int activo;
   final int syncStatus;
+  final String? cedula;
+  final String? estadoCivil;
+  final bool poseeDiscapacidad;
+  final bool bautizadoAgua;
+  final bool bautizadoEspiritu;
+  final String tipoFeligres;
   const Feligrese({
     required this.id,
     required this.nombre,
@@ -215,6 +379,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     this.telefono,
     required this.activo,
     required this.syncStatus,
+    this.cedula,
+    this.estadoCivil,
+    required this.poseeDiscapacidad,
+    required this.bautizadoAgua,
+    required this.bautizadoEspiritu,
+    required this.tipoFeligres,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -232,6 +402,16 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     }
     map['activo'] = Variable<int>(activo);
     map['sync_status'] = Variable<int>(syncStatus);
+    if (!nullToAbsent || cedula != null) {
+      map['cedula'] = Variable<String>(cedula);
+    }
+    if (!nullToAbsent || estadoCivil != null) {
+      map['estado_civil'] = Variable<String>(estadoCivil);
+    }
+    map['posee_discapacidad'] = Variable<bool>(poseeDiscapacidad);
+    map['bautizado_agua'] = Variable<bool>(bautizadoAgua);
+    map['bautizado_espiritu'] = Variable<bool>(bautizadoEspiritu);
+    map['tipo_feligres'] = Variable<String>(tipoFeligres);
     return map;
   }
 
@@ -250,6 +430,16 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           : Value(telefono),
       activo: Value(activo),
       syncStatus: Value(syncStatus),
+      cedula: cedula == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cedula),
+      estadoCivil: estadoCivil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(estadoCivil),
+      poseeDiscapacidad: Value(poseeDiscapacidad),
+      bautizadoAgua: Value(bautizadoAgua),
+      bautizadoEspiritu: Value(bautizadoEspiritu),
+      tipoFeligres: Value(tipoFeligres),
     );
   }
 
@@ -266,6 +456,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       telefono: serializer.fromJson<String?>(json['telefono']),
       activo: serializer.fromJson<int>(json['activo']),
       syncStatus: serializer.fromJson<int>(json['syncStatus']),
+      cedula: serializer.fromJson<String?>(json['cedula']),
+      estadoCivil: serializer.fromJson<String?>(json['estadoCivil']),
+      poseeDiscapacidad: serializer.fromJson<bool>(json['poseeDiscapacidad']),
+      bautizadoAgua: serializer.fromJson<bool>(json['bautizadoAgua']),
+      bautizadoEspiritu: serializer.fromJson<bool>(json['bautizadoEspiritu']),
+      tipoFeligres: serializer.fromJson<String>(json['tipoFeligres']),
     );
   }
   @override
@@ -279,6 +475,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       'telefono': serializer.toJson<String?>(telefono),
       'activo': serializer.toJson<int>(activo),
       'syncStatus': serializer.toJson<int>(syncStatus),
+      'cedula': serializer.toJson<String?>(cedula),
+      'estadoCivil': serializer.toJson<String?>(estadoCivil),
+      'poseeDiscapacidad': serializer.toJson<bool>(poseeDiscapacidad),
+      'bautizadoAgua': serializer.toJson<bool>(bautizadoAgua),
+      'bautizadoEspiritu': serializer.toJson<bool>(bautizadoEspiritu),
+      'tipoFeligres': serializer.toJson<String>(tipoFeligres),
     };
   }
 
@@ -290,6 +492,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     Value<String?> telefono = const Value.absent(),
     int? activo,
     int? syncStatus,
+    Value<String?> cedula = const Value.absent(),
+    Value<String?> estadoCivil = const Value.absent(),
+    bool? poseeDiscapacidad,
+    bool? bautizadoAgua,
+    bool? bautizadoEspiritu,
+    String? tipoFeligres,
   }) => Feligrese(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
@@ -300,6 +508,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     telefono: telefono.present ? telefono.value : this.telefono,
     activo: activo ?? this.activo,
     syncStatus: syncStatus ?? this.syncStatus,
+    cedula: cedula.present ? cedula.value : this.cedula,
+    estadoCivil: estadoCivil.present ? estadoCivil.value : this.estadoCivil,
+    poseeDiscapacidad: poseeDiscapacidad ?? this.poseeDiscapacidad,
+    bautizadoAgua: bautizadoAgua ?? this.bautizadoAgua,
+    bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
+    tipoFeligres: tipoFeligres ?? this.tipoFeligres,
   );
   Feligrese copyWithCompanion(FeligresesCompanion data) {
     return Feligrese(
@@ -314,6 +528,22 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       syncStatus: data.syncStatus.present
           ? data.syncStatus.value
           : this.syncStatus,
+      cedula: data.cedula.present ? data.cedula.value : this.cedula,
+      estadoCivil: data.estadoCivil.present
+          ? data.estadoCivil.value
+          : this.estadoCivil,
+      poseeDiscapacidad: data.poseeDiscapacidad.present
+          ? data.poseeDiscapacidad.value
+          : this.poseeDiscapacidad,
+      bautizadoAgua: data.bautizadoAgua.present
+          ? data.bautizadoAgua.value
+          : this.bautizadoAgua,
+      bautizadoEspiritu: data.bautizadoEspiritu.present
+          ? data.bautizadoEspiritu.value
+          : this.bautizadoEspiritu,
+      tipoFeligres: data.tipoFeligres.present
+          ? data.tipoFeligres.value
+          : this.tipoFeligres,
     );
   }
 
@@ -326,7 +556,13 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           ..write('genero: $genero, ')
           ..write('telefono: $telefono, ')
           ..write('activo: $activo, ')
-          ..write('syncStatus: $syncStatus')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('cedula: $cedula, ')
+          ..write('estadoCivil: $estadoCivil, ')
+          ..write('poseeDiscapacidad: $poseeDiscapacidad, ')
+          ..write('bautizadoAgua: $bautizadoAgua, ')
+          ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
+          ..write('tipoFeligres: $tipoFeligres')
           ..write(')'))
         .toString();
   }
@@ -340,6 +576,12 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     telefono,
     activo,
     syncStatus,
+    cedula,
+    estadoCivil,
+    poseeDiscapacidad,
+    bautizadoAgua,
+    bautizadoEspiritu,
+    tipoFeligres,
   );
   @override
   bool operator ==(Object other) =>
@@ -351,7 +593,13 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           other.genero == this.genero &&
           other.telefono == this.telefono &&
           other.activo == this.activo &&
-          other.syncStatus == this.syncStatus);
+          other.syncStatus == this.syncStatus &&
+          other.cedula == this.cedula &&
+          other.estadoCivil == this.estadoCivil &&
+          other.poseeDiscapacidad == this.poseeDiscapacidad &&
+          other.bautizadoAgua == this.bautizadoAgua &&
+          other.bautizadoEspiritu == this.bautizadoEspiritu &&
+          other.tipoFeligres == this.tipoFeligres);
 }
 
 class FeligresesCompanion extends UpdateCompanion<Feligrese> {
@@ -362,6 +610,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   final Value<String?> telefono;
   final Value<int> activo;
   final Value<int> syncStatus;
+  final Value<String?> cedula;
+  final Value<String?> estadoCivil;
+  final Value<bool> poseeDiscapacidad;
+  final Value<bool> bautizadoAgua;
+  final Value<bool> bautizadoEspiritu;
+  final Value<String> tipoFeligres;
   final Value<int> rowid;
   const FeligresesCompanion({
     this.id = const Value.absent(),
@@ -371,6 +625,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.telefono = const Value.absent(),
     this.activo = const Value.absent(),
     this.syncStatus = const Value.absent(),
+    this.cedula = const Value.absent(),
+    this.estadoCivil = const Value.absent(),
+    this.poseeDiscapacidad = const Value.absent(),
+    this.bautizadoAgua = const Value.absent(),
+    this.bautizadoEspiritu = const Value.absent(),
+    this.tipoFeligres = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FeligresesCompanion.insert({
@@ -381,6 +641,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.telefono = const Value.absent(),
     this.activo = const Value.absent(),
     this.syncStatus = const Value.absent(),
+    this.cedula = const Value.absent(),
+    this.estadoCivil = const Value.absent(),
+    this.poseeDiscapacidad = const Value.absent(),
+    this.bautizadoAgua = const Value.absent(),
+    this.bautizadoEspiritu = const Value.absent(),
+    this.tipoFeligres = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre);
@@ -392,6 +658,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Expression<String>? telefono,
     Expression<int>? activo,
     Expression<int>? syncStatus,
+    Expression<String>? cedula,
+    Expression<String>? estadoCivil,
+    Expression<bool>? poseeDiscapacidad,
+    Expression<bool>? bautizadoAgua,
+    Expression<bool>? bautizadoEspiritu,
+    Expression<String>? tipoFeligres,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -402,6 +674,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       if (telefono != null) 'telefono': telefono,
       if (activo != null) 'activo': activo,
       if (syncStatus != null) 'sync_status': syncStatus,
+      if (cedula != null) 'cedula': cedula,
+      if (estadoCivil != null) 'estado_civil': estadoCivil,
+      if (poseeDiscapacidad != null) 'posee_discapacidad': poseeDiscapacidad,
+      if (bautizadoAgua != null) 'bautizado_agua': bautizadoAgua,
+      if (bautizadoEspiritu != null) 'bautizado_espiritu': bautizadoEspiritu,
+      if (tipoFeligres != null) 'tipo_feligres': tipoFeligres,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -414,6 +692,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Value<String?>? telefono,
     Value<int>? activo,
     Value<int>? syncStatus,
+    Value<String?>? cedula,
+    Value<String?>? estadoCivil,
+    Value<bool>? poseeDiscapacidad,
+    Value<bool>? bautizadoAgua,
+    Value<bool>? bautizadoEspiritu,
+    Value<String>? tipoFeligres,
     Value<int>? rowid,
   }) {
     return FeligresesCompanion(
@@ -424,6 +708,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       telefono: telefono ?? this.telefono,
       activo: activo ?? this.activo,
       syncStatus: syncStatus ?? this.syncStatus,
+      cedula: cedula ?? this.cedula,
+      estadoCivil: estadoCivil ?? this.estadoCivil,
+      poseeDiscapacidad: poseeDiscapacidad ?? this.poseeDiscapacidad,
+      bautizadoAgua: bautizadoAgua ?? this.bautizadoAgua,
+      bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
+      tipoFeligres: tipoFeligres ?? this.tipoFeligres,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -452,6 +742,24 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
     }
+    if (cedula.present) {
+      map['cedula'] = Variable<String>(cedula.value);
+    }
+    if (estadoCivil.present) {
+      map['estado_civil'] = Variable<String>(estadoCivil.value);
+    }
+    if (poseeDiscapacidad.present) {
+      map['posee_discapacidad'] = Variable<bool>(poseeDiscapacidad.value);
+    }
+    if (bautizadoAgua.present) {
+      map['bautizado_agua'] = Variable<bool>(bautizadoAgua.value);
+    }
+    if (bautizadoEspiritu.present) {
+      map['bautizado_espiritu'] = Variable<bool>(bautizadoEspiritu.value);
+    }
+    if (tipoFeligres.present) {
+      map['tipo_feligres'] = Variable<String>(tipoFeligres.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -468,6 +776,12 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
           ..write('telefono: $telefono, ')
           ..write('activo: $activo, ')
           ..write('syncStatus: $syncStatus, ')
+          ..write('cedula: $cedula, ')
+          ..write('estadoCivil: $estadoCivil, ')
+          ..write('poseeDiscapacidad: $poseeDiscapacidad, ')
+          ..write('bautizadoAgua: $bautizadoAgua, ')
+          ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
+          ..write('tipoFeligres: $tipoFeligres, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -901,6 +1215,12 @@ typedef $$FeligresesTableCreateCompanionBuilder =
       Value<String?> telefono,
       Value<int> activo,
       Value<int> syncStatus,
+      Value<String?> cedula,
+      Value<String?> estadoCivil,
+      Value<bool> poseeDiscapacidad,
+      Value<bool> bautizadoAgua,
+      Value<bool> bautizadoEspiritu,
+      Value<String> tipoFeligres,
       Value<int> rowid,
     });
 typedef $$FeligresesTableUpdateCompanionBuilder =
@@ -912,6 +1232,12 @@ typedef $$FeligresesTableUpdateCompanionBuilder =
       Value<String?> telefono,
       Value<int> activo,
       Value<int> syncStatus,
+      Value<String?> cedula,
+      Value<String?> estadoCivil,
+      Value<bool> poseeDiscapacidad,
+      Value<bool> bautizadoAgua,
+      Value<bool> bautizadoEspiritu,
+      Value<String> tipoFeligres,
       Value<int> rowid,
     });
 
@@ -980,6 +1306,36 @@ class $$FeligresesTableFilterComposer
 
   ColumnFilters<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get cedula => $composableBuilder(
+    column: $table.cedula,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get estadoCivil => $composableBuilder(
+    column: $table.estadoCivil,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get poseeDiscapacidad => $composableBuilder(
+    column: $table.poseeDiscapacidad,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get bautizadoAgua => $composableBuilder(
+    column: $table.bautizadoAgua,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get bautizadoEspiritu => $composableBuilder(
+    column: $table.bautizadoEspiritu,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tipoFeligres => $composableBuilder(
+    column: $table.tipoFeligres,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1052,6 +1408,36 @@ class $$FeligresesTableOrderingComposer
     column: $table.syncStatus,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get cedula => $composableBuilder(
+    column: $table.cedula,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get estadoCivil => $composableBuilder(
+    column: $table.estadoCivil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get poseeDiscapacidad => $composableBuilder(
+    column: $table.poseeDiscapacidad,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get bautizadoAgua => $composableBuilder(
+    column: $table.bautizadoAgua,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get bautizadoEspiritu => $composableBuilder(
+    column: $table.bautizadoEspiritu,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tipoFeligres => $composableBuilder(
+    column: $table.tipoFeligres,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$FeligresesTableAnnotationComposer
@@ -1085,6 +1471,34 @@ class $$FeligresesTableAnnotationComposer
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get cedula =>
+      $composableBuilder(column: $table.cedula, builder: (column) => column);
+
+  GeneratedColumn<String> get estadoCivil => $composableBuilder(
+    column: $table.estadoCivil,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get poseeDiscapacidad => $composableBuilder(
+    column: $table.poseeDiscapacidad,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get bautizadoAgua => $composableBuilder(
+    column: $table.bautizadoAgua,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get bautizadoEspiritu => $composableBuilder(
+    column: $table.bautizadoEspiritu,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get tipoFeligres => $composableBuilder(
+    column: $table.tipoFeligres,
     builder: (column) => column,
   );
 
@@ -1149,6 +1563,12 @@ class $$FeligresesTableTableManager
                 Value<String?> telefono = const Value.absent(),
                 Value<int> activo = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
+                Value<String?> cedula = const Value.absent(),
+                Value<String?> estadoCivil = const Value.absent(),
+                Value<bool> poseeDiscapacidad = const Value.absent(),
+                Value<bool> bautizadoAgua = const Value.absent(),
+                Value<bool> bautizadoEspiritu = const Value.absent(),
+                Value<String> tipoFeligres = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion(
                 id: id,
@@ -1158,6 +1578,12 @@ class $$FeligresesTableTableManager
                 telefono: telefono,
                 activo: activo,
                 syncStatus: syncStatus,
+                cedula: cedula,
+                estadoCivil: estadoCivil,
+                poseeDiscapacidad: poseeDiscapacidad,
+                bautizadoAgua: bautizadoAgua,
+                bautizadoEspiritu: bautizadoEspiritu,
+                tipoFeligres: tipoFeligres,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1169,6 +1595,12 @@ class $$FeligresesTableTableManager
                 Value<String?> telefono = const Value.absent(),
                 Value<int> activo = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
+                Value<String?> cedula = const Value.absent(),
+                Value<String?> estadoCivil = const Value.absent(),
+                Value<bool> poseeDiscapacidad = const Value.absent(),
+                Value<bool> bautizadoAgua = const Value.absent(),
+                Value<bool> bautizadoEspiritu = const Value.absent(),
+                Value<String> tipoFeligres = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion.insert(
                 id: id,
@@ -1178,6 +1610,12 @@ class $$FeligresesTableTableManager
                 telefono: telefono,
                 activo: activo,
                 syncStatus: syncStatus,
+                cedula: cedula,
+                estadoCivil: estadoCivil,
+                poseeDiscapacidad: poseeDiscapacidad,
+                bautizadoAgua: bautizadoAgua,
+                bautizadoEspiritu: bautizadoEspiritu,
+                tipoFeligres: tipoFeligres,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
