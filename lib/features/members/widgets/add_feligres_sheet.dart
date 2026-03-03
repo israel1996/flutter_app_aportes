@@ -23,6 +23,21 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
+  final _cedulaController = TextEditingController();
+  String? _estadoCivil;
+  String _tipoFeligres = 'feligres';
+  bool _poseeDiscapacidad = false;
+  bool _bautizadoAgua = false;
+  bool _bautizadoEspiritu = false;
+
+  final List<String> _estadosCiviles = [
+    'Soltero',
+    'Casado',
+    'Divorciado',
+    'Viudo',
+    'Unión Libre',
+  ];
+  final List<String> _tiposFeligres = ['simpatizante', 'feligres', 'visita'];
 
   String? _selectedGender;
   DateTime? _selectedDate;
@@ -65,6 +80,16 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
           ),
           genero: drift.Value(_selectedGender),
           fechaNacimiento: drift.Value(_selectedDate),
+          cedula: drift.Value(
+            _cedulaController.text.trim().isEmpty
+                ? null
+                : _cedulaController.text.trim(),
+          ),
+          estadoCivil: drift.Value(_estadoCivil),
+          tipoFeligres: drift.Value(_tipoFeligres),
+          poseeDiscapacidad: drift.Value(_poseeDiscapacidad),
+          bautizadoAgua: drift.Value(_bautizadoAgua),
+          bautizadoEspiritu: drift.Value(_bautizadoEspiritu),
           activo: const drift.Value(1),
           syncStatus: const drift.Value(0),
         ),
@@ -106,6 +131,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   void dispose() {
     _nombreController.dispose();
     _telefonoController.dispose();
+    _cedulaController.dispose();
     super.dispose();
   }
 
@@ -218,6 +244,119 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                 ),
               ),
               const SizedBox(height: 32),
+
+              Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  collapsedIconColor: colorScheme.primary,
+                  iconColor: colorScheme.primary,
+                  title: Text(
+                    'Datos Avanzados de Secretaría (Opcional)',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.admin_panel_settings,
+                      color: colorScheme.primary,
+                    ),
+                  ),
+                  children: [
+                    const SizedBox(height: 16),
+
+                    // 1. Cédula
+                    TextFormField(
+                      controller: _cedulaController,
+                      decoration: InputDecoration(
+                        labelText: 'Número de Cédula',
+                        prefixIcon: const Icon(Icons.badge_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 2. Estado Civil
+                    DropdownButtonFormField<String>(
+                      value: _estadoCivil,
+                      decoration: InputDecoration(
+                        labelText: 'Estado Civil',
+                        prefixIcon: const Icon(Icons.favorite_border),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      items: _estadosCiviles.map((estado) {
+                        return DropdownMenuItem(
+                          value: estado,
+                          child: Text(estado),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setState(() => _estadoCivil = val),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 3. Tipo de Feligrés
+                    DropdownButtonFormField<String>(
+                      value: _tipoFeligres,
+                      decoration: InputDecoration(
+                        labelText: 'Tipo de Membresía',
+                        prefixIcon: const Icon(Icons.card_membership),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      items: _tiposFeligres.map((tipo) {
+                        return DropdownMenuItem(
+                          value: tipo,
+                          child: Text(
+                            tipo[0].toUpperCase() + tipo.substring(1),
+                          ), // Capitalize
+                        );
+                      }).toList(),
+                      onChanged: (val) => setState(() => _tipoFeligres = val!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // 4. Toggles (Switches)
+                    SwitchListTile(
+                      title: const Text('Posee alguna discapacidad'),
+                      secondary: const Icon(Icons.accessible),
+                      value: _poseeDiscapacidad,
+                      onChanged: (val) =>
+                          setState(() => _poseeDiscapacidad = val),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Bautizado en Agua'),
+                      secondary: const Icon(Icons.water_drop_outlined),
+                      value: _bautizadoAgua,
+                      onChanged: (val) => setState(() => _bautizadoAgua = val),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Bautizado en Espíritu Santo'),
+                      secondary: const Icon(
+                        Icons.local_fire_department_outlined,
+                      ),
+                      value: _bautizadoEspiritu,
+                      onChanged: (val) =>
+                          setState(() => _bautizadoEspiritu = val),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
 
               SizedBox(
                 width: double.infinity,

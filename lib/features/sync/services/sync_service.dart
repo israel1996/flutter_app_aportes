@@ -34,6 +34,12 @@ class SyncService {
           'genero': person.genero,
           'fechanacimiento': person.fechaNacimiento?.toIso8601String(),
           'activo': person.activo,
+          'cedula': person.cedula,
+          'estado_civil': person.estadoCivil,
+          'tipo_feligres': person.tipoFeligres,
+          'posee_discapacidad': person.poseeDiscapacidad,
+          'bautizado_agua': person.bautizadoAgua,
+          'bautizado_espiritu': person.bautizadoEspiritu,
         });
         await (localDb.update(localDb.feligreses)
               ..where((tbl) => tbl.id.equals(person.id)))
@@ -94,6 +100,12 @@ class SyncService {
                       ? DateTime.tryParse(data['fechanacimiento'].toString())
                       : null,
                 ),
+                cedula: drift.Value(data['cedula']),
+                estadoCivil: drift.Value(data['estado_civil']),
+                tipoFeligres: drift.Value(data['tipo_feligres']),
+                poseeDiscapacidad: drift.Value(data['posee_discapacidad']),
+                bautizadoAgua: drift.Value(data['bautizado_agua']),
+                bautizadoEspiritu: drift.Value(data['bautizado_espiritu']),
               ),
             );
       }
