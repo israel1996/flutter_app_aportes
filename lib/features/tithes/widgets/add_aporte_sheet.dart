@@ -169,29 +169,58 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                 stream: database.watchAllFeligreses(),
                 builder: (context, snapshot) {
                   final members = snapshot.data ?? [];
-                  return DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    value: _selectedFeligresId,
-                    decoration: const InputDecoration(
-                      labelText: 'Feligrés *',
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                    dropdownColor: colorScheme.surface,
-                    items: members.map((member) {
-                      return DropdownMenuItem(
-                        value: member.id,
-                        child: Text(member.nombre),
-                      );
-                    }).toList(),
-                    onChanged: (value) =>
-                        setState(() => _selectedFeligresId = value),
-                    hint: members.isEmpty
-                        ? const Text('No hay feligreses registrados')
-                        : const Text('Seleccione un feligrés'),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _selectedFeligresId,
+                        decoration: const InputDecoration(
+                          labelText: 'Feligrés *',
+                          prefixIcon: Icon(Icons.person),
+                        ),
+                        dropdownColor: colorScheme.surface,
+                        items: members.map((member) {
+                          return DropdownMenuItem(
+                            value: member.id,
+                            child: Text(member.nombre),
+                          );
+                        }).toList(),
+                        onChanged: (value) =>
+                            setState(() => _selectedFeligresId = value),
+                        hint: members.isEmpty
+                            ? const Text('No hay feligreses registrados')
+                            : const Text('Seleccione un feligrés'),
+                      ),
+
+                      // --- EL NUEVO BOTÓN DE REDIRECCIÓN MÁGICA ---
+                      const SizedBox(height: 4),
+                      TextButton.icon(
+                        onPressed: () {
+                          // 1. Cierra este formulario de aporte
+                          Navigator.pop(context);
+                          // 2. Cambia al entorno de Secretaría
+                          ref.read(environmentProvider.notifier).state =
+                              AppEnvironment.secretaria;
+                          // 3. Redirige a la pestaña de Feligreses (índice 1)
+                          ref.read(navIndexProvider.notifier).state = 1;
+                        },
+                        icon: const Icon(Icons.person_add_alt_1, size: 18),
+                        label: Text(
+                          'Registrar Nuevo Feligrés',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   );
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               Row(
                 children: [

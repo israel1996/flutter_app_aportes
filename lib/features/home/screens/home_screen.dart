@@ -4,10 +4,10 @@ import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
+import 'package:flutter_app_aportes/features/home/screens/dashboard_secretaria.dart';
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
-import 'package:flutter_app_aportes/features/home/screens/dashboard_secretaria.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../export/screens/export_screen.dart';
@@ -26,9 +26,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
-  int _selectedIndex = 0;
   bool _isSyncing = false;
-
   late AnimationController _syncAnimationController;
 
   @override
@@ -63,7 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       if (!hasInternet) {
         if (mounted)
-          CustomSnackBar.showWarning(context, 'Sin conexión a Internet');
+          CustomSnackBar.showWarning(
+            context,
+            'Modo Offline: Sin conexión a Internet',
+          );
         return;
       }
 
@@ -126,9 +127,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     try {
       await database.clearAllData();
       await authService.signOut();
-    } catch (e) {
-      debugPrint('Logout error: $e');
-    }
+    } catch (e) {}
 
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -142,9 +141,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final userRoleAsync = ref.watch(userRoleProvider);
-    // --- LISTEN TO THE CURRENT ENVIRONMENT (FINANCE OR SECRETARIAT) ---
     final currentEnv = ref.watch(environmentProvider);
     final isFinance = currentEnv == AppEnvironment.finanzas;
+
+    // --- ESTADO GLOBAL DE NAVEGACIÓN ---
+    final selectedIndex = ref.watch(navIndexProvider);
 
     return userRoleAsync.when(
       loading: () => const Scaffold(
@@ -160,33 +161,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final isDesktop = MediaQuery.of(context).size.width > 800;
 
-        // --- DYNAMIC PAGES BASED ON THE ENVIRONMENT ---
+        // --- PÁGINAS AISLADAS POR ENTORNO ---
         final List<Widget> pages = isFinance
             ? [
-                const DashboardSummary(), // Finance
-                const FeligresesScreen(),
-                const AportesScreen(),
-                const ExportScreen(),
-                if (isSuperAdmin) const AdminUsersScreen(),
+                const DashboardSummary(), // 0
+                const AportesScreen(), // 1 (Reemplazó a Feligreses)
+                const ExportScreen(), // 2
+                if (isSuperAdmin) const AdminUsersScreen(), // 3
               ]
             : [
-                const DashboardSecretaria(),
-                const FeligresesScreen(),
-                const ExportScreen(),
-                if (isSuperAdmin) const AdminUsersScreen(),
+                const DashboardSecretaria(), // 0
+                const FeligresesScreen(), // 1 (Exclusivo de Secretaría)
+                const ExportScreen(), // 2
+                if (isSuperAdmin) const AdminUsersScreen(), // 3
               ];
 
-        // Reset index if we change environment to avoid out-of-bounds errors
-        if (_selectedIndex >= pages.length) {
+        // Protección contra desbordamiento de índice al cambiar de entorno
+        if (selectedIndex >= pages.length) {
           WidgetsBinding.instance.addPostFrameCallback(
-            (_) => setState(() => _selectedIndex = 0),
+            (_) => ref.read(navIndexProvider.notifier).state = 0,
           );
         }
 
         return Scaffold(
           body: Row(
             children: [
-              // --- SIDEBAR (DESKTOP) ---
               if (isDesktop)
                 Container(
                   width: 260,
@@ -202,7 +201,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             Icon(
                               isFinance
                                   ? Icons.account_balance
-                                  : Icons.assignment_ind,
+                                  : Icons.analytics_outlined,
                               color: colorScheme.primary,
                               size: 32,
                             ),
@@ -211,7 +210,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               isFinance ? 'FINANZAS' : 'SECRETARÍA',
                               style: GoogleFonts.montserrat(
                                 color: colorScheme.onSurface,
-                                fontSize: 20,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1.5,
                               ),
@@ -232,43 +231,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                       ),
 
-                      // DYNAMIC MENU
+                      // --- MENÚ LATERAL DINÁMICO ---
                       _buildNavItem(
                         0,
                         Icons.grid_view_rounded,
                         'Resumen',
                         colorScheme,
                         isDark,
+                        selectedIndex,
                       ),
-                      _buildNavItem(
-                        1,
-                        Icons.people_alt_outlined,
-                        'Feligreses',
-                        colorScheme,
-                        isDark,
-                      ),
+                      if (!isFinance)
+                        _buildNavItem(
+                          1,
+                          Icons.people_alt_outlined,
+                          'Feligreses',
+                          colorScheme,
+                          isDark,
+                          selectedIndex,
+                        ),
                       if (isFinance)
                         _buildNavItem(
-                          2,
+                          1,
                           Icons.account_balance_wallet_outlined,
                           'Aportes',
                           colorScheme,
                           isDark,
+                          selectedIndex,
                         ),
                       _buildNavItem(
-                        isFinance ? 3 : 2,
+                        2,
                         Icons.file_download_outlined,
                         'Exportar',
                         colorScheme,
                         isDark,
+                        selectedIndex,
                       ),
                       if (isSuperAdmin)
                         _buildNavItem(
-                          isFinance ? 4 : 3,
+                          3,
                           Icons.admin_panel_settings,
                           'Usuarios',
                           colorScheme,
                           isDark,
+                          selectedIndex,
                         ),
 
                       const Spacer(),
@@ -298,11 +303,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
-              // --- MAIN AREA ---
               Expanded(
                 child: Column(
                   children: [
-                    // APP BAR
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 32.0,
@@ -314,7 +317,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               children: [
                                 Expanded(
                                   child: Text(
-                                    _getPageTitle(isFinance),
+                                    _getPageTitle(isFinance, selectedIndex),
                                     style: GoogleFonts.poppins(
                                       color: Colors.grey,
                                       fontSize: 16,
@@ -324,10 +327,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(
-                                  width: 8,
-                                ), // Reduced gap slightly
-                                // Wrapped the switcher so it scales down if space is tight
+                                const SizedBox(width: 8),
                                 Flexible(
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
@@ -338,11 +338,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     ),
                                   ),
                                 ),
-
-                                const SizedBox(
-                                  width: 8,
-                                ), // Reduced gap slightly
-                                _buildActionButtons(colorScheme, isDark),
+                                const SizedBox(width: 8),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: _buildActionButtons(
+                                    colorScheme,
+                                    isDark,
+                                  ),
+                                ),
                               ],
                             )
                           : Column(
@@ -354,19 +357,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        _getPageTitle(isFinance),
+                                        _getPageTitle(isFinance, selectedIndex),
                                         style: GoogleFonts.poppins(
                                           color: Colors.grey,
                                           fontSize: 16,
                                           letterSpacing: 1.2,
                                           fontWeight: FontWeight.w600,
                                         ),
-                                        overflow: TextOverflow
-                                            .ellipsis, // Truncates text if it gets too tight
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    _buildActionButtons(colorScheme, isDark),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: _buildActionButtons(
+                                        colorScheme,
+                                        isDark,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 20),
@@ -384,12 +392,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                     ),
 
-                    // PAGE CONTENT
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        child: _selectedIndex < pages.length
-                            ? pages[_selectedIndex]
+                        child: selectedIndex < pages.length
+                            ? pages[selectedIndex]
                             : pages[0],
                       ),
                     ),
@@ -399,25 +406,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
 
-          // --- BOTTOM NAVIGATION BAR (MOBILE) ---
+          // --- BARRA INFERIOR (MÓVIL) DINÁMICA ---
           bottomNavigationBar: isDesktop
               ? null
               : NavigationBar(
                   backgroundColor: colorScheme.surface,
-                  selectedIndex: _selectedIndex < pages.length
-                      ? _selectedIndex
+                  selectedIndex: selectedIndex < pages.length
+                      ? selectedIndex
                       : 0,
                   onDestinationSelected: (index) =>
-                      setState(() => _selectedIndex = index),
+                      ref.read(navIndexProvider.notifier).state = index,
                   destinations: [
                     const NavigationDestination(
                       icon: Icon(Icons.grid_view_rounded),
                       label: 'Resumen',
                     ),
-                    const NavigationDestination(
-                      icon: Icon(Icons.people_alt_outlined),
-                      label: 'Feligreses',
-                    ),
+                    if (!isFinance)
+                      const NavigationDestination(
+                        icon: Icon(Icons.people_alt_outlined),
+                        label: 'Feligreses',
+                      ),
                     if (isFinance)
                       const NavigationDestination(
                         icon: Icon(Icons.account_balance_wallet_outlined),
@@ -439,24 +447,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  String _getPageTitle(bool isFinance) {
+  String _getPageTitle(bool isFinance, int index) {
     if (isFinance) {
-      switch (_selectedIndex) {
+      switch (index) {
         case 0:
           return 'RESUMEN FINANCIERO';
         case 1:
-          return 'FELIGRESES';
-        case 2:
           return 'APORTES';
-        case 3:
+        case 2:
           return 'EXPORTAR';
-        case 4:
+        case 3:
           return 'PANEL DE APROBACIÓN';
         default:
           return '';
       }
     } else {
-      switch (_selectedIndex) {
+      switch (index) {
         case 0:
           return 'RESUMEN DEMOGRÁFICO';
         case 1:
@@ -484,7 +490,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
           child: IconButton(
-            splashColor: Colors.transparent, // Gray box fix
+            splashColor: Colors.transparent,
             highlightColor: Colors.transparent,
             hoverColor: Colors.transparent,
             icon: RotationTransition(
@@ -559,9 +565,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // ==========================================================
-  // ENVIRONMENT SWITCHER WIDGET (FINANCE / SECRETARIAT)
-  // ==========================================================
   Widget _buildEnvironmentSwitcher(
     AppEnvironment currentEnv,
     ColorScheme colorScheme,
@@ -606,9 +609,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final isSelected = target == current;
     return GestureDetector(
       onTap: () {
-        // Changes the environment and returns the user to the "Summary" tab
         ref.read(environmentProvider.notifier).state = target;
-        setState(() => _selectedIndex = 0);
+        ref.read(navIndexProvider.notifier).state =
+            0; // Regresa al dashboard al cambiar
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -647,10 +650,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     String title,
     ColorScheme colorScheme,
     bool isDark,
+    int selectedIndex,
   ) {
-    bool isSelected = _selectedIndex == index;
+    bool isSelected = selectedIndex == index;
     return InkWell(
-      onTap: () => setState(() => _selectedIndex = index),
+      onTap: () => ref.read(navIndexProvider.notifier).state = index,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
