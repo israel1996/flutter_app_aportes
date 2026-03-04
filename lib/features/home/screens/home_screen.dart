@@ -10,8 +10,8 @@ import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../export/screens/export_screen.dart';
 import '../../auth/screens/force_password_screen.dart';
+import '../../reports/screens/reports_screen.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../../providers.dart';
@@ -166,13 +166,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ? [
                 const DashboardSummary(), // 0
                 const AportesScreen(), // 1 (Reemplazó a Feligreses)
-                const ExportScreen(), // 2
+                const ReportesScreen(), // 2
                 if (isSuperAdmin) const AdminUsersScreen(), // 3
               ]
             : [
                 const DashboardSecretaria(), // 0
                 const FeligresesScreen(), // 1 (Exclusivo de Secretaría)
-                const ExportScreen(), // 2
+                const ReportesScreen(), // 2
                 if (isSuperAdmin) const AdminUsersScreen(), // 3
               ];
 
@@ -258,10 +258,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           isDark,
                           selectedIndex,
                         ),
+                      // REEMPLAZAMOS EXPORTAR POR REPORTES:
                       _buildNavItem(
                         2,
-                        Icons.file_download_outlined,
-                        'Exportar',
+                        Icons.analytics,
+                        'Reportes',
                         colorScheme,
                         isDark,
                         selectedIndex,
@@ -275,7 +276,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           isDark,
                           selectedIndex,
                         ),
-
                       const Spacer(),
 
                       Padding(
@@ -431,9 +431,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         icon: Icon(Icons.account_balance_wallet_outlined),
                         label: 'Aportes',
                       ),
+                    // REEMPLAZAMOS EXPORTAR POR REPORTES:
                     const NavigationDestination(
-                      icon: Icon(Icons.file_download_outlined),
-                      label: 'Exportar',
+                      icon: Icon(Icons.analytics),
+                      label: 'Reportes',
                     ),
                     if (isSuperAdmin)
                       const NavigationDestination(

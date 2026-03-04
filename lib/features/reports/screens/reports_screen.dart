@@ -1,714 +1,769 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+
+// PDF Packages
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
 
-class ReportsScreen extends ConsumerStatefulWidget {
-  const ReportsScreen({super.key});
+class ReportesScreen extends ConsumerStatefulWidget {
+  const ReportesScreen({super.key});
 
   @override
-  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
+  ConsumerState<ReportesScreen> createState() => _ReportesScreenState();
 }
 
-class _ReportsScreenState extends ConsumerState<ReportsScreen> {
-  DateTimeRange? _selectedDateRange;
-  String? _selectedReportFeligresId;
+class _ReportesScreenState extends ConsumerState<ReportesScreen> {
+  final GlobalKey _exportKey = GlobalKey();
 
-  String _normalizeText(String text) {
-    return text
-        .toLowerCase()
-        .replaceAll(RegExp(r'[áàâä]'), 'a')
-        .replaceAll(RegExp(r'[éèêë]'), 'e')
-        .replaceAll(RegExp(r'[íìîï]'), 'i')
-        .replaceAll(RegExp(r'[óòôö]'), 'o')
-        .replaceAll(RegExp(r'[úùûü]'), 'u')
-        .trim();
+  // STATE CACHING (Fixes the focus bug)
+  late Stream<List<AporteConFeligres>> _historyStream;
+  late TextEditingController _searchController;
+  late FocusNode _searchFocusNode;
+
+  DateTimeRange? _dateRange;
+  int _groupingMode = 1; // 1 = Feligrés, 2 = Tipo
+
+  // Drill-down State
+  String? _selectedDetailId;
+  String _selectedDetailName = '';
+
+  // Chart Toggle States for the Detail View
+  final Map<String, bool> _activeChartTypes = {
+    'Diezmo': true,
+    'Ofrenda': true,
+    'Promesa': true,
+    'Pro-Templo': true,
+    'Especial': true,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
+    // Cache the stream so typing doesn't destroy the widget tree
+    _historyStream = ref.read(databaseProvider).watchHistory();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _dateRange,
+    );
+    if (range != null) {
+      setState(() => _dateRange = range);
+    }
+  }
+
+  // --- REAL PDF EXPORT LOGIC ---
+  Future<void> _exportCurrentViewToPDF() async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Generando PDF... por favor espere.')),
+    );
+
+    try {
+      // 1. Capture the screen as an image
+      RenderRepaintBoundary boundary =
+          _exportKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      // 2. Create the PDF Document
+      final pdf = pw.Document();
+      final imageProvider = pw.MemoryImage(pngBytes);
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat:
+              PdfPageFormat.a4.landscape, // Landscape fits charts better
+          margin: const pw.EdgeInsets.all(20),
+          build: (pw.Context context) {
+            return pw.Center(child: pw.Image(imageProvider));
+          },
+        ),
+      );
+
+      // 3. Open the Native Save Dialog / Preview
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name:
+            'Reporte_Financiero_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      );
+    } catch (e) {
+      debugPrint('Export error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al exportar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final database = ref.watch(databaseProvider);
-    final historyStream = database.watchHistory();
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return DefaultTabController(
-      length: 3,
+    return RepaintBoundary(
+      key: _exportKey,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Reportes y Analíticas'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-          bottom: const TabBar(
-            labelColor: Colors.indigo,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.indigo,
-            tabs: [
-              Tab(icon: Icon(Icons.bar_chart), text: 'General'),
-              Tab(icon: Icon(Icons.pie_chart), text: 'Demografía'),
-              Tab(icon: Icon(Icons.person_search), text: 'Por Feligrés'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.date_range),
-              tooltip: 'Filtrar por Fecha',
-              onPressed: () async {
-                final picked = await showDateRangePicker(
-                  context: context,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime.now(),
-                  initialDateRange: _selectedDateRange,
-                );
-                if (picked != null) {
-                  setState(() {
-                    _selectedDateRange = picked;
-                  });
-                }
-              },
-            ),
-          ],
-        ),
+        backgroundColor: Colors.transparent,
         body: StreamBuilder<List<AporteConFeligres>>(
-          stream: historyStream,
+          stream: _historyStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting)
               return const Center(child: CircularProgressIndicator());
+
+            var allData = snapshot.data ?? [];
+
+            // Apply Master Filters
+            if (_dateRange != null) {
+              allData = allData
+                  .where(
+                    (item) =>
+                        item.aporte.fecha.isAfter(
+                          _dateRange!.start.subtract(const Duration(days: 1)),
+                        ) &&
+                        item.aporte.fecha.isBefore(
+                          _dateRange!.end.add(const Duration(days: 1)),
+                        ),
+                  )
+                  .toList();
+            }
+            if (_searchController.text.isNotEmpty) {
+              allData = allData
+                  .where(
+                    (item) => item.feligres.nombre.toLowerCase().contains(
+                      _searchController.text.toLowerCase(),
+                    ),
+                  )
+                  .toList();
             }
 
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
+            // --- VIEW SWITCHER ---
+            if (_selectedDetailId != null) {
+              return _buildDetailView(allData, colorScheme, isDark);
+            } else {
+              return _buildMasterGroupedView(allData, colorScheme, isDark);
             }
-
-            var aportes = snapshot.data ?? [];
-
-            if (_selectedDateRange != null) {
-              aportes = aportes.where((a) {
-                return a.aporte.fecha.isAfter(
-                      _selectedDateRange!.start.subtract(
-                        const Duration(days: 1),
-                      ),
-                    ) &&
-                    a.aporte.fecha.isBefore(
-                      _selectedDateRange!.end.add(const Duration(days: 1)),
-                    );
-              }).toList();
-            }
-
-            return TabBarView(
-              children: [
-                _buildGeneralReportTab(aportes),
-                _buildDemographicsTab(aportes),
-                _buildMemberReportTab(aportes),
-              ],
-            );
           },
         ),
       ),
     );
   }
 
-  Widget _buildGeneralReportTab(List<AporteConFeligres> aportes) {
-    if (aportes.isEmpty) {
-      return const Center(
-        child: Text(
-          "No hay datos para este periodo.",
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
+  // ==========================================
+  // VIEW 1: MASTER GROUPED LIST
+  // ==========================================
+  Widget _buildMasterGroupedView(
+    List<AporteConFeligres> data,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    final groupedMap = <String, Map<String, dynamic>>{};
+    for (var item in data) {
+      final key = _groupingMode == 1 ? item.feligres.id : item.aporte.tipo;
+      final name = _groupingMode == 1 ? item.feligres.nombre : item.aporte.tipo;
+
+      if (!groupedMap.containsKey(key))
+        groupedMap[key] = {'id': key, 'name': name, 'total': 0.0, 'count': 0};
+      groupedMap[key]!['total'] += item.aporte.monto;
+      groupedMap[key]!['count'] += 1;
     }
 
-    final total = aportes.fold(0.0, (sum, item) => sum + item.aporte.monto);
+    final displayList = groupedMap.values.toList()
+      ..sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
 
-    List<double> monthlyTotals = List.filled(12, 0.0);
-    for (var item in aportes) {
-      final month = item.aporte.fecha.month;
-      monthlyTotals[month - 1] += item.aporte.monto;
-    }
-
-    double maxY = monthlyTotals.reduce(
-      (curr, next) => curr > next ? curr : next,
-    );
-    maxY = maxY == 0 ? 100 : maxY * 1.2;
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Card(
-            color: Colors.indigo.shade50,
-            elevation: 2,
-            child: ListTile(
-              title: const Text(
-                'Ingreso Total del Periodo',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              trailing: Text(
-                '\$${total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontSize: 20,
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(30),
             ),
           ),
-          const SizedBox(height: 30),
-
-          const Text(
-            'Historial de Ingresos por Mes',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-
-          Expanded(
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxY,
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (group) => Colors.blueGrey.shade800,
-                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                      return BarTooltipItem(
-                        '\$${rod.toY.toStringAsFixed(2)}',
-                        const TextStyle(
-                          color: Colors.white,
+          child: Column(
+            children: [
+              // INTUITIVE DATE RANGE BUTTON
+              InkWell(
+                onTap: _pickDateRange,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: colorScheme.primary),
+                    borderRadius: BorderRadius.circular(16),
+                    color: colorScheme.primary.withOpacity(0.05),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.date_range, color: colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        _dateRange == null
+                            ? 'Filtrar por Rango de Fechas'
+                            : '${DateFormat('dd MMM yyyy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yyyy').format(_dateRange!.end)}',
+                        style: GoogleFonts.poppins(
+                          color: colorScheme.primary,
                           fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (double value, TitleMeta meta) {
-                        const style = TextStyle(
-                          color: Colors.black54,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                        );
-                        final months = [
-                          'Ene',
-                          'Feb',
-                          'Mar',
-                          'Abr',
-                          'May',
-                          'Jun',
-                          'Jul',
-                          'Ago',
-                          'Sep',
-                          'Oct',
-                          'Nov',
-                          'Dic',
-                        ];
-                        int index = value.toInt();
-                        if (index >= 0 && index < 12) {
-                          return SideTitleWidget(
-                            meta: meta,
-                            child: Text(months[index], style: style),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (value, meta) {
-                        if (value == maxY || value == 0)
-                          return const SizedBox.shrink();
-                        return Text(
-                          '\$${value.toInt()}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: maxY / 4 == 0 ? 1 : maxY / 4,
-                  getDrawingHorizontalLine: (value) =>
-                      FlLine(color: Colors.grey.shade300, strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(12, (index) {
-                  return BarChartGroupData(
-                    x: index,
-                    barRods: [
-                      BarChartRodData(
-                        toY: monthlyTotals[index],
-                        color: Colors.indigo,
-                        width: 16,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          topRight: Radius.circular(4),
                         ),
                       ),
+                      if (_dateRange != null) ...[
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.redAccent,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _dateRange = null),
+                        ),
+                      ],
                     ],
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  int _calculateAge(DateTime birthDate) {
-    final today = DateTime.now();
-    int age = today.year - birthDate.year;
-    if (today.month < birthDate.month ||
-        (today.month == birthDate.month && today.day < birthDate.day)) {
-      age--;
-    }
-    return age;
-  }
-
-  Widget _buildDemographicsTab(List<AporteConFeligres> aportes) {
-    if (aportes.isEmpty) {
-      return const Center(
-        child: Text(
-          "No hay datos para este periodo.",
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    double ninosTotal = 0;
-    double caballerosTotal = 0;
-    double damasTotal = 0;
-    double otrosTotal = 0;
-
-    for (var item in aportes) {
-      final feligres = item.feligres;
-      final amount = item.aporte.monto;
-
-      if (feligres.fechaNacimiento != null) {
-        final age = _calculateAge(feligres.fechaNacimiento!);
-        if (age < 14) {
-          ninosTotal += amount;
-        } else {
-          if (feligres.genero == 'Masculino')
-            caballerosTotal += amount;
-          else if (feligres.genero == 'Femenino')
-            damasTotal += amount;
-          else
-            otrosTotal += amount;
-        }
-      } else {
-        if (feligres.genero == 'Masculino')
-          caballerosTotal += amount;
-        else if (feligres.genero == 'Femenino')
-          damasTotal += amount;
-        else
-          otrosTotal += amount;
-      }
-    }
-
-    final totalAmount = ninosTotal + caballerosTotal + damasTotal + otrosTotal;
-
-    List<PieChartSectionData> getSections() {
-      return [
-        if (ninosTotal > 0)
-          PieChartSectionData(
-            color: Colors.orange,
-            value: ninosTotal,
-            title: '${((ninosTotal / totalAmount) * 100).toStringAsFixed(1)}%',
-            radius: 60,
-            titleStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        if (caballerosTotal > 0)
-          PieChartSectionData(
-            color: Colors.blue,
-            value: caballerosTotal,
-            title:
-                '${((caballerosTotal / totalAmount) * 100).toStringAsFixed(1)}%',
-            radius: 60,
-            titleStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        if (damasTotal > 0)
-          PieChartSectionData(
-            color: Colors.pink,
-            value: damasTotal,
-            title: '${((damasTotal / totalAmount) * 100).toStringAsFixed(1)}%',
-            radius: 60,
-            titleStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        if (otrosTotal > 0)
-          PieChartSectionData(
-            color: Colors.grey,
-            value: otrosTotal,
-            title: '${((otrosTotal / totalAmount) * 100).toStringAsFixed(1)}%',
-            radius: 60,
-            titleStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-      ];
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          const Text(
-            'Distribución de Ingresos por Demografía',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 30),
-
-          Expanded(
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 50,
-                sections: getSections(),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  _buildLegendRow(Colors.blue, 'Caballeros', caballerosTotal),
-                  _buildLegendRow(Colors.pink, 'Damas', damasTotal),
-                  _buildLegendRow(
-                    Colors.orange,
-                    'Niños (Menores de 14)',
-                    ninosTotal,
                   ),
-                  if (otrosTotal > 0)
-                    _buildLegendRow(Colors.grey, 'No Especificado', otrosTotal),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocusNode,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onChanged: (val) =>
+                          setState(() {}), // Trigger rebuild for search
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: _exportCurrentViewToPDF,
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Exportar PDF'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 20,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegendRow(Color color, String label, double amount) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(width: 16, height: 16, color: color),
-              const SizedBox(width: 8),
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 16),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Agrupar por Feligrés'),
+                      selected: _groupingMode == 1,
+                      onSelected: (v) => setState(() => _groupingMode = 1),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Agrupar por Tipo'),
+                      selected: _groupingMode == 2,
+                      onSelected: (v) => setState(() => _groupingMode = 2),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          Text(
-            '\$${amount.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
 
-  Widget _buildMemberReportTab(List<AporteConFeligres> aportes) {
-    final uniqueMembers = aportes.map((a) => a.feligres).toSet().toList();
-
-    final memberAportes = _selectedReportFeligresId == null
-        ? <AporteConFeligres>[]
-        : aportes
-              .where((a) => a.feligres.id == _selectedReportFeligresId)
-              .toList();
-
-    final memberTotal = memberAportes.fold(
-      0.0,
-      (sum, item) => sum + item.aporte.monto,
-    );
-
-    List<double> monthlyData = List.filled(12, 0.0);
-    for (var item in memberAportes) {
-      monthlyData[item.aporte.fecha.month - 1] += item.aporte.monto;
-    }
-
-    double maxY = 10;
-    if (memberAportes.isNotEmpty) {
-      maxY = monthlyData.reduce((curr, next) => curr > next ? curr : next);
-      maxY = maxY == 0 ? 10 : maxY * 1.2;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Autocomplete<Feligrese>(
-            displayStringForOption: (Feligrese option) => option.nombre,
-            optionsBuilder: (TextEditingValue textEditingValue) {
-              if (textEditingValue.text.isEmpty) {
-                return const Iterable<Feligrese>.empty();
-              }
-              return uniqueMembers.where((Feligrese option) {
-                return _normalizeText(
-                  option.nombre,
-                ).contains(_normalizeText(textEditingValue.text));
-              });
-            },
-            onSelected: (Feligrese selection) {
-              setState(() {
-                _selectedReportFeligresId = selection.id;
-              });
-              FocusManager.instance.primaryFocus?.unfocus();
-            },
-            fieldViewBuilder:
-                (context, controller, focusNode, onFieldSubmitted) {
-                  return TextFormField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    decoration: InputDecoration(
-                      labelText: 'Buscar Feligrés',
-                      prefixIcon: const Icon(Icons.person_search),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          controller.clear();
+        Expanded(
+          child: displayList.isEmpty
+              ? Center(
+                  child: Text(
+                    'No hay datos para mostrar',
+                    style: GoogleFonts.poppins(color: Colors.grey),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(24),
+                  itemCount: displayList.length,
+                  itemBuilder: (context, index) {
+                    final item = displayList[index];
+                    return Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 8,
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: colorScheme.primary.withOpacity(0.1),
+                          child: Icon(
+                            _groupingMode == 1 ? Icons.person : Icons.category,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        title: Text(
+                          item['name'],
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: Text('${item['count']} aportes'),
+                        trailing: Text(
+                          '\$${item['total'].toStringAsFixed(2)}',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        onTap: () {
                           setState(() {
-                            _selectedReportFeligresId = null;
+                            _selectedDetailId = item['id'];
+                            _selectedDetailName = item['name'];
                           });
                         },
                       ),
-                      border: const OutlineInputBorder(),
-                    ),
-                  );
-                },
-          ),
-          const SizedBox(height: 20),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
 
-          if (_selectedReportFeligresId == null)
-            const Expanded(
-              child: Center(
-                child: Text(
-                  'Busque un feligrés para ver su historial.',
-                  style: TextStyle(color: Colors.grey),
+  // ==========================================
+  // VIEW 2: DETAIL VIEW WITH REAL CHARTS
+  // ==========================================
+  // ==========================================
+  // VIEW 2: DETAIL VIEW WITH REAL CHARTS
+  // ==========================================
+  Widget _buildDetailView(
+    List<AporteConFeligres> allData,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    // --- 1. DEFINE CUSTOM COLORS FOR EACH TYPE ---
+    final Map<String, Color> typeColors = {
+      'Diezmo': const Color(0xFF4FACFE), // Neon Blue
+      'Ofrenda': const Color(0xFF92FE9D), // Bright Green
+      'Promesa': const Color(0xFF89216B), // Deep Purple
+      'Pro-Templo': Colors.orangeAccent, // Orange
+      'Especial': const Color(0xFFFF007F), // Pink
+    };
+
+    // 2. Filter data specific to the selected item
+    var targetData = allData.where((item) {
+      if (_groupingMode == 1) return item.feligres.id == _selectedDetailId;
+      return item.aporte.tipo == _selectedDetailId;
+    }).toList();
+
+    // 3. Filter by selected toggles (Only if viewing a Parishioner)
+    if (_groupingMode == 1) {
+      targetData = targetData
+          .where((item) => _activeChartTypes[item.aporte.tipo] == true)
+          .toList();
+    }
+
+    // 4. Prepare Chart Data (Group by Type AND Month)
+    final now = DateTime.now();
+    List<DateTime> last12Months = List.generate(
+      12,
+      (i) => DateTime(now.year, now.month - i, 1),
+    ).reversed.toList();
+
+    // Initialize map structure for multiple lines
+    Map<String, Map<String, double>> groupedMonthlyData = {};
+    if (_groupingMode == 1) {
+      for (var type in _activeChartTypes.keys.where(
+        (k) => _activeChartTypes[k] == true,
+      )) {
+        groupedMonthlyData[type] = {
+          for (var m in last12Months) DateFormat('MMM yy', 'es').format(m): 0.0,
+        };
+      }
+    } else {
+      groupedMonthlyData[_selectedDetailId!] = {
+        for (var m in last12Months) DateFormat('MMM yy', 'es').format(m): 0.0,
+      };
+    }
+
+    double maxY = 10;
+    for (var item in targetData) {
+      final key = DateFormat('MMM yy', 'es').format(item.aporte.fecha);
+      final typeKey = item.aporte.tipo; // Group by type to draw separate lines
+
+      if (groupedMonthlyData.containsKey(typeKey) &&
+          groupedMonthlyData[typeKey]!.containsKey(key)) {
+        groupedMonthlyData[typeKey]![key] =
+            groupedMonthlyData[typeKey]![key]! + item.aporte.monto;
+        if (groupedMonthlyData[typeKey]![key]! > maxY)
+          maxY = groupedMonthlyData[typeKey]![key]!;
+      }
+    }
+
+    // 5. Generate Multi-Colored LineSpots and BarGroups
+    List<LineChartBarData> lineBars = [];
+    List<BarChartGroupData> barGroups = [];
+
+    groupedMonthlyData.forEach((type, monthlyTotals) {
+      List<FlSpot> spots = [];
+      int xIndex = 0;
+      final chartColor =
+          typeColors[type] ?? colorScheme.primary; // Apply custom color!
+
+      monthlyTotals.forEach((month, value) {
+        spots.add(FlSpot(xIndex.toDouble(), value));
+
+        // Build bars for "Por Tipo" mode
+        if (_groupingMode == 2) {
+          barGroups.add(
+            BarChartGroupData(
+              x: xIndex,
+              barRods: [
+                BarChartRodData(
+                  toY: value,
+                  color: chartColor,
+                  width: 16,
+                  borderRadius: BorderRadius.circular(4),
                 ),
+              ],
+            ),
+          );
+        }
+        xIndex++;
+      });
+
+      // Build multiple lines for "Por Feligrés" mode
+      if (_groupingMode == 1) {
+        lineBars.add(
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: chartColor, // Apply custom color!
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(
+              show: true,
+              color: chartColor.withOpacity(0.1),
+            ),
+          ),
+        );
+      }
+    });
+
+    return Column(
+      children: [
+        // DETAIL HEADER
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(30),
+            ),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _selectedDetailId = null),
               ),
-            )
-          else ...[
-            Card(
-              color: Colors.green.shade50,
-              elevation: 2,
-              child: ListTile(
-                title: const Text(
-                  'Total Aportado',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                trailing: Text(
-                  '\$${memberTotal.toStringAsFixed(2)}',
-                  style: const TextStyle(
+              Expanded(
+                child: Text(
+                  _selectedDetailName,
+                  style: GoogleFonts.poppins(
                     fontSize: 20,
-                    color: Colors.green,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 15),
-
-            if (memberAportes.isNotEmpty) ...[
-              const Text(
-                'Tendencia de Aportes a lo largo del Año',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                textAlign: TextAlign.center,
+              ElevatedButton.icon(
+                onPressed: _exportCurrentViewToPDF,
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('PDF'),
               ),
-              const SizedBox(height: 15),
-              SizedBox(
-                height: 180,
-                child: LineChart(
-                  LineChartData(
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: true,
-                      horizontalInterval: maxY / 4 == 0 ? 1 : maxY / 4,
-                      getDrawingHorizontalLine: (value) =>
-                          FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-                      getDrawingVerticalLine: (value) =>
-                          FlLine(color: Colors.grey.shade200, strokeWidth: 1),
-                    ),
-                    titlesData: FlTitlesData(
-                      show: true,
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 22,
-                          interval: 1,
-                          getTitlesWidget: (value, meta) {
-                            const style = TextStyle(
-                              color: Colors.black54,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 10,
-                            );
-                            final months = [
-                              'Ene',
-                              'Feb',
-                              'Mar',
-                              'Abr',
-                              'May',
-                              'Jun',
-                              'Jul',
-                              'Ago',
-                              'Sep',
-                              'Oct',
-                              'Nov',
-                              'Dic',
-                            ];
-                            int index = value.toInt();
-                            if (index >= 0 && index < 12) {
-                              return SideTitleWidget(
-                                meta: meta,
-                                child: Text(months[index], style: style),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
+            ],
+          ),
+        ),
+
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // MULTI-COLORED CHART TOGGLES
+                if (_groupingMode == 1)
+                  Wrap(
+                    spacing: 8,
+                    children: _activeChartTypes.keys.map((type) {
+                      final isSelected = _activeChartTypes[type]!;
+                      final badgeColor =
+                          typeColors[type] ?? colorScheme.primary;
+
+                      return FilterChip(
+                        label: Text(
+                          type,
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : (isDark ? Colors.white70 : Colors.black87),
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
                         ),
-                      ),
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 35,
-                          getTitlesWidget: (value, meta) {
-                            if (value == maxY || value == 0)
-                              return const SizedBox.shrink();
-                            return Text(
-                              '\$${value.toInt()}',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: Colors.grey,
+                        selected: isSelected,
+                        selectedColor: badgeColor.withOpacity(
+                          0.9,
+                        ), // Toggles match the line colors!
+                        checkmarkColor: Colors.white,
+                        backgroundColor: isDark
+                            ? Colors.grey.shade800
+                            : Colors.grey.shade200,
+                        onSelected: (val) =>
+                            setState(() => _activeChartTypes[type] = val),
+                      );
+                    }).toList(),
+                  ),
+                const SizedBox(height: 20),
+
+                // THE CHART
+                Container(
+                  height: 300,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black26 : Colors.white,
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: _groupingMode == 1
+                      ? LineChart(
+                          LineChartData(
+                            clipData: const FlClipData.none(),
+                            gridData: const FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                            ),
+                            titlesData: FlTitlesData(
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
                               ),
-                            );
-                          },
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 50,
+                                  getTitlesWidget: (value, meta) {
+                                    if (value == 0 || value == maxY * 1.2)
+                                      return const SizedBox.shrink();
+                                    return Text(
+                                      value.toInt().toString(),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  interval: 1,
+                                  getTitlesWidget: (value, meta) {
+                                    if (value.toInt() >= 0 &&
+                                        value.toInt() < last12Months.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 8.0,
+                                        ),
+                                        child: Text(
+                                          DateFormat(
+                                            'MMM',
+                                            'es',
+                                          ).format(last12Months[value.toInt()]),
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return const Text('');
+                                  },
+                                ),
+                              ),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            minX: 0,
+                            maxX: 11,
+                            minY: 0,
+                            maxY: maxY * 1.2,
+                            lineBarsData:
+                                lineBars, // Render the multiple colored lines here!
+                          ),
+                        )
+                      : BarChart(
+                          BarChartData(
+                            alignment: BarChartAlignment.spaceAround,
+                            maxY: maxY * 1.2,
+                            titlesData: FlTitlesData(
+                              rightTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              topTitles: const AxisTitles(
+                                sideTitles: SideTitles(showTitles: false),
+                              ),
+                              leftTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 50,
+                                  getTitlesWidget: (value, meta) {
+                                    if (value == 0 || value == maxY * 1.2)
+                                      return const SizedBox.shrink();
+                                    return Text(
+                                      value.toInt().toString(),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  interval: 1,
+                                  getTitlesWidget: (value, meta) {
+                                    if (value.toInt() >= 0 &&
+                                        value.toInt() < last12Months.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 8.0,
+                                        ),
+                                        child: Text(
+                                          DateFormat(
+                                            'MMM',
+                                            'es',
+                                          ).format(last12Months[value.toInt()]),
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return const Text('');
+                                  },
+                                ),
+                              ),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            gridData: const FlGridData(
+                              show: true,
+                              drawVerticalLine: false,
+                            ),
+                            barGroups: barGroups,
+                          ),
                         ),
-                      ),
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                    ),
-                    borderData: FlBorderData(
-                      show: true,
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    minX: 0,
-                    maxX: 11,
-                    minY: 0,
-                    maxY: maxY,
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: List.generate(12, (index) {
-                          return FlSpot(index.toDouble(), monthlyData[index]);
-                        }),
-                        isCurved: true,
-                        color: Colors.indigo,
-                        barWidth: 3,
-                        isStrokeCapRound: true,
-                        dotData: const FlDotData(show: true),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.indigo.withOpacity(0.15),
-                        ),
-                      ),
-                    ],
+                ),
+
+                const SizedBox(height: 30),
+                Text(
+                  'Historial de Transacciones',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              const SizedBox(height: 15),
-              const Text(
-                'Desglose Detallado',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const Divider(),
-            ],
-            Expanded(
-              child: memberAportes.isEmpty
-                  ? const Center(child: Text('No hay registros detallados.'))
-                  : ListView.builder(
-                      itemCount: memberAportes.length,
-                      itemBuilder: (context, index) {
-                        final item = memberAportes[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.indigo.shade50,
-                              foregroundColor: Colors.indigo,
-                              child: const Icon(Icons.monetization_on),
-                            ),
-                            title: Text(
-                              item.aporte.tipo,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              DateFormat(
-                                'dd MMMM yyyy',
-                                'es',
-                              ).format(item.aporte.fecha),
-                            ),
-                            trailing: Text(
-                              '\$${item.aporte.monto.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
+                const SizedBox(height: 10),
+
+                // THE TRANSACTIONS LIST
+                if (targetData.isEmpty)
+                  const Center(
+                    child: Text('No hay registros con los filtros actuales.'),
+                  )
+                else
+                  ...targetData.map((item) {
+                    return Card(
+                      child: ListTile(
+                        // Match the icon color to the specific contribution type
+                        leading: Icon(
+                          Icons.monetization_on,
+                          color: typeColors[item.aporte.tipo] ?? Colors.green,
+                        ),
+                        title: Text(
+                          item.aporte.tipo,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                        subtitle: Text(
+                          DateFormat(
+                            'dd MMM yyyy, hh:mm a',
+                            'es',
+                          ).format(item.aporte.fecha),
+                        ),
+                        trailing: Text(
+                          '\$${item.aporte.monto.toStringAsFixed(2)}',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
