@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
+import 'package:flutter_app_aportes/features/members/widgets/add_feligres_sheet.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -197,13 +198,13 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                       const SizedBox(height: 4),
                       TextButton.icon(
                         onPressed: () {
-                          // 1. Cierra este formulario de aporte
-                          Navigator.pop(context);
-                          // 2. Cambia al entorno de Secretaría
-                          ref.read(environmentProvider.notifier).state =
-                              AppEnvironment.secretaria;
-                          // 3. Redirige a la pestaña de Feligreses (índice 1)
-                          ref.read(navIndexProvider.notifier).state = 1;
+                          // Abre el formulario de feligrés ENCIMA del de aportes
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (context) => const AddFeligresSheet(),
+                          );
                         },
                         icon: const Icon(Icons.person_add_alt_1, size: 18),
                         label: Text(
