@@ -436,14 +436,13 @@ class DashboardSummary extends ConsumerWidget {
   }
 
   // --- HELPER: TOP 5 CARD ---
-  // --- HELPER: TOP 5 CARD ---
   Widget _buildTop5Card(
     List<MapEntry<String, double>> top5,
     Color panelColor,
     Color textPrimary,
     bool isDark,
     ColorScheme colorScheme,
-    bool isStacked, // <-- Nuevo parámetro
+    bool isStacked,
   ) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -472,7 +471,6 @@ class DashboardSummary extends ConsumerWidget {
           const SizedBox(height: 20),
 
           if (top5.isEmpty)
-            // Centrado inteligente dependiendo de la pantalla
             isStacked
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 40),
@@ -492,61 +490,68 @@ class DashboardSummary extends ConsumerWidget {
                     ),
                   )
           else
-            ...top5.asMap().entries.map((entry) {
-              int index = entry.key;
-              String nameAndType = entry.value.key;
-              double amount = entry.value.value;
+            // THE FIX: Wrapped the list in Expanded and SingleChildScrollView
+            Column(
+              children: top5.asMap().entries.map((entry) {
+                int index = entry.key;
+                String nameAndType = entry.value.key;
+                double amount = entry.value.value;
 
-              Color rankColor = index == 0
-                  ? Colors.amber
-                  : (index == 1
-                        ? Colors.grey.shade400
-                        : (index == 2
-                              ? Colors.brown.shade300
-                              : colorScheme.primary));
+                Color rankColor = index == 0
+                    ? Colors.amber
+                    : (index == 1
+                          ? Colors.grey.shade400
+                          : (index == 2
+                                ? Colors.brown.shade300
+                                : colorScheme.primary));
 
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: rankColor.withOpacity(0.2),
-                  child: Text(
-                    '#${index + 1}',
-                    style: TextStyle(
-                      color: rankColor,
-                      fontWeight: FontWeight.bold,
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: rankColor.withOpacity(0.2),
+                    child: Text(
+                      '#${index + 1}',
+                      style: TextStyle(
+                        color: rankColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                title: Text(
-                  nameAndType.split(' - ').first,
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                  title: Text(
+                    nameAndType.split(' - ').first,
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1, // This safely prevents vertical overflows!
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 1, // <-- PREVIENE DESBORDAMIENTO VERTICAL
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  nameAndType.split(' - ').last,
-                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
-                  maxLines: 1, // <-- PREVIENE DESBORDAMIENTO VERTICAL
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Text(
-                  '\$${amount.toStringAsFixed(2)}',
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.greenAccent,
-                    fontSize: 16,
+                  subtitle: Text(
+                    nameAndType.split(' - ').last,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              );
-            }),
+                  trailing: Text(
+                    '\$${amount.toStringAsFixed(2)}',
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.greenAccent,
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
   }
 
+  // --- HELPER: GENDER PIE CHART ---
   // --- HELPER: GENDER PIE CHART ---
   Widget _buildGenderPieChart(
     double masculino,
@@ -554,7 +559,7 @@ class DashboardSummary extends ConsumerWidget {
     Color panelColor,
     Color textPrimary,
     bool isDark,
-    bool isStacked, // <-- Nuevo parámetro
+    bool isStacked,
   ) {
     final double total = masculino + femenino;
     final double pctMasc = total == 0 ? 0 : (masculino / total) * 100;
@@ -585,8 +590,7 @@ class DashboardSummary extends ConsumerWidget {
             ),
           ),
 
-          if (!isStacked)
-            const Spacer(), // <-- Centra dinámicamente el gráfico hacia abajo
+          if (!isStacked) const Spacer(),
           if (isStacked) const SizedBox(height: 30),
 
           if (total == 0)
@@ -662,32 +666,22 @@ class DashboardSummary extends ConsumerWidget {
               ),
             ),
 
-          const SizedBox(height: 30), // <-- Espaciado adicional solicitado
-          // <-- FITTEDBOX: PREVIENE EL DESBORDAMIENTO HORIZONTAL REDUCIENDO LA LETRA SI ES NECESARIO
+          const SizedBox(height: 30),
+
+          // THE FIX: Replaced Row with Wrap for automatic line breaks
           Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildLegendItem(
-                    'Hombres',
-                    const Color(0xFF00C9FF),
-                    masculino,
-                  ),
-                  const SizedBox(width: 24),
-                  _buildLegendItem(
-                    'Mujeres',
-                    const Color(0xFFFF007F),
-                    femenino,
-                  ),
-                ],
-              ),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 24, // Horizontal space between items
+              runSpacing: 12, // Vertical space when it moves to the next line
+              children: [
+                _buildLegendItem('Hombres', const Color(0xFF00C9FF), masculino),
+                _buildLegendItem('Mujeres', const Color(0xFFFF007F), femenino),
+              ],
             ),
           ),
 
-          if (!isStacked)
-            const Spacer(), // <-- Empuja el gráfico hacia arriba, logrando el centrado perfecto
+          if (!isStacked) const Spacer(),
         ],
       ),
     );

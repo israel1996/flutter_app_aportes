@@ -61,34 +61,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           connectivity.contains(ConnectivityResult.ethernet);
 
       if (!hasInternet) {
-        if (mounted) {
+        if (mounted)
           CustomSnackBar.showWarning(
             context,
             'Modo Offline: Sin conexión a Internet',
           );
-        }
         return;
       }
 
       final authService = ref.read(authServiceProvider);
       if (authService.currentUser == null) return;
 
-      debugPrint("🚀 Home cargado: Verificando datos pendientes...");
-
       final database = ref.read(databaseProvider);
       final syncService = SyncService(database);
 
       await syncService.syncAll();
-      debugPrint("✅ Sincronización completa.");
 
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
-      }
     } catch (e) {
-      debugPrint("❌ Error de sincronización: $e");
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showError(context, 'Error al sincronizar: $e');
-      }
     } finally {
       if (mounted) {
         setState(() => _isSyncing = false);
@@ -128,7 +121,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ],
         ),
       );
-
       if (proceed != true) return;
     }
 
@@ -152,6 +144,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final userRoleAsync = ref.watch(userRoleProvider);
+    // --- LISTEN TO THE CURRENT ENVIRONMENT (FINANCE OR SECRETARIAT) ---
+    final currentEnv = ref.watch(environmentProvider);
+    final isFinance = currentEnv == AppEnvironment.finanzas;
 
     return userRoleAsync.when(
       loading: () => const Scaffold(
@@ -160,32 +155,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       error: (error, stack) =>
           Scaffold(body: Center(child: Text('Error cargando rol: $error'))),
       data: (role) {
-        if (role == 'requiere_cambio_clave') {
-          return const ForcePasswordScreen();
-        }
-        final isSuperAdmin = role == 'superadmin';
+        if (role == 'requiere_cambio_clave') return const ForcePasswordScreen();
 
+        final isSuperAdmin = role == 'superadmin';
         final colorScheme = Theme.of(context).colorScheme;
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final isDesktop = MediaQuery.of(context).size.width > 800;
 
-        final List<Widget> pages = [
-          const DashboardSummary(),
-          const FeligresesScreen(),
-          const AportesScreen(),
-          const ExportScreen(),
-          if (isSuperAdmin) const AdminUsersScreen(),
-        ];
+        // --- DYNAMIC PAGES BASED ON THE ENVIRONMENT ---
+        final List<Widget> pages = isFinance
+            ? [
+                const DashboardSummary(), // Finance
+                const FeligresesScreen(),
+                const AportesScreen(),
+                const ExportScreen(),
+                if (isSuperAdmin) const AdminUsersScreen(),
+              ]
+            : [
+                const Center(
+                  child: Text('Dashboard Secretaría en Construcción...'),
+                ), // Phase 4 will go here
+                const FeligresesScreen(),
+                const ExportScreen(), // Skip 'Aportes' in Secretariat
+                if (isSuperAdmin) const AdminUsersScreen(),
+              ];
 
+        // Reset index if we change environment to avoid out-of-bounds errors
         if (_selectedIndex >= pages.length) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() => _selectedIndex = 0);
-          });
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => setState(() => _selectedIndex = 0),
+          );
         }
 
         return Scaffold(
           body: Row(
             children: [
+              // --- SIDEBAR (DESKTOP) ---
               if (isDesktop)
                 Container(
                   width: 260,
@@ -199,13 +204,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         child: Row(
                           children: [
                             Icon(
-                              Icons.church,
+                              isFinance
+                                  ? Icons.account_balance
+                                  : Icons.assignment_ind,
                               color: colorScheme.primary,
                               size: 32,
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              'DASHBOARD',
+                              isFinance ? 'FINANZAS' : 'SECRETARÍA',
                               style: GoogleFonts.montserrat(
                                 color: colorScheme.onSurface,
                                 fontSize: 20,
@@ -229,6 +236,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                       ),
 
+                      // DYNAMIC MENU
                       _buildNavItem(
                         0,
                         Icons.grid_view_rounded,
@@ -243,25 +251,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         colorScheme,
                         isDark,
                       ),
+                      if (isFinance)
+                        _buildNavItem(
+                          2,
+                          Icons.account_balance_wallet_outlined,
+                          'Aportes',
+                          colorScheme,
+                          isDark,
+                        ),
                       _buildNavItem(
-                        2,
-                        Icons.account_balance_wallet_outlined,
-                        'Aportes',
-                        colorScheme,
-                        isDark,
-                      ),
-                      _buildNavItem(
-                        3,
+                        isFinance ? 3 : 2,
                         Icons.file_download_outlined,
                         'Exportar',
                         colorScheme,
                         isDark,
                       ),
-
-                      // 2. Conditionally add the 5th sidebar item
                       if (isSuperAdmin)
                         _buildNavItem(
-                          4,
+                          isFinance ? 4 : 3,
                           Icons.admin_panel_settings,
                           'Usuarios',
                           colorScheme,
@@ -295,157 +302,96 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
 
+              // --- MAIN AREA ---
               Expanded(
                 child: Column(
                   children: [
+                    // APP BAR
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 32.0,
                         vertical: 24.0,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // 3. Dynamic Title Updates
-                          Text(
-                            _selectedIndex == 0
-                                ? 'RESUMEN'
-                                : _selectedIndex == 1
-                                ? 'FELIGRESES'
-                                : _selectedIndex == 2
-                                ? 'APORTES'
-                                : _selectedIndex == 3
-                                ? 'EXPORTAR'
-                                : _selectedIndex == 4
-                                ? 'PANEL DE APROBACIÓN'
-                                : '',
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey,
-                              fontSize: 16,
-                              letterSpacing: 1.2,
-                              fontWeight: FontWeight.w600,
+                      child: isDesktop
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _getPageTitle(isFinance),
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.grey,
+                                      fontSize: 16,
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(
+                                  width: 8,
+                                ), // Reduced gap slightly
+                                // Wrapped the switcher so it scales down if space is tight
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: _buildEnvironmentSwitcher(
+                                      currentEnv,
+                                      colorScheme,
+                                      isDark,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(
+                                  width: 8,
+                                ), // Reduced gap slightly
+                                _buildActionButtons(colorScheme, isDark),
+                              ],
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _getPageTitle(isFinance),
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.grey,
+                                          fontSize: 16,
+                                          letterSpacing: 1.2,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow
+                                            .ellipsis, // Truncates text if it gets too tight
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _buildActionButtons(colorScheme, isDark),
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                                Center(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: _buildEnvironmentSwitcher(
+                                      currentEnv,
+                                      colorScheme,
+                                      isDark,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.only(right: 16),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                                child: IconButton(
-                                  icon: RotationTransition(
-                                    turns: _syncAnimationController,
-                                    child: Icon(
-                                      Icons.sync,
-                                      // Glows Cyan when syncing, normal color when idle
-                                      color: _isSyncing
-                                          ? const Color(0xFF00C9FF)
-                                          : colorScheme.primary,
-                                    ),
-                                  ),
-                                  // The fix: We pass a function instead of 'null' to prevent the grey box
-                                  onPressed: () {
-                                    if (!_isSyncing) {
-                                      _checkAndSync();
-                                    }
-                                  },
-                                ),
-                              ),
-
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                                child: IconButton(
-                                  icon: Icon(
-                                    isDark ? Icons.light_mode : Icons.dark_mode,
-                                  ),
-                                  color: isDark
-                                      ? Colors.yellow
-                                      : colorScheme.primary,
-                                  onPressed: () {
-                                    ref
-                                        .read(themeModeProvider.notifier)
-                                        .state = isDark
-                                        ? ThemeMode.light
-                                        : ThemeMode.dark;
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-
-                              PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'logout') {
-                                    _handleSecureLogout();
-                                  }
-                                },
-                                color: colorScheme.surface,
-                                offset: const Offset(0, 50),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(
-                                    color: isDark
-                                        ? Colors.redAccent.withOpacity(0.2)
-                                        : Colors.black.withOpacity(0.05),
-                                  ),
-                                ),
-                                child: CircleAvatar(
-                                  backgroundColor: colorScheme.primary
-                                      .withOpacity(0.2),
-                                  child: Icon(
-                                    Icons.person,
-                                    color: colorScheme.primary,
-                                  ),
-                                ),
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: 'logout',
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.logout,
-                                          color: Colors.redAccent,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          'Cerrar Sesión',
-                                          style: GoogleFonts.poppins(
-                                            color: Colors.redAccent,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                     ),
 
+                    // PAGE CONTENT
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        // Safe index lookup
                         child: _selectedIndex < pages.length
                             ? pages[_selectedIndex]
                             : pages[0],
@@ -457,6 +403,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
 
+          // --- BOTTOM NAVIGATION BAR (MOBILE) ---
           bottomNavigationBar: isDesktop
               ? null
               : NavigationBar(
@@ -475,15 +422,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       icon: Icon(Icons.people_alt_outlined),
                       label: 'Feligreses',
                     ),
-                    const NavigationDestination(
-                      icon: Icon(Icons.account_balance_wallet_outlined),
-                      label: 'Aportes',
-                    ),
+                    if (isFinance)
+                      const NavigationDestination(
+                        icon: Icon(Icons.account_balance_wallet_outlined),
+                        label: 'Aportes',
+                      ),
                     const NavigationDestination(
                       icon: Icon(Icons.file_download_outlined),
                       label: 'Exportar',
                     ),
-                    // 4. Conditionally add the 5th mobile navigation item
                     if (isSuperAdmin)
                       const NavigationDestination(
                         icon: Icon(Icons.admin_panel_settings),
@@ -493,6 +440,208 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
         );
       },
+    );
+  }
+
+  String _getPageTitle(bool isFinance) {
+    if (isFinance) {
+      switch (_selectedIndex) {
+        case 0:
+          return 'RESUMEN FINANCIERO';
+        case 1:
+          return 'FELIGRESES';
+        case 2:
+          return 'APORTES';
+        case 3:
+          return 'EXPORTAR';
+        case 4:
+          return 'PANEL DE APROBACIÓN';
+        default:
+          return '';
+      }
+    } else {
+      switch (_selectedIndex) {
+        case 0:
+          return 'RESUMEN DEMOGRÁFICO';
+        case 1:
+          return 'FELIGRESES';
+        case 2:
+          return 'EXPORTAR';
+        case 3:
+          return 'PANEL DE APROBACIÓN';
+        default:
+          return '';
+      }
+    }
+  }
+
+  Widget _buildActionButtons(ColorScheme colorScheme, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          margin: const EdgeInsets.only(right: 16),
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
+          ),
+          child: IconButton(
+            splashColor: Colors.transparent, // Gray box fix
+            highlightColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            icon: RotationTransition(
+              turns: _syncAnimationController,
+              child: Icon(
+                Icons.sync,
+                color: _isSyncing
+                    ? const Color(0xFF00C9FF)
+                    : colorScheme.primary,
+              ),
+            ),
+            onPressed: () {
+              if (!_isSyncing) _checkAndSync();
+            },
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
+          ),
+          child: IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            color: isDark ? Colors.yellow : colorScheme.primary,
+            onPressed: () => ref.read(themeModeProvider.notifier).state = isDark
+                ? ThemeMode.light
+                : ThemeMode.dark,
+          ),
+        ),
+        const SizedBox(width: 16),
+        PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'logout') _handleSecureLogout();
+          },
+          color: colorScheme.surface,
+          offset: const Offset(0, 50),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(
+              color: isDark
+                  ? Colors.redAccent.withOpacity(0.2)
+                  : Colors.black.withOpacity(0.05),
+            ),
+          ),
+          child: CircleAvatar(
+            backgroundColor: colorScheme.primary.withOpacity(0.2),
+            child: Icon(Icons.person, color: colorScheme.primary),
+          ),
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: [
+                  const Icon(Icons.logout, color: Colors.redAccent, size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Cerrar Sesión',
+                    style: GoogleFonts.poppins(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================
+  // ENVIRONMENT SWITCHER WIDGET (FINANCE / SECRETARIAT)
+  // ==========================================================
+  Widget _buildEnvironmentSwitcher(
+    AppEnvironment currentEnv,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
+    return Container(
+      height: 45,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleOption(
+            'FINANZAS',
+            Icons.attach_money,
+            AppEnvironment.finanzas,
+            currentEnv,
+            colorScheme,
+          ),
+          _buildToggleOption(
+            'SECRETARÍA',
+            Icons.analytics_outlined,
+            AppEnvironment.secretaria,
+            currentEnv,
+            colorScheme,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToggleOption(
+    String title,
+    IconData icon,
+    AppEnvironment target,
+    AppEnvironment current,
+    ColorScheme colorScheme,
+  ) {
+    final isSelected = target == current;
+    return GestureDetector(
+      onTap: () {
+        // Changes the environment and returns the user to the "Summary" tab
+        ref.read(environmentProvider.notifier).state = target;
+        setState(() => _selectedIndex = 0);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? colorScheme.primary.withOpacity(0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? colorScheme.primary : Colors.grey,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? colorScheme.primary : Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
