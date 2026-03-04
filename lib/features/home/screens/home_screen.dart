@@ -7,6 +7,7 @@ import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
+import 'package:flutter_app_aportes/features/home/screens/dashboard_secretaria.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../export/screens/export_screen.dart';
@@ -62,10 +63,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       if (!hasInternet) {
         if (mounted)
-          CustomSnackBar.showWarning(
-            context,
-            'Modo Offline: Sin conexión a Internet',
-          );
+          CustomSnackBar.showWarning(context, 'Sin conexión a Internet');
         return;
       }
 
@@ -172,11 +170,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 if (isSuperAdmin) const AdminUsersScreen(),
               ]
             : [
-                const Center(
-                  child: Text('Dashboard Secretaría en Construcción...'),
-                ), // Phase 4 will go here
+                const DashboardSecretaria(),
                 const FeligresesScreen(),
-                const ExportScreen(), // Skip 'Aportes' in Secretariat
+                const ExportScreen(),
                 if (isSuperAdmin) const AdminUsersScreen(),
               ];
 
