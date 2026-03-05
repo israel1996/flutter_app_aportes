@@ -25,7 +25,6 @@ class ReportesScreen extends ConsumerStatefulWidget {
 class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   final GlobalKey _exportKey = GlobalKey();
 
-  // STATE CACHING (Fixes the focus bug)
   late Stream<List<AporteConFeligres>> _historyStream;
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
@@ -36,6 +35,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   // Drill-down State
   String? _selectedDetailId;
   String _selectedDetailName = '';
+
+  // --- PAGINATION STATES ---
+  int _masterCurrentPage = 1;
+  int _detailCurrentPage = 1;
+  int _itemsPerPage = 10;
+  final List<int> _pageOptions = [10, 20, 50];
 
   // Chart Toggle States for the Detail View
   final Map<String, bool> _activeChartTypes = {
@@ -51,7 +56,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     super.initState();
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
-    // Cache the stream so typing doesn't destroy the widget tree
     _historyStream = ref.read(databaseProvider).watchHistory();
   }
 
@@ -70,7 +74,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       initialDateRange: _dateRange,
     );
     if (range != null) {
-      setState(() => _dateRange = range);
+      setState(() {
+        _dateRange = range;
+        _detailCurrentPage = 1; // Reset detail page when filtering
+      });
     }
   }
 
@@ -81,7 +88,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     );
 
     try {
-      // 1. Capture the screen as an image
       RenderRepaintBoundary boundary =
           _exportKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
@@ -91,14 +97,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       );
       Uint8List pngBytes = byteData!.buffer.asUint8List();
 
-      // 2. Create the PDF Document
       final pdf = pw.Document();
       final imageProvider = pw.MemoryImage(pngBytes);
 
       pdf.addPage(
         pw.Page(
-          pageFormat:
-              PdfPageFormat.a4.landscape, // Landscape fits charts better
+          pageFormat: PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.all(20),
           build: (pw.Context context) {
             return pw.Center(child: pw.Image(imageProvider));
@@ -106,7 +110,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         ),
       );
 
-      // 3. Open the Native Save Dialog / Preview
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
         name:
@@ -142,20 +145,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
             var allData = snapshot.data ?? [];
 
-            // Apply Master Filters
-            if (_dateRange != null) {
-              allData = allData
-                  .where(
-                    (item) =>
-                        item.aporte.fecha.isAfter(
-                          _dateRange!.start.subtract(const Duration(days: 1)),
-                        ) &&
-                        item.aporte.fecha.isBefore(
-                          _dateRange!.end.add(const Duration(days: 1)),
-                        ),
-                  )
-                  .toList();
-            }
+            // Search filter is applied globally
             if (_searchController.text.isNotEmpty) {
               allData = allData
                   .where(
@@ -166,7 +156,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   .toList();
             }
 
-            // --- VIEW SWITCHER ---
             if (_selectedDetailId != null) {
               return _buildDetailView(allData, colorScheme, isDark);
             } else {
@@ -200,6 +189,19 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     final displayList = groupedMap.values.toList()
       ..sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
 
+    // --- PAGINATION LOGIC (MASTER) ---
+    final totalPages = (displayList.length / _itemsPerPage).ceil() == 0
+        ? 1
+        : (displayList.length / _itemsPerPage).ceil();
+    if (_masterCurrentPage > totalPages) _masterCurrentPage = totalPages;
+    if (_masterCurrentPage < 1) _masterCurrentPage = 1;
+
+    final startIndex = (_masterCurrentPage - 1) * _itemsPerPage;
+    final endIndex = (startIndex + _itemsPerPage > displayList.length)
+        ? displayList.length
+        : startIndex + _itemsPerPage;
+    final paginatedMasterList = displayList.sublist(startIndex, endIndex);
+
     return Column(
       children: [
         Container(
@@ -212,51 +214,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           ),
           child: Column(
             children: [
-              // INTUITIVE DATE RANGE BUTTON
-              InkWell(
-                onTap: _pickDateRange,
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: colorScheme.primary),
-                    borderRadius: BorderRadius.circular(16),
-                    color: colorScheme.primary.withOpacity(0.05),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.date_range, color: colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        _dateRange == null
-                            ? 'Filtrar por Rango de Fechas'
-                            : '${DateFormat('dd MMM yyyy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yyyy').format(_dateRange!.end)}',
-                        style: GoogleFonts.poppins(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (_dateRange != null) ...[
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                            color: Colors.redAccent,
-                            size: 20,
-                          ),
-                          onPressed: () => setState(() => _dateRange = null),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
               Row(
                 children: [
                   Expanded(
@@ -270,8 +227,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onChanged: (val) =>
-                          setState(() {}), // Trigger rebuild for search
+                      onChanged: (val) => setState(() {
+                        _masterCurrentPage = 1;
+                      }),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -296,13 +254,19 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                     ChoiceChip(
                       label: const Text('Agrupar por Feligrés'),
                       selected: _groupingMode == 1,
-                      onSelected: (v) => setState(() => _groupingMode = 1),
+                      onSelected: (v) => setState(() {
+                        _groupingMode = 1;
+                        _masterCurrentPage = 1;
+                      }),
                     ),
                     const SizedBox(width: 8),
                     ChoiceChip(
                       label: const Text('Agrupar por Tipo'),
                       selected: _groupingMode == 2,
-                      onSelected: (v) => setState(() => _groupingMode = 2),
+                      onSelected: (v) => setState(() {
+                        _groupingMode = 2;
+                        _masterCurrentPage = 1;
+                      }),
                     ),
                   ],
                 ),
@@ -312,7 +276,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         ),
 
         Expanded(
-          child: displayList.isEmpty
+          child: paginatedMasterList.isEmpty
               ? Center(
                   child: Text(
                     'No hay datos para mostrar',
@@ -321,9 +285,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(24),
-                  itemCount: displayList.length,
+                  itemCount: paginatedMasterList.length,
                   itemBuilder: (context, index) {
-                    final item = displayList[index];
+                    final item = paginatedMasterList[index];
                     return Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(
@@ -360,6 +324,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           setState(() {
                             _selectedDetailId = item['id'];
                             _selectedDetailName = item['name'];
+                            _dateRange = null;
+                            _detailCurrentPage = 1; // Reset detail page
                           });
                         },
                       ),
@@ -367,13 +333,65 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   },
                 ),
         ),
+
+        // --- MASTER PAGINATION CONTROLS ---
+        if (displayList.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            color: colorScheme.surface,
+            child: Row(
+              children: [
+                Text(
+                  'Mostrar:',
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(width: 8),
+                DropdownButton<int>(
+                  value: _itemsPerPage,
+                  underline: const SizedBox(),
+                  items: _pageOptions
+                      .map(
+                        (i) => DropdownMenuItem(
+                          value: i,
+                          child: Text(
+                            '$i',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (val) => setState(() {
+                    _itemsPerPage = val!;
+                    _masterCurrentPage = 1;
+                    _detailCurrentPage = 1;
+                  }),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: _masterCurrentPage > 1
+                      ? () => setState(() => _masterCurrentPage--)
+                      : null,
+                ),
+                Text(
+                  'Pág $_masterCurrentPage de $totalPages',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: _masterCurrentPage < totalPages
+                      ? () => setState(() => _masterCurrentPage++)
+                      : null,
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
 
-  // ==========================================
-  // VIEW 2: DETAIL VIEW WITH REAL CHARTS
-  // ==========================================
   // ==========================================
   // VIEW 2: DETAIL VIEW WITH REAL CHARTS
   // ==========================================
@@ -382,20 +400,34 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     ColorScheme colorScheme,
     bool isDark,
   ) {
-    // --- 1. DEFINE CUSTOM COLORS FOR EACH TYPE ---
     final Map<String, Color> typeColors = {
-      'Diezmo': const Color(0xFF4FACFE), // Neon Blue
-      'Ofrenda': const Color(0xFF92FE9D), // Bright Green
-      'Promesa': const Color(0xFF89216B), // Deep Purple
-      'Pro-Templo': Colors.orangeAccent, // Orange
-      'Especial': const Color(0xFFFF007F), // Pink
+      'Diezmo': const Color(0xFF4FACFE),
+      'Ofrenda': const Color(0xFF92FE9D),
+      'Promesa': const Color(0xFF89216B),
+      'Pro-Templo': Colors.orangeAccent,
+      'Especial': const Color(0xFFFF007F),
     };
 
-    // 2. Filter data specific to the selected item
+    // 1. Filter data specific to the selected item
     var targetData = allData.where((item) {
       if (_groupingMode == 1) return item.feligres.id == _selectedDetailId;
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
+
+    // 2. Apply Date Range Filter INSIDE the detail view
+    if (_dateRange != null) {
+      targetData = targetData
+          .where(
+            (item) =>
+                item.aporte.fecha.isAfter(
+                  _dateRange!.start.subtract(const Duration(days: 1)),
+                ) &&
+                item.aporte.fecha.isBefore(
+                  _dateRange!.end.add(const Duration(days: 1)),
+                ),
+          )
+          .toList();
+    }
 
     // 3. Filter by selected toggles (Only if viewing a Parishioner)
     if (_groupingMode == 1) {
@@ -404,14 +436,34 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           .toList();
     }
 
-    // 4. Prepare Chart Data (Group by Type AND Month)
+    // 4. Sort transactions by date descending
+    targetData.sort((a, b) => b.aporte.fecha.compareTo(a.aporte.fecha));
+
+    // --- PAGINATION LOGIC (DETAIL) ---
+    final totalDetailPages = (targetData.length / _itemsPerPage).ceil() == 0
+        ? 1
+        : (targetData.length / _itemsPerPage).ceil();
+    if (_detailCurrentPage > totalDetailPages)
+      _detailCurrentPage = totalDetailPages;
+    if (_detailCurrentPage < 1) _detailCurrentPage = 1;
+
+    final startDetailIndex = (_detailCurrentPage - 1) * _itemsPerPage;
+    final endDetailIndex =
+        (startDetailIndex + _itemsPerPage > targetData.length)
+        ? targetData.length
+        : startDetailIndex + _itemsPerPage;
+    final paginatedDetailList = targetData.sublist(
+      startDetailIndex,
+      endDetailIndex,
+    );
+
+    // 5. Prepare Chart Data (Group by Type AND Month based on ALL targetData, not just the paginated slice!)
     final now = DateTime.now();
     List<DateTime> last12Months = List.generate(
       12,
       (i) => DateTime(now.year, now.month - i, 1),
     ).reversed.toList();
 
-    // Initialize map structure for multiple lines
     Map<String, Map<String, double>> groupedMonthlyData = {};
     if (_groupingMode == 1) {
       for (var type in _activeChartTypes.keys.where(
@@ -430,7 +482,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     double maxY = 10;
     for (var item in targetData) {
       final key = DateFormat('MMM yy', 'es').format(item.aporte.fecha);
-      final typeKey = item.aporte.tipo; // Group by type to draw separate lines
+      final typeKey = item.aporte.tipo;
 
       if (groupedMonthlyData.containsKey(typeKey) &&
           groupedMonthlyData[typeKey]!.containsKey(key)) {
@@ -441,20 +493,17 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       }
     }
 
-    // 5. Generate Multi-Colored LineSpots and BarGroups
     List<LineChartBarData> lineBars = [];
     List<BarChartGroupData> barGroups = [];
 
     groupedMonthlyData.forEach((type, monthlyTotals) {
       List<FlSpot> spots = [];
       int xIndex = 0;
-      final chartColor =
-          typeColors[type] ?? colorScheme.primary; // Apply custom color!
+      final chartColor = typeColors[type] ?? colorScheme.primary;
 
       monthlyTotals.forEach((month, value) {
         spots.add(FlSpot(xIndex.toDouble(), value));
 
-        // Build bars for "Por Tipo" mode
         if (_groupingMode == 2) {
           barGroups.add(
             BarChartGroupData(
@@ -473,13 +522,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         xIndex++;
       });
 
-      // Build multiple lines for "Por Feligrés" mode
       if (_groupingMode == 1) {
         lineBars.add(
           LineChartBarData(
             spots: spots,
             isCurved: true,
-            color: chartColor, // Apply custom color!
+            color: chartColor,
             barWidth: 3,
             isStrokeCapRound: true,
             dotData: const FlDotData(show: true),
@@ -529,236 +577,363 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // MULTI-COLORED CHART TOGGLES
-                if (_groupingMode == 1)
-                  Wrap(
-                    spacing: 8,
-                    children: _activeChartTypes.keys.map((type) {
-                      final isSelected = _activeChartTypes[type]!;
-                      final badgeColor =
-                          typeColors[type] ?? colorScheme.primary;
-
-                      return FilterChip(
-                        label: Text(
-                          type,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : (isDark ? Colors.white70 : Colors.black87),
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // INTERNAL DATE RANGE PICKER
+                      InkWell(
+                        onTap: _pickDateRange,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: colorScheme.primary),
+                            borderRadius: BorderRadius.circular(16),
+                            color: colorScheme.primary.withOpacity(0.05),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.date_range,
+                                color: colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _dateRange == null
+                                    ? 'Filtrar por Rango de Fechas'
+                                    : '${DateFormat('dd MMM yyyy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yyyy').format(_dateRange!.end)}',
+                                style: GoogleFonts.poppins(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (_dateRange != null) ...[
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.close,
+                                    color: Colors.redAccent,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() {
+                                    _dateRange = null;
+                                    _detailCurrentPage = 1;
+                                  }),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        selected: isSelected,
-                        selectedColor: badgeColor.withOpacity(
-                          0.9,
-                        ), // Toggles match the line colors!
-                        checkmarkColor: Colors.white,
-                        backgroundColor: isDark
-                            ? Colors.grey.shade800
-                            : Colors.grey.shade200,
-                        onSelected: (val) =>
-                            setState(() => _activeChartTypes[type] = val),
-                      );
-                    }).toList(),
-                  ),
-                const SizedBox(height: 20),
+                      ),
+                      const SizedBox(height: 20),
 
-                // THE CHART
-                Container(
-                  height: 300,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.black26 : Colors.white,
-                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: _groupingMode == 1
-                      ? LineChart(
-                          LineChartData(
-                            clipData: const FlClipData.none(),
-                            gridData: const FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                            ),
-                            titlesData: FlTitlesData(
-                              rightTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
+                      // MULTI-COLORED CHART TOGGLES
+                      if (_groupingMode == 1)
+                        Wrap(
+                          spacing: 8,
+                          children: _activeChartTypes.keys.map((type) {
+                            final isSelected = _activeChartTypes[type]!;
+                            final badgeColor =
+                                typeColors[type] ?? colorScheme.primary;
+
+                            return FilterChip(
+                              label: Text(
+                                type,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isDark
+                                            ? Colors.white70
+                                            : Colors.black87),
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
                               ),
-                              topTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 50,
-                                  getTitlesWidget: (value, meta) {
-                                    if (value == 0 || value == maxY * 1.2)
-                                      return const SizedBox.shrink();
-                                    return Text(
-                                      value.toInt().toString(),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey,
+                              selected: isSelected,
+                              selectedColor: badgeColor.withOpacity(0.9),
+                              checkmarkColor: Colors.white,
+                              backgroundColor: isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200,
+                              onSelected: (val) => setState(() {
+                                _activeChartTypes[type] = val;
+                                _detailCurrentPage = 1;
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 20),
+
+                      // THE CHART
+                      Container(
+                        height: 300,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.black26 : Colors.white,
+                          border: Border.all(
+                            color: Colors.grey.withOpacity(0.3),
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _groupingMode == 1
+                            ? LineChart(
+                                LineChartData(
+                                  clipData: const FlClipData.none(),
+                                  gridData: const FlGridData(
+                                    show: true,
+                                    drawVerticalLine: false,
+                                  ),
+                                  titlesData: FlTitlesData(
+                                    rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    leftTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: 50,
+                                        getTitlesWidget: (value, meta) {
+                                          if (value == 0 || value == maxY * 1.2)
+                                            return const SizedBox.shrink();
+                                          return Text(
+                                            value.toInt().toString(),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          );
+                                        },
                                       ),
-                                    );
-                                  },
+                                    ),
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        interval: 1,
+                                        getTitlesWidget: (value, meta) {
+                                          if (value.toInt() >= 0 &&
+                                              value.toInt() <
+                                                  last12Months.length) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 8.0,
+                                              ),
+                                              child: Text(
+                                                DateFormat('MMM', 'es').format(
+                                                  last12Months[value.toInt()],
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const Text('');
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  borderData: FlBorderData(show: false),
+                                  minX: 0,
+                                  maxX: 11,
+                                  minY: 0,
+                                  maxY: maxY * 1.2,
+                                  lineBarsData: lineBars,
+                                ),
+                              )
+                            : BarChart(
+                                BarChartData(
+                                  alignment: BarChartAlignment.spaceAround,
+                                  maxY: maxY * 1.2,
+                                  titlesData: FlTitlesData(
+                                    rightTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    topTitles: const AxisTitles(
+                                      sideTitles: SideTitles(showTitles: false),
+                                    ),
+                                    leftTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: 50,
+                                        getTitlesWidget: (value, meta) {
+                                          if (value == 0 || value == maxY * 1.2)
+                                            return const SizedBox.shrink();
+                                          return Text(
+                                            value.toInt().toString(),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.grey,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    bottomTitles: AxisTitles(
+                                      sideTitles: SideTitles(
+                                        showTitles: true,
+                                        interval: 1,
+                                        getTitlesWidget: (value, meta) {
+                                          if (value.toInt() >= 0 &&
+                                              value.toInt() <
+                                                  last12Months.length) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 8.0,
+                                              ),
+                                              child: Text(
+                                                DateFormat('MMM', 'es').format(
+                                                  last12Months[value.toInt()],
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return const Text('');
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  borderData: FlBorderData(show: false),
+                                  gridData: const FlGridData(
+                                    show: true,
+                                    drawVerticalLine: false,
+                                  ),
+                                  barGroups: barGroups,
                                 ),
                               ),
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: 1,
-                                  getTitlesWidget: (value, meta) {
-                                    if (value.toInt() >= 0 &&
-                                        value.toInt() < last12Months.length) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 8.0,
-                                        ),
-                                        child: Text(
-                                          DateFormat(
-                                            'MMM',
-                                            'es',
-                                          ).format(last12Months[value.toInt()]),
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const Text('');
-                                  },
-                                ),
-                              ),
-                            ),
-                            borderData: FlBorderData(show: false),
-                            minX: 0,
-                            maxX: 11,
-                            minY: 0,
-                            maxY: maxY * 1.2,
-                            lineBarsData:
-                                lineBars, // Render the multiple colored lines here!
+                      ),
+
+                      const SizedBox(height: 30),
+                      Text(
+                        'Historial de Transacciones',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // THE PAGINATED TRANSACTIONS LIST
+                      if (targetData.isEmpty)
+                        const Center(
+                          child: Text(
+                            'No hay registros con los filtros actuales.',
                           ),
                         )
-                      : BarChart(
-                          BarChartData(
-                            alignment: BarChartAlignment.spaceAround,
-                            maxY: maxY * 1.2,
-                            titlesData: FlTitlesData(
-                              rightTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
+                      else
+                        ...paginatedDetailList.map((item) {
+                          return Card(
+                            child: ListTile(
+                              leading: Icon(
+                                Icons.monetization_on,
+                                color:
+                                    typeColors[item.aporte.tipo] ??
+                                    Colors.green,
                               ),
-                              topTitles: const AxisTitles(
-                                sideTitles: SideTitles(showTitles: false),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  reservedSize: 50,
-                                  getTitlesWidget: (value, meta) {
-                                    if (value == 0 || value == maxY * 1.2)
-                                      return const SizedBox.shrink();
-                                    return Text(
-                                      value.toInt().toString(),
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                                  },
+                              title: Text(
+                                item.aporte.tipo,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: 1,
-                                  getTitlesWidget: (value, meta) {
-                                    if (value.toInt() >= 0 &&
-                                        value.toInt() < last12Months.length) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 8.0,
-                                        ),
-                                        child: Text(
-                                          DateFormat(
-                                            'MMM',
-                                            'es',
-                                          ).format(last12Months[value.toInt()]),
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const Text('');
-                                  },
+                              subtitle: Text(
+                                DateFormat(
+                                  'dd MMM yyyy, hh:mm a',
+                                  'es',
+                                ).format(item.aporte.fecha),
+                              ),
+                              trailing: Text(
+                                '\$${item.aporte.monto.toStringAsFixed(2)}',
+                                style: GoogleFonts.montserrat(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               ),
                             ),
-                            borderData: FlBorderData(show: false),
-                            gridData: const FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                            ),
-                            barGroups: barGroups,
-                          ),
-                        ),
-                ),
-
-                const SizedBox(height: 30),
-                Text(
-                  'Historial de Transacciones',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                          );
+                        }).toList(),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
 
-                // THE TRANSACTIONS LIST
-                if (targetData.isEmpty)
-                  const Center(
-                    child: Text('No hay registros con los filtros actuales.'),
-                  )
-                else
-                  ...targetData.map((item) {
-                    return Card(
-                      child: ListTile(
-                        // Match the icon color to the specific contribution type
-                        leading: Icon(
-                          Icons.monetization_on,
-                          color: typeColors[item.aporte.tipo] ?? Colors.green,
+                // --- DETAIL PAGINATION CONTROLS ---
+                if (targetData.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                      horizontal: 24,
+                    ),
+                    color: colorScheme.surface,
+                    child: Row(
+                      children: [
+                        Text(
+                          'Mostrar:',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
                         ),
-                        title: Text(
-                          item.aporte.tipo,
+                        const SizedBox(width: 8),
+                        DropdownButton<int>(
+                          value: _itemsPerPage,
+                          underline: const SizedBox(),
+                          items: _pageOptions
+                              .map(
+                                (i) => DropdownMenuItem(
+                                  value: i,
+                                  child: Text(
+                                    '$i',
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) => setState(() {
+                            _itemsPerPage = val!;
+                            _detailCurrentPage = 1;
+                            _masterCurrentPage = 1;
+                          }),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _detailCurrentPage > 1
+                              ? () => setState(() => _detailCurrentPage--)
+                              : null,
+                        ),
+                        Text(
+                          'Pág $_detailCurrentPage de $totalDetailPages',
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        subtitle: Text(
-                          DateFormat(
-                            'dd MMM yyyy, hh:mm a',
-                            'es',
-                          ).format(item.aporte.fecha),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _detailCurrentPage < totalDetailPages
+                              ? () => setState(() => _detailCurrentPage++)
+                              : null,
                         ),
-                        trailing: Text(
-                          '\$${item.aporte.monto.toStringAsFixed(2)}',
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),

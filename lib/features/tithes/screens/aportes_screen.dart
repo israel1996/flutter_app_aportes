@@ -336,11 +336,23 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
               // PAGINATION WITH DROPDOWN
               Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 24,
+                // Added extra padding on the right (80) and bottom (32) to prevent FAB overlap
+                padding: const EdgeInsets.only(
+                  top: 16,
+                  bottom: 32,
+                  left: 24,
+                  right: 80,
                 ),
-                color: colorScheme.surface,
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
                 child: Row(
                   children: [
                     Text(
