@@ -2,12 +2,14 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-// PDF Packages
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -23,7 +25,8 @@ class ReportesScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportesScreenState extends ConsumerState<ReportesScreen> {
-  final GlobalKey _exportKey = GlobalKey();
+  // Exclusive key to capture ONLY the chart
+  final GlobalKey _chartExportKey = GlobalKey();
 
   late Stream<List<AporteConFeligres>> _historyStream;
   late TextEditingController _searchController;
@@ -32,17 +35,17 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   DateTimeRange? _dateRange;
   int _groupingMode = 1; // 1 = Feligrés, 2 = Tipo
 
-  // Drill-down State
+  // Navigation State (Detail)
   String? _selectedDetailId;
   String _selectedDetailName = '';
 
-  // --- PAGINATION STATES ---
+  // Pagination States
   int _masterCurrentPage = 1;
   int _detailCurrentPage = 1;
   int _itemsPerPage = 10;
-  final List<int> _pageOptions = [10, 20, 50];
+  final List<int> _pageOptions = [10, 20, 50, 100];
 
-  // Chart Toggle States for the Detail View
+  // Chart Filters
   final Map<String, bool> _activeChartTypes = {
     'Diezmo': true,
     'Ofrenda': true,
@@ -76,93 +79,270 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     if (range != null) {
       setState(() {
         _dateRange = range;
-        _detailCurrentPage = 1; // Reset detail page when filtering
+        _detailCurrentPage = 1;
       });
     }
   }
 
-  // --- REAL PDF EXPORT LOGIC ---
-  Future<void> _exportCurrentViewToPDF() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Generando PDF... por favor espere.')),
+  // ==========================================
+  // CLEAN NATIVE PDF EXPORT LOGIC
+  // ==========================================
+
+  // 1. Export Master List (Grouped Summary)
+  Future<void> _exportMasterToPDF(
+    List<Map<String, dynamic>> displayList,
+  ) async {
+    CustomSnackBar.showInfo(context, 'Generando Reporte PDF...');
+    final pdf = pw.Document();
+
+    // Native PDF table configuration
+    pdf.addPage(
+      pw.MultiPage(
+        // MultiPage creates pages automatically if the table is very long
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Reporte Financiero Resumido',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: ['Nombre / Tipo', 'Cantidad de Aportes', 'Monto Total'],
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blue800,
+              ),
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
+              cellAlignment: pw.Alignment.centerLeft,
+              data: displayList
+                  .map(
+                    (item) => [
+                      item['name'].toString(),
+                      item['count'].toString(),
+                      '\$${(item['total'] as double).toStringAsFixed(2)}',
+                    ],
+                  )
+                  .toList(),
+            ),
+          ];
+        },
+      ),
     );
+    // GENERATE THE BYTES
+    final bytes = await pdf.save();
 
-    try {
-      RenderRepaintBoundary boundary =
-          _exportKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      Uint8List pngBytes = byteData!.buffer.asUint8List();
+    // GET DOWNLOADS FOLDER AND SAVE DIRECTLY
+    final directory = await getDownloadsDirectory();
+    if (directory != null) {
+      final fileName =
+          'Reporte_General_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$fileName');
 
-      final pdf = pw.Document();
-      final imageProvider = pw.MemoryImage(pngBytes);
+      await file.writeAsBytes(bytes);
 
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.all(20),
-          build: (pw.Context context) {
-            return pw.Center(child: pw.Image(imageProvider));
-          },
-        ),
-      );
-
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => pdf.save(),
-        name:
-            'Reporte_Financiero_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
-      );
-    } catch (e) {
-      debugPrint('Export error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al exportar: $e'),
-            backgroundColor: Colors.red,
-          ),
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas: $fileName',
+        );
+      }
+    } else {
+      if (mounted) {
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
         );
       }
     }
   }
 
+  // 2. Export Detail View (Chart + Transactions)
+  Future<void> _exportDetailToPDF(
+    List<AporteConFeligres> targetData,
+    String title,
+  ) async {
+    CustomSnackBar.showInfo(context, 'Capturando gráfico y generando PDF...');
+
+    Uint8List? chartBytes;
+    try {
+      // Extracts ONLY the chart as a high-quality image
+      RenderRepaintBoundary boundary =
+          _chartExportKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+      chartBytes = byteData!.buffer.asUint8List();
+    } catch (e) {
+      debugPrint('No se pudo capturar el gráfico: $e');
+    }
+
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Historial Detallado: $title',
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 10),
+
+            // If the chart was captured, we embed it cleanly
+            if (chartBytes != null) ...[
+              pw.Container(
+                height: 200,
+                width: double.infinity,
+                child: pw.Image(
+                  pw.MemoryImage(chartBytes),
+                  fit: pw.BoxFit.contain,
+                ),
+              ),
+              pw.SizedBox(height: 20),
+            ],
+
+            pw.Text(
+              'Lista de Transacciones Filtradas',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+
+            // Native table with ALL filtered data (ignores the UI's pagination)
+            pw.TableHelper.fromTextArray(
+              context: context,
+              headers: ['Fecha', 'Tipo de Aporte', 'Monto'],
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blue800,
+              ),
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
+              cellAlignment: pw.Alignment.centerLeft,
+              data: targetData
+                  .map(
+                    (item) => [
+                      DateFormat(
+                        'dd MMM yyyy, hh:mm a',
+                        'es',
+                      ).format(item.aporte.fecha),
+                      item.aporte.tipo,
+                      '\$${item.aporte.monto.toStringAsFixed(2)}',
+                    ],
+                  )
+                  .toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    // GENERATE THE BYTES
+    final bytes = await pdf.save();
+
+    // GET DOWNLOADS FOLDER AND SAVE DIRECTLY
+    final directory = await getDownloadsDirectory();
+    if (directory != null) {
+      final safeTitle = title.replaceAll(' ', '_');
+      final fileName =
+          'Detalle_${safeTitle}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$fileName');
+
+      await file.writeAsBytes(bytes);
+
+      if (mounted) {
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas: $fileName',
+        );
+      }
+    } else {
+      if (mounted) {
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
+        );
+      }
+    }
+  }
+
+  // ==========================================
+  // MAIN WIDGET BUILDER
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return RepaintBoundary(
-      key: _exportKey,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: StreamBuilder<List<AporteConFeligres>>(
-          stream: _historyStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting)
-              return const Center(child: CircularProgressIndicator());
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: StreamBuilder<List<AporteConFeligres>>(
+        stream: _historyStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting)
+            return const Center(child: CircularProgressIndicator());
 
-            var allData = snapshot.data ?? [];
+          var allData = snapshot.data ?? [];
 
-            // Search filter is applied globally
-            if (_searchController.text.isNotEmpty) {
-              allData = allData
-                  .where(
-                    (item) => item.feligres.nombre.toLowerCase().contains(
-                      _searchController.text.toLowerCase(),
-                    ),
-                  )
-                  .toList();
-            }
+          if (_searchController.text.isNotEmpty) {
+            allData = allData
+                .where(
+                  (item) => item.feligres.nombre.toLowerCase().contains(
+                    _searchController.text.toLowerCase(),
+                  ),
+                )
+                .toList();
+          }
 
-            if (_selectedDetailId != null) {
-              return _buildDetailView(allData, colorScheme, isDark);
-            } else {
-              return _buildMasterGroupedView(allData, colorScheme, isDark);
-            }
-          },
-        ),
+          if (_selectedDetailId != null) {
+            return _buildDetailView(allData, colorScheme, isDark);
+          } else {
+            return _buildMasterGroupedView(allData, colorScheme, isDark);
+          }
+        },
       ),
     );
   }
@@ -189,7 +369,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     final displayList = groupedMap.values.toList()
       ..sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
 
-    // --- PAGINATION LOGIC (MASTER) ---
+    // Master Pagination Logic
     final totalPages = (displayList.length / _itemsPerPage).ceil() == 0
         ? 1
         : (displayList.length / _itemsPerPage).ceil();
@@ -233,8 +413,11 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
+                  // NATIVE EXPORT BUTTON (Summary)
                   ElevatedButton.icon(
-                    onPressed: _exportCurrentViewToPDF,
+                    onPressed: () => _exportMasterToPDF(
+                      displayList,
+                    ), // Passes the FULL list, not the paginated one
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                     style: ElevatedButton.styleFrom(
@@ -325,7 +508,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                             _selectedDetailId = item['id'];
                             _selectedDetailName = item['name'];
                             _dateRange = null;
-                            _detailCurrentPage = 1; // Reset detail page
+                            _detailCurrentPage = 1;
                           });
                         },
                       ),
@@ -334,7 +517,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
         ),
 
-        // --- MASTER PAGINATION CONTROLS ---
+        // UI Pagination
         if (displayList.isNotEmpty)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
@@ -393,7 +576,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   }
 
   // ==========================================
-  // VIEW 2: DETAIL VIEW WITH REAL CHARTS
+  // VIEW 2: DETAIL AND CHARTS
   // ==========================================
   Widget _buildDetailView(
     List<AporteConFeligres> allData,
@@ -408,13 +591,11 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       'Especial': const Color(0xFFFF007F),
     };
 
-    // 1. Filter data specific to the selected item
     var targetData = allData.where((item) {
       if (_groupingMode == 1) return item.feligres.id == _selectedDetailId;
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
 
-    // 2. Apply Date Range Filter INSIDE the detail view
     if (_dateRange != null) {
       targetData = targetData
           .where(
@@ -429,17 +610,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           .toList();
     }
 
-    // 3. Filter by selected toggles (Only if viewing a Parishioner)
     if (_groupingMode == 1) {
       targetData = targetData
           .where((item) => _activeChartTypes[item.aporte.tipo] == true)
           .toList();
     }
 
-    // 4. Sort transactions by date descending
     targetData.sort((a, b) => b.aporte.fecha.compareTo(a.aporte.fecha));
 
-    // --- PAGINATION LOGIC (DETAIL) ---
+    // Detail Pagination Logic
     final totalDetailPages = (targetData.length / _itemsPerPage).ceil() == 0
         ? 1
         : (targetData.length / _itemsPerPage).ceil();
@@ -457,7 +636,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       endDetailIndex,
     );
 
-    // 5. Prepare Chart Data (Group by Type AND Month based on ALL targetData, not just the paginated slice!)
+    // Prepare Chart
     final now = DateTime.now();
     List<DateTime> last12Months = List.generate(
       12,
@@ -483,7 +662,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     for (var item in targetData) {
       final key = DateFormat('MMM yy', 'es').format(item.aporte.fecha);
       final typeKey = item.aporte.tipo;
-
       if (groupedMonthlyData.containsKey(typeKey) &&
           groupedMonthlyData[typeKey]!.containsKey(key)) {
         groupedMonthlyData[typeKey]![key] =
@@ -503,7 +681,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
       monthlyTotals.forEach((month, value) {
         spots.add(FlSpot(xIndex.toDouble(), value));
-
         if (_groupingMode == 2) {
           barGroups.add(
             BarChartGroupData(
@@ -542,7 +719,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     return Column(
       children: [
-        // DETAIL HEADER
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -566,10 +742,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   ),
                 ),
               ),
+
+              // NATIVE EXPORT BUTTON (Detail)
               ElevatedButton.icon(
-                onPressed: _exportCurrentViewToPDF,
+                onPressed: () => _exportDetailToPDF(
+                  targetData,
+                  _selectedDetailName,
+                ), // We pass ALL the filtered data, not just the paginated ones
                 icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('PDF'),
+                label: const Text('Exportar PDF'),
               ),
             ],
           ),
@@ -585,7 +766,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // INTERNAL DATE RANGE PICKER
                       InkWell(
                         onTap: _pickDateRange,
                         borderRadius: BorderRadius.circular(16),
@@ -636,7 +816,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // MULTI-COLORED CHART TOGGLES
                       if (_groupingMode == 1)
                         Wrap(
                           spacing: 8,
@@ -644,7 +823,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                             final isSelected = _activeChartTypes[type]!;
                             final badgeColor =
                                 typeColors[type] ?? colorScheme.primary;
-
                             return FilterChip(
                               label: Text(
                                 type,
@@ -674,149 +852,170 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         ),
                       const SizedBox(height: 20),
 
-                      // THE CHART
-                      Container(
-                        height: 300,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.black26 : Colors.white,
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.3),
+                      // BOUNDARY ONLY FOR THE CHART
+                      RepaintBoundary(
+                        key: _chartExportKey,
+                        child: Container(
+                          height: 300,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF1E1E2C)
+                                : Colors.white,
+                            border: Border.all(
+                              color: Colors.grey.withOpacity(0.3),
+                            ),
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          borderRadius: BorderRadius.circular(16),
+                          child: _groupingMode == 1
+                              ? LineChart(
+                                  LineChartData(
+                                    clipData: const FlClipData.none(),
+                                    gridData: const FlGridData(
+                                      show: true,
+                                      drawVerticalLine: false,
+                                    ),
+                                    titlesData: FlTitlesData(
+                                      rightTitles: const AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+                                      topTitles: const AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 50,
+                                          getTitlesWidget: (value, meta) {
+                                            if (value == 0 ||
+                                                value == maxY * 1.2)
+                                              return const SizedBox.shrink();
+                                            return Text(
+                                              value.toInt().toString(),
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          interval: 1,
+                                          getTitlesWidget: (value, meta) {
+                                            if (value.toInt() >= 0 &&
+                                                value.toInt() <
+                                                    last12Months.length) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 8.0,
+                                                ),
+                                                child: Text(
+                                                  DateFormat(
+                                                    'MMM',
+                                                    'es',
+                                                  ).format(
+                                                    last12Months[value.toInt()],
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return const Text('');
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    borderData: FlBorderData(show: false),
+                                    minX: 0,
+                                    maxX: 11,
+                                    minY: 0,
+                                    maxY: maxY * 1.2,
+                                    lineBarsData: lineBars,
+                                  ),
+                                )
+                              : BarChart(
+                                  BarChartData(
+                                    alignment: BarChartAlignment.spaceAround,
+                                    maxY: maxY * 1.2,
+                                    titlesData: FlTitlesData(
+                                      rightTitles: const AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+                                      topTitles: const AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: false,
+                                        ),
+                                      ),
+                                      leftTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 50,
+                                          getTitlesWidget: (value, meta) {
+                                            if (value == 0 ||
+                                                value == maxY * 1.2)
+                                              return const SizedBox.shrink();
+                                            return Text(
+                                              value.toInt().toString(),
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Colors.grey,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          interval: 1,
+                                          getTitlesWidget: (value, meta) {
+                                            if (value.toInt() >= 0 &&
+                                                value.toInt() <
+                                                    last12Months.length) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 8.0,
+                                                ),
+                                                child: Text(
+                                                  DateFormat(
+                                                    'MMM',
+                                                    'es',
+                                                  ).format(
+                                                    last12Months[value.toInt()],
+                                                  ),
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                            return const Text('');
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    borderData: FlBorderData(show: false),
+                                    gridData: const FlGridData(
+                                      show: true,
+                                      drawVerticalLine: false,
+                                    ),
+                                    barGroups: barGroups,
+                                  ),
+                                ),
                         ),
-                        child: _groupingMode == 1
-                            ? LineChart(
-                                LineChartData(
-                                  clipData: const FlClipData.none(),
-                                  gridData: const FlGridData(
-                                    show: true,
-                                    drawVerticalLine: false,
-                                  ),
-                                  titlesData: FlTitlesData(
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 50,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value == 0 || value == maxY * 1.2)
-                                            return const SizedBox.shrink();
-                                          return Text(
-                                            value.toInt().toString(),
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.grey,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        interval: 1,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value.toInt() >= 0 &&
-                                              value.toInt() <
-                                                  last12Months.length) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 8.0,
-                                              ),
-                                              child: Text(
-                                                DateFormat('MMM', 'es').format(
-                                                  last12Months[value.toInt()],
-                                                ),
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const Text('');
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  minX: 0,
-                                  maxX: 11,
-                                  minY: 0,
-                                  maxY: maxY * 1.2,
-                                  lineBarsData: lineBars,
-                                ),
-                              )
-                            : BarChart(
-                                BarChartData(
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: maxY * 1.2,
-                                  titlesData: FlTitlesData(
-                                    rightTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    topTitles: const AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 50,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value == 0 || value == maxY * 1.2)
-                                            return const SizedBox.shrink();
-                                          return Text(
-                                            value.toInt().toString(),
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.grey,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        interval: 1,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value.toInt() >= 0 &&
-                                              value.toInt() <
-                                                  last12Months.length) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 8.0,
-                                              ),
-                                              child: Text(
-                                                DateFormat('MMM', 'es').format(
-                                                  last12Months[value.toInt()],
-                                                ),
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                  color: Colors.grey,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const Text('');
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  gridData: const FlGridData(
-                                    show: true,
-                                    drawVerticalLine: false,
-                                  ),
-                                  barGroups: barGroups,
-                                ),
-                              ),
                       ),
 
                       const SizedBox(height: 30),
@@ -829,7 +1028,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                       ),
                       const SizedBox(height: 10),
 
-                      // THE PAGINATED TRANSACTIONS LIST
                       if (targetData.isEmpty)
                         const Center(
                           child: Text(
@@ -872,7 +1070,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   ),
                 ),
 
-                // --- DETAIL PAGINATION CONTROLS ---
                 if (targetData.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
