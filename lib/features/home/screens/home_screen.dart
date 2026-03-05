@@ -187,80 +187,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: Consumer(
-              builder: (context, ref, child) {
-                final database = ref.watch(databaseProvider);
-                final currentIglesia = ref.watch(currentIglesiaProvider);
-
-                return StreamBuilder<List<Iglesia>>(
-                  stream: database.watchAllIglesias(),
-                  builder: (context, snapshot) {
-                    final iglesias = snapshot.data ?? [];
-
-                    // If there are no churches, prompt them to create one
-                    if (iglesias.isEmpty) {
-                      return ElevatedButton.icon(
-                        onPressed: () => showModalBottomSheet(
-                          context: context,
-                          builder: (_) => const AddIglesiaSheet(),
-                        ),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Registrar Sede'),
-                      );
-                    }
-
-                    // Auto-select the first one if the current state is null
-                    if (currentIglesia == null && iglesias.isNotEmpty) {
-                      Future.microtask(
-                        () => ref.read(currentIglesiaProvider.notifier).state =
-                            iglesias.first,
-                      );
-                    }
-
-                    return DropdownButtonHideUnderline(
-                      child: DropdownButton<Iglesia>(
-                        value: currentIglesia ?? iglesias.first,
-                        icon: const Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.white,
-                        ),
-                        dropdownColor: Theme.of(context).colorScheme.surface,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        items: iglesias.map((iglesia) {
-                          return DropdownMenuItem(
-                            value: iglesia,
-                            child: Text(
-                              '${iglesia.nombre} (Distrito ${iglesia.distrito})',
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (Iglesia? nuevaSeleccion) {
-                          ref.read(currentIglesiaProvider.notifier).state =
-                              nuevaSeleccion;
-                        },
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.add_home_work),
-                tooltip: 'Registrar nueva sede',
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  builder: (_) => const AddIglesiaSheet(),
-                ),
-              ),
-              // ... your other action buttons (dark mode, user profile, etc.)
-            ],
-          ),
           body: Row(
             children: [
               if (isDesktop)
@@ -296,6 +222,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                       ),
                       const SizedBox(height: 40),
+
+                      Padding(
+                        padding: const EdgeInsets.only(left: 24, bottom: 5),
+                        child: Text(
+                          'SEDE ACTUAL',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      _buildSidebarIglesiaSelector(colorScheme, isDark),
+                      const SizedBox(height: 20),
 
                       Padding(
                         padding: const EdgeInsets.only(left: 24, bottom: 10),
@@ -403,11 +342,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                _buildIglesiaSelector(
-                                  colorScheme,
-                                  isDark,
                                 ), // <--- ADDED HERE
                                 const SizedBox(width: 16),
                                 Flexible(
@@ -473,6 +407,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ],
                             ),
                     ),
+
+                    if (!isDesktop)
+                      _buildMobileIglesiaSelector(colorScheme, isDark),
 
                     Expanded(
                       child: Container(
@@ -648,6 +585,118 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  Widget _buildMobileIglesiaSelector(ColorScheme colorScheme, bool isDark) {
+    return Consumer(
+      builder: (context, ref, child) {
+        final database = ref.watch(databaseProvider);
+        final currentIglesia = ref.watch(currentIglesiaProvider);
+
+        return StreamBuilder<List<Iglesia>>(
+          stream: database.select(database.iglesias).watch(),
+          builder: (context, snapshot) {
+            final iglesias = snapshot.data ?? [];
+            if (iglesias.isEmpty) return const SizedBox.shrink();
+
+            Iglesia? validDropdownValue;
+            if (currentIglesia != null &&
+                iglesias.any((i) => i.id == currentIglesia.id)) {
+              validDropdownValue = iglesias.firstWhere(
+                (i) => i.id == currentIglesia.id,
+              );
+            } else {
+              validDropdownValue = iglesias.first;
+            }
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.church, color: colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<Iglesia>(
+                        value: validDropdownValue,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down),
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                        items: iglesias.map((iglesia) {
+                          return DropdownMenuItem(
+                            value: iglesia,
+                            child: Text(
+                              '${iglesia.nombre} (D${iglesia.distrito})',
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (Iglesia? nueva) {
+                          ref.read(currentIglesiaProvider.notifier).state =
+                              nueva;
+                        },
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.add_circle_outline,
+                      size: 20,
+                      color: Colors.green,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 35),
+                    tooltip: 'Registrar Nueva Sede',
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) =>
+                            const AddIglesiaSheet(), // No parameters = Create Mode
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.settings,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      if (validDropdownValue != null) {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => AddIglesiaSheet(
+                            iglesiaParaEditar: validDropdownValue,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildEnvironmentSwitcher(
     AppEnvironment currentEnv,
     ColorScheme colorScheme,
@@ -771,71 +820,154 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  Widget _buildIglesiaSelector(ColorScheme colorScheme, bool isDark) {
+  Widget _buildSidebarIglesiaSelector(ColorScheme colorScheme, bool isDark) {
     return Consumer(
       builder: (context, ref, child) {
         final database = ref.watch(databaseProvider);
         final currentIglesia = ref.watch(currentIglesiaProvider);
 
         return StreamBuilder<List<Iglesia>>(
-          stream: database
-              .select(database.iglesias)
-              .watch(), // Listens to the iglesias table
+          stream: database.select(database.iglesias).watch(),
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
 
-            if (iglesias.isEmpty) {
-              return ElevatedButton.icon(
-                onPressed: () {}, // We will connect AddIglesiaSheet here later
-                icon: const Icon(Icons.add_business),
-                label: const Text('Create Sede'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: Colors.white,
+            // FORCED FIRST-TIME REGISTRATION LOGIC
+            if (snapshot.connectionState == ConnectionState.active &&
+                iglesias.isEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (ModalRoute.of(context)?.isCurrent == true) {
+                  showModalBottomSheet(
+                    context: context,
+                    isDismissible: false,
+                    enableDrag: false,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const AddIglesiaSheet(),
+                  );
+                }
+              });
+              return const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                child: Text(
+                  'Requiere configuración...',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               );
             }
 
-            // Auto-select the first church if none is selected
-            if (currentIglesia == null && iglesias.isNotEmpty) {
-              Future.microtask(
-                () => ref.read(currentIglesiaProvider.notifier).state =
-                    iglesias.first,
-              );
+            // --- THE FIX: MATCH BY ID TO PREVENT DROPDOWN CRASHES ---
+            Iglesia? validDropdownValue;
+
+            if (iglesias.isNotEmpty) {
+              if (currentIglesia != null &&
+                  iglesias.any((i) => i.id == currentIglesia.id)) {
+                // If the selected church exists in the new list, grab the updated instance
+                validDropdownValue = iglesias.firstWhere(
+                  (i) => i.id == currentIglesia.id,
+                );
+              } else {
+                // If it's null or the previously selected church was deleted, fallback to the first one
+                validDropdownValue = iglesias.first;
+                Future.microtask(
+                  () => ref.read(currentIglesiaProvider.notifier).state =
+                      validDropdownValue,
+                );
+              }
             }
 
-            return Container(
-              height: 45,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.primary.withOpacity(0.5)),
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 8.0,
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<Iglesia>(
-                  value: currentIglesia ?? iglesias.first,
-                  icon: Icon(
-                    Icons.keyboard_arrow_down,
-                    color: colorScheme.primary,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.black12 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: colorScheme.primary.withOpacity(0.3),
                   ),
-                  dropdownColor: colorScheme.surface,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                  ),
-                  items: iglesias.map((iglesia) {
-                    return DropdownMenuItem(
-                      value: iglesia,
-                      child: Text(
-                        '${iglesia.nombre} (District ${iglesia.distrito})',
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.church, color: colorScheme.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Iglesia>(
+                          // Pass the validated instance here
+                          value: validDropdownValue,
+                          icon: const Icon(Icons.arrow_drop_down, size: 20),
+                          isExpanded: true,
+                          dropdownColor: colorScheme.surface,
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                          items: iglesias.map((iglesia) {
+                            return DropdownMenuItem(
+                              value: iglesia,
+                              child: Text(
+                                iglesia.nombre,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (Iglesia? nueva) {
+                            ref.read(currentIglesiaProvider.notifier).state =
+                                nueva;
+                          },
+                        ),
                       ),
-                    );
-                  }).toList(),
-                  onChanged: (Iglesia? nueva) {
-                    ref.read(currentIglesiaProvider.notifier).state = nueva;
-                  },
+                    ),
+
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        size: 20,
+                        color: Colors.green,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 35),
+                      tooltip: 'Registrar Nueva Sede',
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) =>
+                              const AddIglesiaSheet(), // No parameters = Create Mode
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.settings,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Administrar Sede',
+                      onPressed: () {
+                        if (validDropdownValue != null) {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => AddIglesiaSheet(
+                              iglesiaParaEditar: validDropdownValue,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
             );

@@ -33,12 +33,14 @@ class Feligreses extends Table {
 // Add this new table
 class Iglesias extends Table {
   TextColumn get id => text()(); // UUID
+  TextColumn get userId => text()();
   TextColumn get nombre => text()();
   IntColumn get distrito => integer()(); // 1 to 16
   DateTimeColumn get fechaLlegada => dateTime().nullable()();
   DateTimeColumn get fechaSalida => dateTime().nullable()();
   TextColumn get categoria =>
       text().nullable()(); // misionera, en formación, etc.
+  IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -121,6 +123,7 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       await delete(aportes).go();
       await delete(feligreses).go();
+      await delete(iglesias).go();
     });
   }
 

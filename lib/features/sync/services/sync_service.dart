@@ -21,6 +21,34 @@ class SyncService {
   }
 
   Future<void> pushLocalChanges() async {
+    final currentUser = cloudDb.auth.currentUser;
+    if (currentUser == null) return;
+
+    // 1. SYNC CHURCHES
+    final pendingIglesias = await (localDb.select(
+      localDb.iglesias,
+    )..where((tbl) => tbl.syncStatus.equals(0))).get();
+    for (var iglesia in pendingIglesias) {
+      try {
+        await cloudDb.from('iglesias').upsert({
+          'id': iglesia.id,
+          'user_id': currentUser.id, // Assign to current pastor
+          'nombre': iglesia.nombre,
+          'distrito': iglesia.distrito,
+          'fecha_llegada': iglesia.fechaLlegada?.toIso8601String(),
+          'fecha_salida': iglesia.fechaSalida?.toIso8601String(),
+          'categoria': iglesia.categoria,
+          'sync_status': 1,
+        });
+        await (localDb.update(localDb.iglesias)
+              ..where((tbl) => tbl.id.equals(iglesia.id)))
+            .write(IglesiasCompanion(syncStatus: const drift.Value(1)));
+        debugPrint("Uploaded Church: ${iglesia.nombre}");
+      } catch (e) {
+        debugPrint("Error pushing church: $e");
+      }
+    }
+
     final pendingMembers = await (localDb.select(
       localDb.feligreses,
     )..where((tbl) => tbl.syncStatus.equals(0))).get();
@@ -77,9 +105,14 @@ class SyncService {
 
   Future<void> pullFromCloud() async {
     try {
+      final currentUser = cloudDb.auth.currentUser;
+      if (currentUser == null) throw Exception("User not logged in");
+      // 1. PULL ONLY THIS USER'S CHURCHES
       final List<dynamic> cloudIglesias = await cloudDb
           .from('iglesias')
-          .select();
+          .select()
+          .eq('user_id', currentUser.id); // Filter by pastor
+
       debugPrint("Downloaded ${cloudIglesias.length} iglesias from cloud.");
 
       for (var data in cloudIglesias) {
@@ -88,6 +121,7 @@ class SyncService {
             .insertOnConflictUpdate(
               IglesiasCompanion(
                 id: drift.Value(data['id']),
+                userId: drift.Value(data['user_id']),
                 nombre: drift.Value(data['nombre']),
                 distrito: drift.Value(data['distrito']),
                 categoria: drift.Value(data['categoria']),
@@ -101,6 +135,7 @@ class SyncService {
                       ? DateTime.parse(data['fecha_salida'])
                       : null,
                 ),
+                syncStatus: const drift.Value(1),
               ),
             );
       }

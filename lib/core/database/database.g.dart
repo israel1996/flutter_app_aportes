@@ -17,6 +17,15 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _nombreMeta = const VerificationMeta('nombre');
   @override
   late final GeneratedColumn<String> nombre = GeneratedColumn<String>(
@@ -70,14 +79,28 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<int> syncStatus = GeneratedColumn<int>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    userId,
     nombre,
     distrito,
     fechaLlegada,
     fechaSalida,
     categoria,
+    syncStatus,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -95,6 +118,14 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
     }
     if (data.containsKey('nombre')) {
       context.handle(
@@ -136,6 +167,12 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
         categoria.isAcceptableOrUnknown(data['categoria']!, _categoriaMeta),
       );
     }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
     return context;
   }
 
@@ -148,6 +185,10 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
       )!,
       nombre: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -169,6 +210,10 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
         DriftSqlType.string,
         data['${effectivePrefix}categoria'],
       ),
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_status'],
+      )!,
     );
   }
 
@@ -180,23 +225,28 @@ class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
 
 class Iglesia extends DataClass implements Insertable<Iglesia> {
   final String id;
+  final String userId;
   final String nombre;
   final int distrito;
   final DateTime? fechaLlegada;
   final DateTime? fechaSalida;
   final String? categoria;
+  final int syncStatus;
   const Iglesia({
     required this.id,
+    required this.userId,
     required this.nombre,
     required this.distrito,
     this.fechaLlegada,
     this.fechaSalida,
     this.categoria,
+    required this.syncStatus,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    map['user_id'] = Variable<String>(userId);
     map['nombre'] = Variable<String>(nombre);
     map['distrito'] = Variable<int>(distrito);
     if (!nullToAbsent || fechaLlegada != null) {
@@ -208,12 +258,14 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
     if (!nullToAbsent || categoria != null) {
       map['categoria'] = Variable<String>(categoria);
     }
+    map['sync_status'] = Variable<int>(syncStatus);
     return map;
   }
 
   IglesiasCompanion toCompanion(bool nullToAbsent) {
     return IglesiasCompanion(
       id: Value(id),
+      userId: Value(userId),
       nombre: Value(nombre),
       distrito: Value(distrito),
       fechaLlegada: fechaLlegada == null && nullToAbsent
@@ -225,6 +277,7 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
       categoria: categoria == null && nullToAbsent
           ? const Value.absent()
           : Value(categoria),
+      syncStatus: Value(syncStatus),
     );
   }
 
@@ -235,11 +288,13 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Iglesia(
       id: serializer.fromJson<String>(json['id']),
+      userId: serializer.fromJson<String>(json['userId']),
       nombre: serializer.fromJson<String>(json['nombre']),
       distrito: serializer.fromJson<int>(json['distrito']),
       fechaLlegada: serializer.fromJson<DateTime?>(json['fechaLlegada']),
       fechaSalida: serializer.fromJson<DateTime?>(json['fechaSalida']),
       categoria: serializer.fromJson<String?>(json['categoria']),
+      syncStatus: serializer.fromJson<int>(json['syncStatus']),
     );
   }
   @override
@@ -247,32 +302,39 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'userId': serializer.toJson<String>(userId),
       'nombre': serializer.toJson<String>(nombre),
       'distrito': serializer.toJson<int>(distrito),
       'fechaLlegada': serializer.toJson<DateTime?>(fechaLlegada),
       'fechaSalida': serializer.toJson<DateTime?>(fechaSalida),
       'categoria': serializer.toJson<String?>(categoria),
+      'syncStatus': serializer.toJson<int>(syncStatus),
     };
   }
 
   Iglesia copyWith({
     String? id,
+    String? userId,
     String? nombre,
     int? distrito,
     Value<DateTime?> fechaLlegada = const Value.absent(),
     Value<DateTime?> fechaSalida = const Value.absent(),
     Value<String?> categoria = const Value.absent(),
+    int? syncStatus,
   }) => Iglesia(
     id: id ?? this.id,
+    userId: userId ?? this.userId,
     nombre: nombre ?? this.nombre,
     distrito: distrito ?? this.distrito,
     fechaLlegada: fechaLlegada.present ? fechaLlegada.value : this.fechaLlegada,
     fechaSalida: fechaSalida.present ? fechaSalida.value : this.fechaSalida,
     categoria: categoria.present ? categoria.value : this.categoria,
+    syncStatus: syncStatus ?? this.syncStatus,
   );
   Iglesia copyWithCompanion(IglesiasCompanion data) {
     return Iglesia(
       id: data.id.present ? data.id.value : this.id,
+      userId: data.userId.present ? data.userId.value : this.userId,
       nombre: data.nombre.present ? data.nombre.value : this.nombre,
       distrito: data.distrito.present ? data.distrito.value : this.distrito,
       fechaLlegada: data.fechaLlegada.present
@@ -282,6 +344,9 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
           ? data.fechaSalida.value
           : this.fechaSalida,
       categoria: data.categoria.present ? data.categoria.value : this.categoria,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
     );
   }
 
@@ -289,94 +354,121 @@ class Iglesia extends DataClass implements Insertable<Iglesia> {
   String toString() {
     return (StringBuffer('Iglesia(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('nombre: $nombre, ')
           ..write('distrito: $distrito, ')
           ..write('fechaLlegada: $fechaLlegada, ')
           ..write('fechaSalida: $fechaSalida, ')
-          ..write('categoria: $categoria')
+          ..write('categoria: $categoria, ')
+          ..write('syncStatus: $syncStatus')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, nombre, distrito, fechaLlegada, fechaSalida, categoria);
+  int get hashCode => Object.hash(
+    id,
+    userId,
+    nombre,
+    distrito,
+    fechaLlegada,
+    fechaSalida,
+    categoria,
+    syncStatus,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Iglesia &&
           other.id == this.id &&
+          other.userId == this.userId &&
           other.nombre == this.nombre &&
           other.distrito == this.distrito &&
           other.fechaLlegada == this.fechaLlegada &&
           other.fechaSalida == this.fechaSalida &&
-          other.categoria == this.categoria);
+          other.categoria == this.categoria &&
+          other.syncStatus == this.syncStatus);
 }
 
 class IglesiasCompanion extends UpdateCompanion<Iglesia> {
   final Value<String> id;
+  final Value<String> userId;
   final Value<String> nombre;
   final Value<int> distrito;
   final Value<DateTime?> fechaLlegada;
   final Value<DateTime?> fechaSalida;
   final Value<String?> categoria;
+  final Value<int> syncStatus;
   final Value<int> rowid;
   const IglesiasCompanion({
     this.id = const Value.absent(),
+    this.userId = const Value.absent(),
     this.nombre = const Value.absent(),
     this.distrito = const Value.absent(),
     this.fechaLlegada = const Value.absent(),
     this.fechaSalida = const Value.absent(),
     this.categoria = const Value.absent(),
+    this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   IglesiasCompanion.insert({
     required String id,
+    required String userId,
     required String nombre,
     required int distrito,
     this.fechaLlegada = const Value.absent(),
     this.fechaSalida = const Value.absent(),
     this.categoria = const Value.absent(),
+    this.syncStatus = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
+       userId = Value(userId),
        nombre = Value(nombre),
        distrito = Value(distrito);
   static Insertable<Iglesia> custom({
     Expression<String>? id,
+    Expression<String>? userId,
     Expression<String>? nombre,
     Expression<int>? distrito,
     Expression<DateTime>? fechaLlegada,
     Expression<DateTime>? fechaSalida,
     Expression<String>? categoria,
+    Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (userId != null) 'user_id': userId,
       if (nombre != null) 'nombre': nombre,
       if (distrito != null) 'distrito': distrito,
       if (fechaLlegada != null) 'fecha_llegada': fechaLlegada,
       if (fechaSalida != null) 'fecha_salida': fechaSalida,
       if (categoria != null) 'categoria': categoria,
+      if (syncStatus != null) 'sync_status': syncStatus,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
   IglesiasCompanion copyWith({
     Value<String>? id,
+    Value<String>? userId,
     Value<String>? nombre,
     Value<int>? distrito,
     Value<DateTime?>? fechaLlegada,
     Value<DateTime?>? fechaSalida,
     Value<String?>? categoria,
+    Value<int>? syncStatus,
     Value<int>? rowid,
   }) {
     return IglesiasCompanion(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       nombre: nombre ?? this.nombre,
       distrito: distrito ?? this.distrito,
       fechaLlegada: fechaLlegada ?? this.fechaLlegada,
       fechaSalida: fechaSalida ?? this.fechaSalida,
       categoria: categoria ?? this.categoria,
+      syncStatus: syncStatus ?? this.syncStatus,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -386,6 +478,9 @@ class IglesiasCompanion extends UpdateCompanion<Iglesia> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
     }
     if (nombre.present) {
       map['nombre'] = Variable<String>(nombre.value);
@@ -402,6 +497,9 @@ class IglesiasCompanion extends UpdateCompanion<Iglesia> {
     if (categoria.present) {
       map['categoria'] = Variable<String>(categoria.value);
     }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<int>(syncStatus.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -412,11 +510,13 @@ class IglesiasCompanion extends UpdateCompanion<Iglesia> {
   String toString() {
     return (StringBuffer('IglesiasCompanion(')
           ..write('id: $id, ')
+          ..write('userId: $userId, ')
           ..write('nombre: $nombre, ')
           ..write('distrito: $distrito, ')
           ..write('fechaLlegada: $fechaLlegada, ')
           ..write('fechaSalida: $fechaSalida, ')
           ..write('categoria: $categoria, ')
+          ..write('syncStatus: $syncStatus, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1686,21 +1786,25 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$IglesiasTableCreateCompanionBuilder =
     IglesiasCompanion Function({
       required String id,
+      required String userId,
       required String nombre,
       required int distrito,
       Value<DateTime?> fechaLlegada,
       Value<DateTime?> fechaSalida,
       Value<String?> categoria,
+      Value<int> syncStatus,
       Value<int> rowid,
     });
 typedef $$IglesiasTableUpdateCompanionBuilder =
     IglesiasCompanion Function({
       Value<String> id,
+      Value<String> userId,
       Value<String> nombre,
       Value<int> distrito,
       Value<DateTime?> fechaLlegada,
       Value<DateTime?> fechaSalida,
       Value<String?> categoria,
+      Value<int> syncStatus,
       Value<int> rowid,
     });
 
@@ -1741,6 +1845,11 @@ class $$IglesiasTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get nombre => $composableBuilder(
     column: $table.nombre,
     builder: (column) => ColumnFilters(column),
@@ -1763,6 +1872,11 @@ class $$IglesiasTableFilterComposer
 
   ColumnFilters<String> get categoria => $composableBuilder(
     column: $table.categoria,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1806,6 +1920,11 @@ class $$IglesiasTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get nombre => $composableBuilder(
     column: $table.nombre,
     builder: (column) => ColumnOrderings(column),
@@ -1830,6 +1949,11 @@ class $$IglesiasTableOrderingComposer
     column: $table.categoria,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$IglesiasTableAnnotationComposer
@@ -1843,6 +1967,9 @@ class $$IglesiasTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<String> get nombre =>
       $composableBuilder(column: $table.nombre, builder: (column) => column);
@@ -1862,6 +1989,11 @@ class $$IglesiasTableAnnotationComposer
 
   GeneratedColumn<String> get categoria =>
       $composableBuilder(column: $table.categoria, builder: (column) => column);
+
+  GeneratedColumn<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
 
   Expression<T> feligresesRefs<T extends Object>(
     Expression<T> Function($$FeligresesTableAnnotationComposer a) f,
@@ -1918,37 +2050,45 @@ class $$IglesiasTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String> userId = const Value.absent(),
                 Value<String> nombre = const Value.absent(),
                 Value<int> distrito = const Value.absent(),
                 Value<DateTime?> fechaLlegada = const Value.absent(),
                 Value<DateTime?> fechaSalida = const Value.absent(),
                 Value<String?> categoria = const Value.absent(),
+                Value<int> syncStatus = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => IglesiasCompanion(
                 id: id,
+                userId: userId,
                 nombre: nombre,
                 distrito: distrito,
                 fechaLlegada: fechaLlegada,
                 fechaSalida: fechaSalida,
                 categoria: categoria,
+                syncStatus: syncStatus,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
+                required String userId,
                 required String nombre,
                 required int distrito,
                 Value<DateTime?> fechaLlegada = const Value.absent(),
                 Value<DateTime?> fechaSalida = const Value.absent(),
                 Value<String?> categoria = const Value.absent(),
+                Value<int> syncStatus = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => IglesiasCompanion.insert(
                 id: id,
+                userId: userId,
                 nombre: nombre,
                 distrito: distrito,
                 fechaLlegada: fechaLlegada,
                 fechaSalida: fechaSalida,
                 categoria: categoria,
+                syncStatus: syncStatus,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
