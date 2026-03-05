@@ -13,7 +13,10 @@ import '../../../core/database/database.dart';
 import '../../../providers.dart';
 
 class AddFeligresSheet extends ConsumerStatefulWidget {
-  const AddFeligresSheet({super.key});
+  final bool initiallyExpanded; // ADD THIS VARIABLE
+
+  // Update the constructor to accept the variable, defaulting to false
+  const AddFeligresSheet({super.key, this.initiallyExpanded = false});
 
   @override
   ConsumerState<AddFeligresSheet> createState() => _AddFeligresSheetState();
@@ -250,6 +253,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                   context,
                 ).copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
+                  initiallyExpanded: widget.initiallyExpanded,
                   tilePadding: EdgeInsets.zero,
                   collapsedIconColor: colorScheme.primary,
                   iconColor: colorScheme.primary,

@@ -492,6 +492,7 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                 context,
               ).copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
+                initiallyExpanded: true,
                 tilePadding: EdgeInsets.zero,
                 collapsedIconColor: colorScheme.primary,
                 iconColor: colorScheme.primary,

@@ -6,6 +6,7 @@ import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_secretaria.dart';
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
+import 'package:flutter_app_aportes/features/reports/screens/reports_secretaria.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,7 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             : [
                 const DashboardSecretaria(), // 0
                 const FeligresesScreen(), // 1 (Exclusivo de Secretaría)
-                const ReportesScreen(), // 2
+                const ReportesSecretariaScreen(), // 2
                 if (isSuperAdmin) const AdminUsersScreen(), // 3
               ];
 
