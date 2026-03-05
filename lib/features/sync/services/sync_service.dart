@@ -11,11 +11,12 @@ class SyncService {
 
   Future<void> syncAll() async {
     final session = cloudDb.auth.currentSession;
+
     if (session == null || session.isExpired) {
-      throw Exception(
-        "Modo Offline activo. Por favor, cierra sesión y vuelve a iniciar sesión para sincronizar.",
-      );
+      debugPrint("⚠️ No active session yet. Skipping cloud sync for now.");
+      return;
     }
+
     await pushLocalChanges();
     await pullFromCloud();
   }

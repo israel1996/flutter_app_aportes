@@ -13,6 +13,7 @@ import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/screens/force_password_screen.dart';
 import '../../reports/screens/reports_screen.dart';
 
@@ -31,10 +32,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   bool _isSyncing = false;
   late AnimationController _syncAnimationController;
+  bool _hasPromptedForChurch = false;
 
   @override
   void initState() {
     super.initState();
+    _checkIfUserNeedsChurch();
     _syncAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -49,6 +52,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void dispose() {
     _syncAnimationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkIfUserNeedsChurch() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      // We directly ask the absolute source of truth (the cloud) if this user has any churches.
+      // RLS policies will ensure it only counts churches belonging to this specific user.
+      final response = await supabase.from('iglesias').select('id').limit(1);
+
+      // If Supabase confirms they have 0 churches, we force the registration modal
+      if (response.isEmpty && mounted) {
+        showModalBottomSheet(
+          context: context,
+          isDismissible: false,
+          enableDrag: false,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const AddIglesiaSheet(),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error verifying cloud churches: $e');
+    }
   }
 
   Future<void> _checkAndSync() async {
@@ -595,9 +624,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           stream: database.select(database.iglesias).watch(),
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
+            Iglesia? validDropdownValue;
             if (iglesias.isEmpty) return const SizedBox.shrink();
 
-            Iglesia? validDropdownValue;
             if (currentIglesia != null &&
                 iglesias.any((i) => i.id == currentIglesia.id)) {
               validDropdownValue = iglesias.firstWhere(
@@ -605,6 +634,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               );
             } else {
               validDropdownValue = iglesias.first;
+              Future.microtask(
+                () => ref.read(currentIglesiaProvider.notifier).state =
+                    validDropdownValue,
+              );
             }
 
             return Container(
@@ -830,43 +863,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           stream: database.select(database.iglesias).watch(),
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
-
-            // FORCED FIRST-TIME REGISTRATION LOGIC
-            if (snapshot.connectionState == ConnectionState.active &&
-                iglesias.isEmpty) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (ModalRoute.of(context)?.isCurrent == true) {
-                  showModalBottomSheet(
-                    context: context,
-                    isDismissible: false,
-                    enableDrag: false,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const AddIglesiaSheet(),
-                  );
-                }
-              });
-              return const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                child: Text(
-                  'Requiere configuración...',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-              );
-            }
-
-            // --- THE FIX: MATCH BY ID TO PREVENT DROPDOWN CRASHES ---
             Iglesia? validDropdownValue;
 
             if (iglesias.isNotEmpty) {
+              // 2. AUTO-SELECT THE CHURCH
               if (currentIglesia != null &&
                   iglesias.any((i) => i.id == currentIglesia.id)) {
-                // If the selected church exists in the new list, grab the updated instance
                 validDropdownValue = iglesias.firstWhere(
                   (i) => i.id == currentIglesia.id,
                 );
               } else {
-                // If it's null or the previously selected church was deleted, fallback to the first one
+                // If there is no current church selected (e.g., app just started),
+                // default to the first one on the list so they never start with a null church.
                 validDropdownValue = iglesias.first;
                 Future.microtask(
                   () => ref.read(currentIglesiaProvider.notifier).state =

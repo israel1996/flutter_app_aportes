@@ -12,7 +12,6 @@ class RecoveryDialog extends StatefulWidget {
 }
 
 class _RecoveryDialogState extends State<RecoveryDialog> {
-  // Static variables keep their value even if the dialog is closed!
   static int _failedAttempts = 0;
   static DateTime? _lockoutTime;
 
@@ -35,7 +34,6 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
       if (now.isBefore(_lockoutTime!)) {
         _startTimer();
       } else {
-        // Penalty time is over, reset variables
         _failedAttempts = 0;
         _lockoutTime = null;
       }
@@ -74,7 +72,6 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
       final email = _emailController.text.trim();
       final supabase = Supabase.instance.client;
 
-      // Check if email exists in our custom table
       final response = await supabase
           .from('usuarios_app')
           .select('id')
@@ -82,81 +79,96 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
           .maybeSingle();
 
       if (response != null) {
-        // --- 1. NEW: FLAG THE USER IN THE DATABASE ---
         await supabase
             .from('usuarios_app')
             .update({'estado': 'solicita_reseteo'})
             .eq('id', response['id']);
 
-        // SUCCESS: The email exists and the admin is notified!
         if (mounted) {
-          Navigator.pop(context); // Close the input dialog
+          Navigator.pop(context);
 
           showDialog(
             context: context,
-            builder: (context) => AlertDialog(
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    color: Colors.greenAccent,
-                    size: 28,
+            builder: (context) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
+              return AlertDialog(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      color: Colors.greenAccent,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 8),
+                    // Uso de Flexible + FittedBox para protección horizontal extrema
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Solicitud Enviada',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  // Protección contra desbordamiento vertical
+                  child: Text(
+                    'Su cuenta ha sido verificada y se ha notificado al Administrador.\n\nPor favor, contacte al Superadmin para recibir su clave temporal.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: isDark
+                          ? Colors.grey.shade300
+                          : Colors.grey.shade700,
+                      height: 1.5,
+                    ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Solicitud Enviada',
-                    style: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Entendido',
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
-              ),
-              content: Text(
-                'Su cuenta ha sido verificada y se ha notificado al Administrador.\n\nPor favor, contacte al Superadmin para recibir su clave temporal.',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                  height: 1.5,
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Entendido',
-                    style: TextStyle(
-                      color: Colors.greenAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           );
         }
       } else {
-        // FAILED: Email does not exist
         _failedAttempts++;
 
         if (_failedAttempts >= 3) {
           _lockoutTime = DateTime.now().add(const Duration(minutes: 5));
           _startTimer();
-          if (mounted)
+          if (mounted) {
             CustomSnackBar.showError(
               context,
               'Demasiados intentos. Bloqueado por 5 minutos.',
             );
+          }
         } else {
-          if (mounted)
+          if (mounted) {
             CustomSnackBar.showWarning(
               context,
               'Correo no encontrado. Intentos restantes: ${3 - _failedAttempts}',
             );
+          }
         }
       }
     } catch (e) {
@@ -197,78 +209,89 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
             color: isDark ? const Color(0xFF00C9FF) : colorScheme.primary,
             size: 28,
           ),
-          const SizedBox(width: 12),
-          Text(
-            'Verificar Cuenta',
-            style: GoogleFonts.montserrat(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
+          const SizedBox(width: 8),
+          // Uso de Flexible + FittedBox
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Verificar Cuenta',
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
             ),
           ),
         ],
       ),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Ingrese su correo registrado para verificar su identidad antes de solicitar el cambio de clave.',
-              style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            if (isLocked)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.lock_clock,
-                      color: Colors.redAccent,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Intentos agotados.\nIntente de nuevo en:',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.poppins(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}',
-                      style: GoogleFonts.montserrat(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: 'Correo Electrónico',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
+      // CRÍTICO: Envuelve todo el contenido en un SingleChildScrollView
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize:
+                MainAxisSize.min, // Hace que la columna ocupe solo lo necesario
+            children: [
+              Text(
+                'Ingrese su correo registrado para verificar su identidad antes de solicitar el cambio de clave.',
+                style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              if (isLocked)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.lock_clock,
+                        color: Colors.redAccent,
+                        size: 32,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Intentos agotados.\nIntente de nuevo en:',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.poppins(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${(_remainingSeconds ~/ 60).toString().padLeft(2, '0')}:${(_remainingSeconds % 60).toString().padLeft(2, '0')}',
+                        style: GoogleFonts.montserrat(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'Correo Electrónico',
+                    prefixIcon: const Icon(Icons.email_outlined),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Obligatorio';
+                    if (!value.contains('@')) return 'Correo inválido';
+                    return null;
+                  },
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Obligatorio';
-                  if (!value.contains('@')) return 'Correo inválido';
-                  return null;
-                },
-              ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
