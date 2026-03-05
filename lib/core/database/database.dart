@@ -24,6 +24,22 @@ class Feligreses extends Table {
   TextColumn get tipoFeligres =>
       text().withDefault(const Constant('feligres'))();
 
+  TextColumn get iglesiaId => text().nullable().references(Iglesias, #id)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// Add this new table
+class Iglesias extends Table {
+  TextColumn get id => text()(); // UUID
+  TextColumn get nombre => text()();
+  IntColumn get distrito => integer()(); // 1 to 16
+  DateTimeColumn get fechaLlegada => dateTime().nullable()();
+  DateTimeColumn get fechaSalida => dateTime().nullable()();
+  TextColumn get categoria =>
+      text().nullable()(); // misionera, en formación, etc.
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -118,4 +134,9 @@ class AppDatabase extends _$AppDatabase {
 
     return pendingAportes.isNotEmpty || pendingFeligreses.isNotEmpty;
   }
+
+  // Queries for Iglesias
+  Stream<List<Iglesia>> watchAllIglesias() => select(iglesias).watch();
+  Future<int> insertIglesia(IglesiasCompanion iglesia) =>
+      into(iglesias).insert(iglesia);
 }

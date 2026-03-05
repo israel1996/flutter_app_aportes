@@ -56,6 +56,14 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   // --- SAVE & AUTO-SYNC LOGIC ---
   Future<void> _saveAporte() async {
     if (!_formKey.currentState!.validate()) return;
+    final currentIglesia = ref.read(currentIglesiaProvider);
+    if (currentIglesia == null) {
+      CustomSnackBar.showError(
+        context,
+        'Debes registrar o seleccionar una Sede en el menú principal primero.',
+      );
+      return;
+    }
     if (_selectedFeligresId == null || _selectedTipo == null) {
       CustomSnackBar.showWarning(
         context,
@@ -169,7 +177,17 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
               StreamBuilder<List<Feligrese>>(
                 stream: database.watchAllFeligreses(),
                 builder: (context, snapshot) {
-                  final members = snapshot.data ?? [];
+                  final currentIglesia = ref.watch(currentIglesiaProvider);
+                  final members =
+                      snapshot.data
+                          ?.where(
+                            (m) =>
+                                m.activo == 1 &&
+                                (currentIglesia == null ||
+                                    m.iglesiaId == currentIglesia.id),
+                          )
+                          .toList() ??
+                      [];
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [

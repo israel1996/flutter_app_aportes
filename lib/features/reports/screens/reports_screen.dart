@@ -316,6 +316,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentIglesia = ref.watch(currentIglesiaProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -326,6 +327,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             return const Center(child: CircularProgressIndicator());
 
           var allData = snapshot.data ?? [];
+
+          allData = allData
+              .where(
+                (item) =>
+                    currentIglesia == null ||
+                    item.feligres.iglesiaId == currentIglesia.id,
+              )
+              .toList();
 
           if (_searchController.text.isNotEmpty) {
             allData = allData

@@ -40,6 +40,7 @@ class SyncService {
           'posee_discapacidad': person.poseeDiscapacidad,
           'bautizado_agua': person.bautizadoAgua,
           'bautizado_espiritu': person.bautizadoEspiritu,
+          'iglesia_id': person.iglesiaId,
         });
         await (localDb.update(localDb.feligreses)
               ..where((tbl) => tbl.id.equals(person.id)))
@@ -76,6 +77,34 @@ class SyncService {
 
   Future<void> pullFromCloud() async {
     try {
+      final List<dynamic> cloudIglesias = await cloudDb
+          .from('iglesias')
+          .select();
+      debugPrint("Downloaded ${cloudIglesias.length} iglesias from cloud.");
+
+      for (var data in cloudIglesias) {
+        await localDb
+            .into(localDb.iglesias)
+            .insertOnConflictUpdate(
+              IglesiasCompanion(
+                id: drift.Value(data['id']),
+                nombre: drift.Value(data['nombre']),
+                distrito: drift.Value(data['distrito']),
+                categoria: drift.Value(data['categoria']),
+                fechaLlegada: drift.Value(
+                  data['fecha_llegada'] != null
+                      ? DateTime.parse(data['fecha_llegada'])
+                      : null,
+                ),
+                fechaSalida: drift.Value(
+                  data['fecha_salida'] != null
+                      ? DateTime.parse(data['fecha_salida'])
+                      : null,
+                ),
+              ),
+            );
+      }
+
       final List<dynamic> cloudMembers = await cloudDb
           .from('feligreses')
           .select();
@@ -106,6 +135,7 @@ class SyncService {
                 poseeDiscapacidad: drift.Value(data['posee_discapacidad']),
                 bautizadoAgua: drift.Value(data['bautizado_agua']),
                 bautizadoEspiritu: drift.Value(data['bautizado_espiritu']),
+                iglesiaId: drift.Value(data['iglesia_id']),
               ),
             );
       }

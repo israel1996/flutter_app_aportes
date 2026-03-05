@@ -66,6 +66,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentIglesia = ref.watch(currentIglesiaProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -109,9 +110,15 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
           // 1. Filter
           var filtered = allAportes.where((item) {
+            // FILTRO MULTI-SEDE: Verifica que el feligrés pertenezca a la iglesia actual
+            final matchIglesia =
+                currentIglesia == null ||
+                item.feligres.iglesiaId == currentIglesia.id;
+
             final matchName = item.feligres.nombre.toLowerCase().contains(
               _searchController.text.toLowerCase(),
             );
+
             bool matchDate = true;
             if (_dateRange != null) {
               matchDate =
@@ -122,9 +129,10 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                     _dateRange!.end.add(const Duration(days: 1)),
                   );
             }
-            return matchName && matchDate;
-          }).toList();
 
+            // Retornamos true solo si cumple con la iglesia, el nombre y la fecha
+            return matchIglesia && matchName && matchDate;
+          }).toList();
           // 2. Sort
           filtered.sort((a, b) {
             switch (_sortBy) {

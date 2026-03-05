@@ -187,6 +187,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentIglesia = ref.watch(currentIglesiaProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -235,6 +236,10 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
           // 1. FILTERING
           var filteredMembers = allMembers.where((m) {
+            // Multi-tenancy Filter
+            final matchIglesia =
+                currentIglesia == null || m.iglesiaId == currentIglesia.id;
+
             final matchStatus = m.activo == (_showDeleted ? 0 : 1);
             final matchSearch = m.nombre.toLowerCase().contains(
               _searchController.text.toLowerCase(),
@@ -246,7 +251,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 _filterGenero == 'Todos' ||
                 m.genero?.toLowerCase() == _filterGenero.toLowerCase();
 
-            return matchStatus && matchSearch && matchTipo && matchGenero;
+            return matchIglesia &&
+                matchStatus &&
+                matchSearch &&
+                matchTipo &&
+                matchGenero;
           }).toList();
 
           // 2. SORTING

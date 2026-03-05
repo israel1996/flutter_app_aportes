@@ -64,7 +64,17 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   Future<void> _saveFeligres() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedGender == null) {
-      CustomSnackBar.showWarning(context, 'Por favor, seleccione un género');
+      CustomSnackBar.showWarning(context, 'Please select a gender');
+      return;
+    }
+
+    // 1. READ THE CURRENT CHURCH
+    final currentIglesia = ref.read(currentIglesiaProvider);
+    if (currentIglesia == null) {
+      CustomSnackBar.showError(
+        context,
+        'You must register or select a Church (Sede) from the main menu first.',
+      );
       return;
     }
 
@@ -75,6 +85,9 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
       await database.insertFeligres(
         FeligresesCompanion.insert(
           id: const Uuid().v4(),
+          iglesiaId: drift.Value(
+            currentIglesia.id,
+          ), // 2. ASSIGN THE CHURCH TO THE PARISHIONER
           nombre: _nombreController.text.trim(),
           telefono: drift.Value(
             _telefonoController.text.trim().isEmpty
@@ -98,19 +111,18 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         ),
       );
 
+      // ... rest of the code (sync and success messages) remains the same ...
       try {
         final connectivity = await Connectivity().checkConnectivity();
         final hasInternet =
             connectivity.contains(ConnectivityResult.mobile) ||
             connectivity.contains(ConnectivityResult.wifi) ||
             connectivity.contains(ConnectivityResult.ethernet);
-
         if (hasInternet) {
           final authService = ref.read(authServiceProvider);
           if (authService.currentUser != null) {
             final syncService = SyncService(database);
             await syncService.syncAll();
-            debugPrint("✅ Auto-sync background complete.");
           }
         }
       } catch (syncError) {
@@ -119,12 +131,13 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
 
       if (mounted) {
         Navigator.pop(context);
-        CustomSnackBar.showSuccess(context, 'Feligrés registrado y respaldado');
+        CustomSnackBar.showSuccess(
+          context,
+          'Parishioner registered in ${currentIglesia.nombre}',
+        );
       }
     } catch (e) {
-      if (mounted) {
-        CustomSnackBar.showError(context, 'Error al guardar localmente:$e');
-      }
+      if (mounted) CustomSnackBar.showError(context, 'Error saving locally:$e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

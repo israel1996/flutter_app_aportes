@@ -4,6 +4,8 @@ import 'core/database/database.dart';
 
 final navIndexProvider = StateProvider<int>((ref) => 0);
 
+final currentIglesiaProvider = StateProvider<Iglesia?>((ref) => null);
+
 final databaseProvider = Provider<AppDatabase>((ref) {
   return AppDatabase();
 });

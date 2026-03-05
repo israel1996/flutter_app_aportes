@@ -17,18 +17,36 @@ class DashboardSummary extends ConsumerWidget {
     final panelColor = Theme.of(context).colorScheme.surface;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
 
+    // LEER LA IGLESIA ACTUAL
+    final currentIglesia = ref.watch(currentIglesiaProvider);
+
+    // Si no hay iglesia seleccionada, mostramos el mensaje de advertencia
+    if (currentIglesia == null) {
+      return Center(
+        child: Text(
+          'Por favor, selecciona o registra una sede en la parte superior.',
+          style: GoogleFonts.poppins(color: Colors.grey),
+        ),
+      );
+    }
+
     return StreamBuilder<List<AporteConFeligres>>(
       stream: database.watchHistory(),
       builder: (context, historySnapshot) {
         return StreamBuilder<List<Feligrese>>(
           stream: database.watchAllFeligreses(),
           builder: (context, membersSnapshot) {
-            // 1. Calculate Real Data
-            final aportes = historySnapshot.data ?? [];
+            final rawAportes = historySnapshot.data ?? [];
             final allMembers = membersSnapshot.data ?? [];
 
+            // 1. FILTRAR APORTES POR LA IGLESIA SELECCIONADA
+            final aportes = rawAportes
+                .where((a) => a.feligres.iglesiaId == currentIglesia.id)
+                .toList();
+
+            // 2. FILTRAR FELIGRESES POR LA IGLESIA SELECCIONADA
             final activeMembers = allMembers
-                .where((m) => m.activo == 1)
+                .where((m) => m.activo == 1 && m.iglesiaId == currentIglesia.id)
                 .toList();
 
             double totalAportes = 0;
@@ -57,14 +75,7 @@ class DashboardSummary extends ConsumerWidget {
               maxY = maxY == 0 ? 10 : maxY * 1.2;
             }
 
-            if (aportes.isNotEmpty) {
-              maxY = monthlyData.reduce(
-                (curr, next) => curr > next ? curr : next,
-              );
-              maxY = maxY == 0 ? 10 : maxY * 1.2;
-            }
-
-            // --- 1. NEW LOGIC: TOP 5 CONTRIBUTORS (THIS MONTH) ---
+            // --- 1. TOP 5 CONTRIBUTORS (THIS MONTH) ---
             final Map<String, double> top5Map = {};
             for (var a in aportes) {
               if (a.aporte.fecha.year == now.year &&
@@ -77,12 +88,11 @@ class DashboardSummary extends ConsumerWidget {
               ..sort((a, b) => b.value.compareTo(a.value));
             final top5 = top5List.take(5).toList();
 
-            // --- 2. NEW LOGIC: TOTAL BY GENDER ---
+            // --- 2. TOTAL BY GENDER ---
             double totalMasculino = 0;
             double totalFemenino = 0;
 
             for (var a in aportes) {
-              // Only add if the contribution is from the current year and month
               if (a.aporte.fecha.year == now.year &&
                   a.aporte.fecha.month == now.month) {
                 final genero = a.feligres.genero?.toLowerCase() ?? '';
@@ -94,7 +104,7 @@ class DashboardSummary extends ConsumerWidget {
               }
             }
 
-            // --- 3. NEW LOGIC: TOTAL BY AGE BRACKETS (CURRENT MONTH) ---
+            // --- 3. TOTAL BY AGE BRACKETS (CURRENT MONTH) ---
             double ninos = 0; // 0-11
             double adolescentes = 0; // 12-17
             double jovenes = 0; // 18-29
@@ -102,13 +112,10 @@ class DashboardSummary extends ConsumerWidget {
             double mayores = 0; // 60+
 
             for (var a in aportes) {
-              // Only process contributions from the current month
               if (a.aporte.fecha.year == now.year &&
                   a.aporte.fecha.month == now.month) {
-                // We extract the date directly. No parsing needed!
                 final birthDate = a.feligres.fechaNacimiento;
 
-                // If the user has a birthdate, calculate exact age
                 if (birthDate != null) {
                   int age = now.year - birthDate.year;
                   if (now.month < birthDate.month ||
@@ -117,7 +124,6 @@ class DashboardSummary extends ConsumerWidget {
                     age--;
                   }
 
-                  // Group the contribution amounts
                   if (age <= 11) {
                     ninos += a.aporte.monto;
                   } else if (age <= 17) {
@@ -143,7 +149,6 @@ class DashboardSummary extends ConsumerWidget {
                   // ---------------------------------------------------
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      // Make cards stack vertically on phones, horizontally on desktop
                       if (constraints.maxWidth < 600) {
                         return Column(
                           children: [
@@ -208,8 +213,7 @@ class DashboardSummary extends ConsumerWidget {
                         );
                       }
                       return SizedBox(
-                        height:
-                            460, // <-- Altura fija y segura para igualar ambos cuadros
+                        height: 460,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -262,7 +266,7 @@ class DashboardSummary extends ConsumerWidget {
                   // 3. NEON CURVED CHART AREA
                   // ---------------------------------------------------
                   Container(
-                    height: 400, // Fixed height for the chart
+                    height: 400,
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -279,7 +283,6 @@ class DashboardSummary extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Chart Header
                         Text(
                           'Tendencia de Aportes Anual',
                           style: GoogleFonts.poppins(
@@ -290,7 +293,6 @@ class DashboardSummary extends ConsumerWidget {
                         ),
                         const SizedBox(height: 30),
 
-                        // The Actual Chart
                         Expanded(
                           child: LineChart(
                             LineChartData(
@@ -378,7 +380,6 @@ class DashboardSummary extends ConsumerWidget {
                               minY: 0,
                               maxY: maxY,
                               lineBarsData: [
-                                // --- REAL DATA LINE ---
                                 LineChartBarData(
                                   spots: List.generate(12, (index) {
                                     return FlSpot(
@@ -387,7 +388,7 @@ class DashboardSummary extends ConsumerWidget {
                                     );
                                   }),
                                   isCurved: true,
-                                  color: const Color(0xFF00C9FF), // Neon Cyan
+                                  color: const Color(0xFF00C9FF),
                                   barWidth: 4,
                                   isStrokeCapRound: true,
                                   dotData: FlDotData(
@@ -435,7 +436,6 @@ class DashboardSummary extends ConsumerWidget {
     );
   }
 
-  // --- HELPER: TOP 5 CARD ---
   Widget _buildTop5Card(
     List<MapEntry<String, double>> top5,
     Color panelColor,
@@ -490,7 +490,6 @@ class DashboardSummary extends ConsumerWidget {
                     ),
                   )
           else
-            // THE FIX: Wrapped the list in Expanded and SingleChildScrollView
             Column(
               children: top5.asMap().entries.map((entry) {
                 int index = entry.key;
@@ -523,7 +522,7 @@ class DashboardSummary extends ConsumerWidget {
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
-                    maxLines: 1, // This safely prevents vertical overflows!
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
@@ -551,8 +550,6 @@ class DashboardSummary extends ConsumerWidget {
     );
   }
 
-  // --- HELPER: GENDER PIE CHART ---
-  // --- HELPER: GENDER PIE CHART ---
   Widget _buildGenderPieChart(
     double masculino,
     double femenino,
@@ -668,12 +665,11 @@ class DashboardSummary extends ConsumerWidget {
 
           const SizedBox(height: 30),
 
-          // THE FIX: Replaced Row with Wrap for automatic line breaks
           Center(
             child: Wrap(
               alignment: WrapAlignment.center,
-              spacing: 24, // Horizontal space between items
-              runSpacing: 12, // Vertical space when it moves to the next line
+              spacing: 24,
+              runSpacing: 12,
               children: [
                 _buildLegendItem('Hombres', const Color(0xFF00C9FF), masculino),
                 _buildLegendItem('Mujeres', const Color(0xFFFF007F), femenino),
@@ -687,9 +683,9 @@ class DashboardSummary extends ConsumerWidget {
     );
   }
 
-  // Updated legend to accept and display the amount
   Widget _buildLegendItem(String title, Color color, double amount) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 12,
@@ -705,14 +701,13 @@ class DashboardSummary extends ConsumerWidget {
     );
   }
 
-  // Helper widgets for the cards
   Widget _buildTotalCard({double total = 0}) {
     return GradientSummaryCard(
       title: 'Total Histórico',
       value: '\$${total.toStringAsFixed(2)}',
       subtitle: 'Acumulado global',
       gradient: const LinearGradient(
-        colors: [Color(0xFF89216B), Color(0xFFDA4453)], // Pink/Purple
+        colors: [Color(0xFF89216B), Color(0xFFDA4453)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -726,7 +721,7 @@ class DashboardSummary extends ConsumerWidget {
       value: count,
       subtitle: 'Registrados en sistema',
       gradient: const LinearGradient(
-        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)], // Cyan/Green
+        colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -743,7 +738,7 @@ class DashboardSummary extends ConsumerWidget {
         'es',
       ).format(DateTime.now()).toUpperCase(),
       gradient: const LinearGradient(
-        colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)], // Deep Blue/Cyan
+        colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -752,7 +747,6 @@ class DashboardSummary extends ConsumerWidget {
   }
 }
 
-// --- HELPER: AGE BRACKETS BAR CHART ---
 Widget _buildAgeBracketChart(
   double ninos,
   double adolescentes,
@@ -764,7 +758,6 @@ Widget _buildAgeBracketChart(
   bool isDark,
   ColorScheme colorScheme,
 ) {
-  // Find the maximum value to scale the Y-axis properly
   final double maxVal = [
     ninos,
     adolescentes,
@@ -861,7 +854,7 @@ Widget _buildAgeBracketChart(
                       }
                       return SideTitleWidget(
                         meta: meta,
-                        space: 12, // Space between chart and text
+                        space: 12,
                         child: Text(
                           text,
                           style: style,
@@ -869,8 +862,7 @@ Widget _buildAgeBracketChart(
                         ),
                       );
                     },
-                    reservedSize:
-                        45, // Gives enough space for the two lines of text
+                    reservedSize: 45,
                   ),
                 ),
                 leftTitles: AxisTitles(
@@ -902,19 +894,11 @@ Widget _buildAgeBracketChart(
               ),
               borderData: FlBorderData(show: false),
               barGroups: [
-                _buildBarGroup(0, ninos, const Color(0xFF92FE9D)), // Green
-                _buildBarGroup(
-                  1,
-                  adolescentes,
-                  const Color(0xFF00C9FF),
-                ), // Cyan
-                _buildBarGroup(
-                  2,
-                  jovenes,
-                  const Color(0xFF4FACFE),
-                ), // Deep Blue
-                _buildBarGroup(3, adultos, const Color(0xFF89216B)), // Purple
-                _buildBarGroup(4, mayores, const Color(0xFFFF007F)), // Pink
+                _buildBarGroup(0, ninos, const Color(0xFF92FE9D)),
+                _buildBarGroup(1, adolescentes, const Color(0xFF00C9FF)),
+                _buildBarGroup(2, jovenes, const Color(0xFF4FACFE)),
+                _buildBarGroup(3, adultos, const Color(0xFF89216B)),
+                _buildBarGroup(4, mayores, const Color(0xFFFF007F)),
               ],
             ),
           ),
@@ -924,7 +908,6 @@ Widget _buildAgeBracketChart(
   );
 }
 
-// Mini helper to generate the actual bars cleanly
 BarChartGroupData _buildBarGroup(int x, double y, Color color) {
   return BarChartGroupData(
     x: x,
@@ -932,7 +915,7 @@ BarChartGroupData _buildBarGroup(int x, double y, Color color) {
       BarChartRodData(
         toY: y,
         color: color,
-        width: 24, // Thickness of the bars
+        width: 24,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(8),
           topRight: Radius.circular(8),
@@ -979,16 +962,14 @@ class GradientSummaryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Use Expanded and overflow to prevent the title from breaking
               Expanded(
                 child: Text(
                   title,
                   style: GoogleFonts.poppins(
-                    color: Colors.white, // Changed to pure white
+                    color: Colors.white,
                     fontSize: 14,
-                    fontWeight: FontWeight.w600, // Slightly bolder
+                    fontWeight: FontWeight.w600,
                     shadows: [
-                      // Added shadow for contrast
                       Shadow(
                         color: Colors.black.withOpacity(0.3),
                         blurRadius: 4,

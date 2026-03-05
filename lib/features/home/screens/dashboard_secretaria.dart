@@ -16,6 +16,16 @@ class DashboardSecretaria extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final panelColor = Theme.of(context).colorScheme.surface;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
+    final currentIglesia = ref.watch(currentIglesiaProvider);
+
+    if (currentIglesia == null) {
+      return Center(
+        child: Text(
+          'Por favor, selecciona o registra una sede en la parte superior.',
+          style: GoogleFonts.poppins(color: Colors.grey),
+        ),
+      );
+    }
 
     return StreamBuilder<List<Feligrese>>(
       stream: database.watchAllFeligreses(),
@@ -25,7 +35,9 @@ class DashboardSecretaria extends ConsumerWidget {
         }
 
         final allMembers = snapshot.data ?? [];
-        final activeMembers = allMembers.where((m) => m.activo == 1).toList();
+        final activeMembers = allMembers
+            .where((m) => m.activo == 1 && m.iglesiaId == currentIglesia.id)
+            .toList();
 
         // --- 1. CALCULATE DEMOGRAPHICS ---
         int ambosBautismos = 0;

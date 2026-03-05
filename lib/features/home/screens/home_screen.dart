@@ -1,11 +1,13 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_app_aportes/core/database/database.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_summary.dart';
 import 'package:flutter_app_aportes/features/home/screens/dashboard_secretaria.dart';
 import 'package:flutter_app_aportes/features/members/screens/feligreses_screen.dart';
+import 'package:flutter_app_aportes/features/members/widgets/add_iglesia_sheet.dart';
 import 'package:flutter_app_aportes/features/reports/screens/reports_secretaria.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
@@ -185,6 +187,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
 
         return Scaffold(
+          appBar: AppBar(
+            title: Consumer(
+              builder: (context, ref, child) {
+                final database = ref.watch(databaseProvider);
+                final currentIglesia = ref.watch(currentIglesiaProvider);
+
+                return StreamBuilder<List<Iglesia>>(
+                  stream: database.watchAllIglesias(),
+                  builder: (context, snapshot) {
+                    final iglesias = snapshot.data ?? [];
+
+                    // If there are no churches, prompt them to create one
+                    if (iglesias.isEmpty) {
+                      return ElevatedButton.icon(
+                        onPressed: () => showModalBottomSheet(
+                          context: context,
+                          builder: (_) => const AddIglesiaSheet(),
+                        ),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Registrar Sede'),
+                      );
+                    }
+
+                    // Auto-select the first one if the current state is null
+                    if (currentIglesia == null && iglesias.isNotEmpty) {
+                      Future.microtask(
+                        () => ref.read(currentIglesiaProvider.notifier).state =
+                            iglesias.first,
+                      );
+                    }
+
+                    return DropdownButtonHideUnderline(
+                      child: DropdownButton<Iglesia>(
+                        value: currentIglesia ?? iglesias.first,
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Colors.white,
+                        ),
+                        dropdownColor: Theme.of(context).colorScheme.surface,
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        items: iglesias.map((iglesia) {
+                          return DropdownMenuItem(
+                            value: iglesia,
+                            child: Text(
+                              '${iglesia.nombre} (Distrito ${iglesia.distrito})',
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (Iglesia? nuevaSeleccion) {
+                          ref.read(currentIglesiaProvider.notifier).state =
+                              nuevaSeleccion;
+                        },
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.add_home_work),
+                tooltip: 'Registrar nueva sede',
+                onPressed: () => showModalBottomSheet(
+                  context: context,
+                  builder: (_) => const AddIglesiaSheet(),
+                ),
+              ),
+              // ... your other action buttons (dark mode, user profile, etc.)
+            ],
+          ),
           body: Row(
             children: [
               if (isDesktop)
@@ -329,6 +405,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                _buildIglesiaSelector(
+                                  colorScheme,
+                                  isDark,
+                                ), // <--- ADDED HERE
+                                const SizedBox(width: 16),
                                 Flexible(
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
@@ -687,6 +768,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildIglesiaSelector(ColorScheme colorScheme, bool isDark) {
+    return Consumer(
+      builder: (context, ref, child) {
+        final database = ref.watch(databaseProvider);
+        final currentIglesia = ref.watch(currentIglesiaProvider);
+
+        return StreamBuilder<List<Iglesia>>(
+          stream: database
+              .select(database.iglesias)
+              .watch(), // Listens to the iglesias table
+          builder: (context, snapshot) {
+            final iglesias = snapshot.data ?? [];
+
+            if (iglesias.isEmpty) {
+              return ElevatedButton.icon(
+                onPressed: () {}, // We will connect AddIglesiaSheet here later
+                icon: const Icon(Icons.add_business),
+                label: const Text('Create Sede'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              );
+            }
+
+            // Auto-select the first church if none is selected
+            if (currentIglesia == null && iglesias.isNotEmpty) {
+              Future.microtask(
+                () => ref.read(currentIglesiaProvider.notifier).state =
+                    iglesias.first,
+              );
+            }
+
+            return Container(
+              height: 45,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.primary.withOpacity(0.5)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<Iglesia>(
+                  value: currentIglesia ?? iglesias.first,
+                  icon: Icon(
+                    Icons.keyboard_arrow_down,
+                    color: colorScheme.primary,
+                  ),
+                  dropdownColor: colorScheme.surface,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
+                  items: iglesias.map((iglesia) {
+                    return DropdownMenuItem(
+                      value: iglesia,
+                      child: Text(
+                        '${iglesia.nombre} (District ${iglesia.distrito})',
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (Iglesia? nueva) {
+                    ref.read(currentIglesiaProvider.notifier).state = nueva;
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

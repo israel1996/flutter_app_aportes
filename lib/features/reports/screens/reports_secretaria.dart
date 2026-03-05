@@ -312,11 +312,17 @@ class _ReportesSecretariaScreenState
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-
+          final currentIglesia = ref.watch(currentIglesiaProvider);
           var allData = snapshot.data ?? [];
+          // FILTER ACTIVE MEMBERS AND MATCHING CHURCH
           allData = allData
-              .where((m) => m.activo == 1)
-              .toList(); // Only show active members
+              .where(
+                (m) =>
+                    m.activo == 1 &&
+                    (currentIglesia == null ||
+                        m.iglesiaId == currentIglesia.id),
+              )
+              .toList();
 
           if (_selectedDetailCategory != null) {
             return _buildDetailView(allData, colorScheme, isDark);

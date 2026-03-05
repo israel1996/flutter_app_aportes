@@ -3,6 +3,426 @@
 part of 'database.dart';
 
 // ignore_for_file: type=lint
+class $IglesiasTable extends Iglesias with TableInfo<$IglesiasTable, Iglesia> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $IglesiasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nombreMeta = const VerificationMeta('nombre');
+  @override
+  late final GeneratedColumn<String> nombre = GeneratedColumn<String>(
+    'nombre',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _distritoMeta = const VerificationMeta(
+    'distrito',
+  );
+  @override
+  late final GeneratedColumn<int> distrito = GeneratedColumn<int>(
+    'distrito',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fechaLlegadaMeta = const VerificationMeta(
+    'fechaLlegada',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaLlegada = GeneratedColumn<DateTime>(
+    'fecha_llegada',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fechaSalidaMeta = const VerificationMeta(
+    'fechaSalida',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaSalida = GeneratedColumn<DateTime>(
+    'fecha_salida',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _categoriaMeta = const VerificationMeta(
+    'categoria',
+  );
+  @override
+  late final GeneratedColumn<String> categoria = GeneratedColumn<String>(
+    'categoria',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    nombre,
+    distrito,
+    fechaLlegada,
+    fechaSalida,
+    categoria,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'iglesias';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Iglesia> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('nombre')) {
+      context.handle(
+        _nombreMeta,
+        nombre.isAcceptableOrUnknown(data['nombre']!, _nombreMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nombreMeta);
+    }
+    if (data.containsKey('distrito')) {
+      context.handle(
+        _distritoMeta,
+        distrito.isAcceptableOrUnknown(data['distrito']!, _distritoMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_distritoMeta);
+    }
+    if (data.containsKey('fecha_llegada')) {
+      context.handle(
+        _fechaLlegadaMeta,
+        fechaLlegada.isAcceptableOrUnknown(
+          data['fecha_llegada']!,
+          _fechaLlegadaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fecha_salida')) {
+      context.handle(
+        _fechaSalidaMeta,
+        fechaSalida.isAcceptableOrUnknown(
+          data['fecha_salida']!,
+          _fechaSalidaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('categoria')) {
+      context.handle(
+        _categoriaMeta,
+        categoria.isAcceptableOrUnknown(data['categoria']!, _categoriaMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Iglesia map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Iglesia(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      nombre: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}nombre'],
+      )!,
+      distrito: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}distrito'],
+      )!,
+      fechaLlegada: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_llegada'],
+      ),
+      fechaSalida: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_salida'],
+      ),
+      categoria: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}categoria'],
+      ),
+    );
+  }
+
+  @override
+  $IglesiasTable createAlias(String alias) {
+    return $IglesiasTable(attachedDatabase, alias);
+  }
+}
+
+class Iglesia extends DataClass implements Insertable<Iglesia> {
+  final String id;
+  final String nombre;
+  final int distrito;
+  final DateTime? fechaLlegada;
+  final DateTime? fechaSalida;
+  final String? categoria;
+  const Iglesia({
+    required this.id,
+    required this.nombre,
+    required this.distrito,
+    this.fechaLlegada,
+    this.fechaSalida,
+    this.categoria,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['nombre'] = Variable<String>(nombre);
+    map['distrito'] = Variable<int>(distrito);
+    if (!nullToAbsent || fechaLlegada != null) {
+      map['fecha_llegada'] = Variable<DateTime>(fechaLlegada);
+    }
+    if (!nullToAbsent || fechaSalida != null) {
+      map['fecha_salida'] = Variable<DateTime>(fechaSalida);
+    }
+    if (!nullToAbsent || categoria != null) {
+      map['categoria'] = Variable<String>(categoria);
+    }
+    return map;
+  }
+
+  IglesiasCompanion toCompanion(bool nullToAbsent) {
+    return IglesiasCompanion(
+      id: Value(id),
+      nombre: Value(nombre),
+      distrito: Value(distrito),
+      fechaLlegada: fechaLlegada == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaLlegada),
+      fechaSalida: fechaSalida == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaSalida),
+      categoria: categoria == null && nullToAbsent
+          ? const Value.absent()
+          : Value(categoria),
+    );
+  }
+
+  factory Iglesia.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Iglesia(
+      id: serializer.fromJson<String>(json['id']),
+      nombre: serializer.fromJson<String>(json['nombre']),
+      distrito: serializer.fromJson<int>(json['distrito']),
+      fechaLlegada: serializer.fromJson<DateTime?>(json['fechaLlegada']),
+      fechaSalida: serializer.fromJson<DateTime?>(json['fechaSalida']),
+      categoria: serializer.fromJson<String?>(json['categoria']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'nombre': serializer.toJson<String>(nombre),
+      'distrito': serializer.toJson<int>(distrito),
+      'fechaLlegada': serializer.toJson<DateTime?>(fechaLlegada),
+      'fechaSalida': serializer.toJson<DateTime?>(fechaSalida),
+      'categoria': serializer.toJson<String?>(categoria),
+    };
+  }
+
+  Iglesia copyWith({
+    String? id,
+    String? nombre,
+    int? distrito,
+    Value<DateTime?> fechaLlegada = const Value.absent(),
+    Value<DateTime?> fechaSalida = const Value.absent(),
+    Value<String?> categoria = const Value.absent(),
+  }) => Iglesia(
+    id: id ?? this.id,
+    nombre: nombre ?? this.nombre,
+    distrito: distrito ?? this.distrito,
+    fechaLlegada: fechaLlegada.present ? fechaLlegada.value : this.fechaLlegada,
+    fechaSalida: fechaSalida.present ? fechaSalida.value : this.fechaSalida,
+    categoria: categoria.present ? categoria.value : this.categoria,
+  );
+  Iglesia copyWithCompanion(IglesiasCompanion data) {
+    return Iglesia(
+      id: data.id.present ? data.id.value : this.id,
+      nombre: data.nombre.present ? data.nombre.value : this.nombre,
+      distrito: data.distrito.present ? data.distrito.value : this.distrito,
+      fechaLlegada: data.fechaLlegada.present
+          ? data.fechaLlegada.value
+          : this.fechaLlegada,
+      fechaSalida: data.fechaSalida.present
+          ? data.fechaSalida.value
+          : this.fechaSalida,
+      categoria: data.categoria.present ? data.categoria.value : this.categoria,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Iglesia(')
+          ..write('id: $id, ')
+          ..write('nombre: $nombre, ')
+          ..write('distrito: $distrito, ')
+          ..write('fechaLlegada: $fechaLlegada, ')
+          ..write('fechaSalida: $fechaSalida, ')
+          ..write('categoria: $categoria')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, nombre, distrito, fechaLlegada, fechaSalida, categoria);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Iglesia &&
+          other.id == this.id &&
+          other.nombre == this.nombre &&
+          other.distrito == this.distrito &&
+          other.fechaLlegada == this.fechaLlegada &&
+          other.fechaSalida == this.fechaSalida &&
+          other.categoria == this.categoria);
+}
+
+class IglesiasCompanion extends UpdateCompanion<Iglesia> {
+  final Value<String> id;
+  final Value<String> nombre;
+  final Value<int> distrito;
+  final Value<DateTime?> fechaLlegada;
+  final Value<DateTime?> fechaSalida;
+  final Value<String?> categoria;
+  final Value<int> rowid;
+  const IglesiasCompanion({
+    this.id = const Value.absent(),
+    this.nombre = const Value.absent(),
+    this.distrito = const Value.absent(),
+    this.fechaLlegada = const Value.absent(),
+    this.fechaSalida = const Value.absent(),
+    this.categoria = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  IglesiasCompanion.insert({
+    required String id,
+    required String nombre,
+    required int distrito,
+    this.fechaLlegada = const Value.absent(),
+    this.fechaSalida = const Value.absent(),
+    this.categoria = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       nombre = Value(nombre),
+       distrito = Value(distrito);
+  static Insertable<Iglesia> custom({
+    Expression<String>? id,
+    Expression<String>? nombre,
+    Expression<int>? distrito,
+    Expression<DateTime>? fechaLlegada,
+    Expression<DateTime>? fechaSalida,
+    Expression<String>? categoria,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (nombre != null) 'nombre': nombre,
+      if (distrito != null) 'distrito': distrito,
+      if (fechaLlegada != null) 'fecha_llegada': fechaLlegada,
+      if (fechaSalida != null) 'fecha_salida': fechaSalida,
+      if (categoria != null) 'categoria': categoria,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  IglesiasCompanion copyWith({
+    Value<String>? id,
+    Value<String>? nombre,
+    Value<int>? distrito,
+    Value<DateTime?>? fechaLlegada,
+    Value<DateTime?>? fechaSalida,
+    Value<String?>? categoria,
+    Value<int>? rowid,
+  }) {
+    return IglesiasCompanion(
+      id: id ?? this.id,
+      nombre: nombre ?? this.nombre,
+      distrito: distrito ?? this.distrito,
+      fechaLlegada: fechaLlegada ?? this.fechaLlegada,
+      fechaSalida: fechaSalida ?? this.fechaSalida,
+      categoria: categoria ?? this.categoria,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (nombre.present) {
+      map['nombre'] = Variable<String>(nombre.value);
+    }
+    if (distrito.present) {
+      map['distrito'] = Variable<int>(distrito.value);
+    }
+    if (fechaLlegada.present) {
+      map['fecha_llegada'] = Variable<DateTime>(fechaLlegada.value);
+    }
+    if (fechaSalida.present) {
+      map['fecha_salida'] = Variable<DateTime>(fechaSalida.value);
+    }
+    if (categoria.present) {
+      map['categoria'] = Variable<String>(categoria.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IglesiasCompanion(')
+          ..write('id: $id, ')
+          ..write('nombre: $nombre, ')
+          ..write('distrito: $distrito, ')
+          ..write('fechaLlegada: $fechaLlegada, ')
+          ..write('fechaSalida: $fechaSalida, ')
+          ..write('categoria: $categoria, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $FeligresesTable extends Feligreses
     with TableInfo<$FeligresesTable, Feligrese> {
   @override
@@ -162,6 +582,20 @@ class $FeligresesTable extends Feligreses
     requiredDuringInsert: false,
     defaultValue: const Constant('feligres'),
   );
+  static const VerificationMeta _iglesiaIdMeta = const VerificationMeta(
+    'iglesiaId',
+  );
+  @override
+  late final GeneratedColumn<String> iglesiaId = GeneratedColumn<String>(
+    'iglesia_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES iglesias (id)',
+    ),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -177,6 +611,7 @@ class $FeligresesTable extends Feligreses
     bautizadoAgua,
     bautizadoEspiritu,
     tipoFeligres,
+    iglesiaId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -287,6 +722,12 @@ class $FeligresesTable extends Feligreses
         ),
       );
     }
+    if (data.containsKey('iglesia_id')) {
+      context.handle(
+        _iglesiaIdMeta,
+        iglesiaId.isAcceptableOrUnknown(data['iglesia_id']!, _iglesiaIdMeta),
+      );
+    }
     return context;
   }
 
@@ -348,6 +789,10 @@ class $FeligresesTable extends Feligreses
         DriftSqlType.string,
         data['${effectivePrefix}tipo_feligres'],
       )!,
+      iglesiaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}iglesia_id'],
+      ),
     );
   }
 
@@ -371,6 +816,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
   final bool bautizadoAgua;
   final bool bautizadoEspiritu;
   final String tipoFeligres;
+  final String? iglesiaId;
   const Feligrese({
     required this.id,
     required this.nombre,
@@ -385,6 +831,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     required this.bautizadoAgua,
     required this.bautizadoEspiritu,
     required this.tipoFeligres,
+    this.iglesiaId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -412,6 +859,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     map['bautizado_agua'] = Variable<bool>(bautizadoAgua);
     map['bautizado_espiritu'] = Variable<bool>(bautizadoEspiritu);
     map['tipo_feligres'] = Variable<String>(tipoFeligres);
+    if (!nullToAbsent || iglesiaId != null) {
+      map['iglesia_id'] = Variable<String>(iglesiaId);
+    }
     return map;
   }
 
@@ -440,6 +890,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       bautizadoAgua: Value(bautizadoAgua),
       bautizadoEspiritu: Value(bautizadoEspiritu),
       tipoFeligres: Value(tipoFeligres),
+      iglesiaId: iglesiaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(iglesiaId),
     );
   }
 
@@ -462,6 +915,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       bautizadoAgua: serializer.fromJson<bool>(json['bautizadoAgua']),
       bautizadoEspiritu: serializer.fromJson<bool>(json['bautizadoEspiritu']),
       tipoFeligres: serializer.fromJson<String>(json['tipoFeligres']),
+      iglesiaId: serializer.fromJson<String?>(json['iglesiaId']),
     );
   }
   @override
@@ -481,6 +935,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       'bautizadoAgua': serializer.toJson<bool>(bautizadoAgua),
       'bautizadoEspiritu': serializer.toJson<bool>(bautizadoEspiritu),
       'tipoFeligres': serializer.toJson<String>(tipoFeligres),
+      'iglesiaId': serializer.toJson<String?>(iglesiaId),
     };
   }
 
@@ -498,6 +953,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bool? bautizadoAgua,
     bool? bautizadoEspiritu,
     String? tipoFeligres,
+    Value<String?> iglesiaId = const Value.absent(),
   }) => Feligrese(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
@@ -514,6 +970,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bautizadoAgua: bautizadoAgua ?? this.bautizadoAgua,
     bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
     tipoFeligres: tipoFeligres ?? this.tipoFeligres,
+    iglesiaId: iglesiaId.present ? iglesiaId.value : this.iglesiaId,
   );
   Feligrese copyWithCompanion(FeligresesCompanion data) {
     return Feligrese(
@@ -544,6 +1001,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       tipoFeligres: data.tipoFeligres.present
           ? data.tipoFeligres.value
           : this.tipoFeligres,
+      iglesiaId: data.iglesiaId.present ? data.iglesiaId.value : this.iglesiaId,
     );
   }
 
@@ -562,7 +1020,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           ..write('poseeDiscapacidad: $poseeDiscapacidad, ')
           ..write('bautizadoAgua: $bautizadoAgua, ')
           ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
-          ..write('tipoFeligres: $tipoFeligres')
+          ..write('tipoFeligres: $tipoFeligres, ')
+          ..write('iglesiaId: $iglesiaId')
           ..write(')'))
         .toString();
   }
@@ -582,6 +1041,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bautizadoAgua,
     bautizadoEspiritu,
     tipoFeligres,
+    iglesiaId,
   );
   @override
   bool operator ==(Object other) =>
@@ -599,7 +1059,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           other.poseeDiscapacidad == this.poseeDiscapacidad &&
           other.bautizadoAgua == this.bautizadoAgua &&
           other.bautizadoEspiritu == this.bautizadoEspiritu &&
-          other.tipoFeligres == this.tipoFeligres);
+          other.tipoFeligres == this.tipoFeligres &&
+          other.iglesiaId == this.iglesiaId);
 }
 
 class FeligresesCompanion extends UpdateCompanion<Feligrese> {
@@ -616,6 +1077,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   final Value<bool> bautizadoAgua;
   final Value<bool> bautizadoEspiritu;
   final Value<String> tipoFeligres;
+  final Value<String?> iglesiaId;
   final Value<int> rowid;
   const FeligresesCompanion({
     this.id = const Value.absent(),
@@ -631,6 +1093,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.bautizadoAgua = const Value.absent(),
     this.bautizadoEspiritu = const Value.absent(),
     this.tipoFeligres = const Value.absent(),
+    this.iglesiaId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FeligresesCompanion.insert({
@@ -647,6 +1110,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.bautizadoAgua = const Value.absent(),
     this.bautizadoEspiritu = const Value.absent(),
     this.tipoFeligres = const Value.absent(),
+    this.iglesiaId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre);
@@ -664,6 +1128,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Expression<bool>? bautizadoAgua,
     Expression<bool>? bautizadoEspiritu,
     Expression<String>? tipoFeligres,
+    Expression<String>? iglesiaId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -680,6 +1145,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       if (bautizadoAgua != null) 'bautizado_agua': bautizadoAgua,
       if (bautizadoEspiritu != null) 'bautizado_espiritu': bautizadoEspiritu,
       if (tipoFeligres != null) 'tipo_feligres': tipoFeligres,
+      if (iglesiaId != null) 'iglesia_id': iglesiaId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -698,6 +1164,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Value<bool>? bautizadoAgua,
     Value<bool>? bautizadoEspiritu,
     Value<String>? tipoFeligres,
+    Value<String?>? iglesiaId,
     Value<int>? rowid,
   }) {
     return FeligresesCompanion(
@@ -714,6 +1181,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       bautizadoAgua: bautizadoAgua ?? this.bautizadoAgua,
       bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
       tipoFeligres: tipoFeligres ?? this.tipoFeligres,
+      iglesiaId: iglesiaId ?? this.iglesiaId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -760,6 +1228,9 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     if (tipoFeligres.present) {
       map['tipo_feligres'] = Variable<String>(tipoFeligres.value);
     }
+    if (iglesiaId.present) {
+      map['iglesia_id'] = Variable<String>(iglesiaId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -782,6 +1253,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
           ..write('bautizadoAgua: $bautizadoAgua, ')
           ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
           ..write('tipoFeligres: $tipoFeligres, ')
+          ..write('iglesiaId: $iglesiaId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1197,15 +1669,343 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
+  late final $IglesiasTable iglesias = $IglesiasTable(this);
   late final $FeligresesTable feligreses = $FeligresesTable(this);
   late final $AportesTable aportes = $AportesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [feligreses, aportes];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    iglesias,
+    feligreses,
+    aportes,
+  ];
 }
 
+typedef $$IglesiasTableCreateCompanionBuilder =
+    IglesiasCompanion Function({
+      required String id,
+      required String nombre,
+      required int distrito,
+      Value<DateTime?> fechaLlegada,
+      Value<DateTime?> fechaSalida,
+      Value<String?> categoria,
+      Value<int> rowid,
+    });
+typedef $$IglesiasTableUpdateCompanionBuilder =
+    IglesiasCompanion Function({
+      Value<String> id,
+      Value<String> nombre,
+      Value<int> distrito,
+      Value<DateTime?> fechaLlegada,
+      Value<DateTime?> fechaSalida,
+      Value<String?> categoria,
+      Value<int> rowid,
+    });
+
+final class $$IglesiasTableReferences
+    extends BaseReferences<_$AppDatabase, $IglesiasTable, Iglesia> {
+  $$IglesiasTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$FeligresesTable, List<Feligrese>>
+  _feligresesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.feligreses,
+    aliasName: $_aliasNameGenerator(db.iglesias.id, db.feligreses.iglesiaId),
+  );
+
+  $$FeligresesTableProcessedTableManager get feligresesRefs {
+    final manager = $$FeligresesTableTableManager(
+      $_db,
+      $_db.feligreses,
+    ).filter((f) => f.iglesiaId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_feligresesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$IglesiasTableFilterComposer
+    extends Composer<_$AppDatabase, $IglesiasTable> {
+  $$IglesiasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nombre => $composableBuilder(
+    column: $table.nombre,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get distrito => $composableBuilder(
+    column: $table.distrito,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fechaLlegada => $composableBuilder(
+    column: $table.fechaLlegada,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fechaSalida => $composableBuilder(
+    column: $table.fechaSalida,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get categoria => $composableBuilder(
+    column: $table.categoria,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  Expression<bool> feligresesRefs(
+    Expression<bool> Function($$FeligresesTableFilterComposer f) f,
+  ) {
+    final $$FeligresesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.feligreses,
+      getReferencedColumn: (t) => t.iglesiaId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FeligresesTableFilterComposer(
+            $db: $db,
+            $table: $db.feligreses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$IglesiasTableOrderingComposer
+    extends Composer<_$AppDatabase, $IglesiasTable> {
+  $$IglesiasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nombre => $composableBuilder(
+    column: $table.nombre,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get distrito => $composableBuilder(
+    column: $table.distrito,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fechaLlegada => $composableBuilder(
+    column: $table.fechaLlegada,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fechaSalida => $composableBuilder(
+    column: $table.fechaSalida,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get categoria => $composableBuilder(
+    column: $table.categoria,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$IglesiasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $IglesiasTable> {
+  $$IglesiasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get nombre =>
+      $composableBuilder(column: $table.nombre, builder: (column) => column);
+
+  GeneratedColumn<int> get distrito =>
+      $composableBuilder(column: $table.distrito, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get fechaLlegada => $composableBuilder(
+    column: $table.fechaLlegada,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fechaSalida => $composableBuilder(
+    column: $table.fechaSalida,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get categoria =>
+      $composableBuilder(column: $table.categoria, builder: (column) => column);
+
+  Expression<T> feligresesRefs<T extends Object>(
+    Expression<T> Function($$FeligresesTableAnnotationComposer a) f,
+  ) {
+    final $$FeligresesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.feligreses,
+      getReferencedColumn: (t) => t.iglesiaId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$FeligresesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.feligreses,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$IglesiasTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $IglesiasTable,
+          Iglesia,
+          $$IglesiasTableFilterComposer,
+          $$IglesiasTableOrderingComposer,
+          $$IglesiasTableAnnotationComposer,
+          $$IglesiasTableCreateCompanionBuilder,
+          $$IglesiasTableUpdateCompanionBuilder,
+          (Iglesia, $$IglesiasTableReferences),
+          Iglesia,
+          PrefetchHooks Function({bool feligresesRefs})
+        > {
+  $$IglesiasTableTableManager(_$AppDatabase db, $IglesiasTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$IglesiasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$IglesiasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$IglesiasTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> nombre = const Value.absent(),
+                Value<int> distrito = const Value.absent(),
+                Value<DateTime?> fechaLlegada = const Value.absent(),
+                Value<DateTime?> fechaSalida = const Value.absent(),
+                Value<String?> categoria = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IglesiasCompanion(
+                id: id,
+                nombre: nombre,
+                distrito: distrito,
+                fechaLlegada: fechaLlegada,
+                fechaSalida: fechaSalida,
+                categoria: categoria,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String nombre,
+                required int distrito,
+                Value<DateTime?> fechaLlegada = const Value.absent(),
+                Value<DateTime?> fechaSalida = const Value.absent(),
+                Value<String?> categoria = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IglesiasCompanion.insert(
+                id: id,
+                nombre: nombre,
+                distrito: distrito,
+                fechaLlegada: fechaLlegada,
+                fechaSalida: fechaSalida,
+                categoria: categoria,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$IglesiasTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({feligresesRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (feligresesRefs) db.feligreses],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (feligresesRefs)
+                    await $_getPrefetchedData<
+                      Iglesia,
+                      $IglesiasTable,
+                      Feligrese
+                    >(
+                      currentTable: table,
+                      referencedTable: $$IglesiasTableReferences
+                          ._feligresesRefsTable(db),
+                      managerFromTypedResult: (p0) => $$IglesiasTableReferences(
+                        db,
+                        table,
+                        p0,
+                      ).feligresesRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.iglesiaId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$IglesiasTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $IglesiasTable,
+      Iglesia,
+      $$IglesiasTableFilterComposer,
+      $$IglesiasTableOrderingComposer,
+      $$IglesiasTableAnnotationComposer,
+      $$IglesiasTableCreateCompanionBuilder,
+      $$IglesiasTableUpdateCompanionBuilder,
+      (Iglesia, $$IglesiasTableReferences),
+      Iglesia,
+      PrefetchHooks Function({bool feligresesRefs})
+    >;
 typedef $$FeligresesTableCreateCompanionBuilder =
     FeligresesCompanion Function({
       required String id,
@@ -1221,6 +2021,7 @@ typedef $$FeligresesTableCreateCompanionBuilder =
       Value<bool> bautizadoAgua,
       Value<bool> bautizadoEspiritu,
       Value<String> tipoFeligres,
+      Value<String?> iglesiaId,
       Value<int> rowid,
     });
 typedef $$FeligresesTableUpdateCompanionBuilder =
@@ -1238,12 +2039,32 @@ typedef $$FeligresesTableUpdateCompanionBuilder =
       Value<bool> bautizadoAgua,
       Value<bool> bautizadoEspiritu,
       Value<String> tipoFeligres,
+      Value<String?> iglesiaId,
       Value<int> rowid,
     });
 
 final class $$FeligresesTableReferences
     extends BaseReferences<_$AppDatabase, $FeligresesTable, Feligrese> {
   $$FeligresesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $IglesiasTable _iglesiaIdTable(_$AppDatabase db) =>
+      db.iglesias.createAlias(
+        $_aliasNameGenerator(db.feligreses.iglesiaId, db.iglesias.id),
+      );
+
+  $$IglesiasTableProcessedTableManager? get iglesiaId {
+    final $_column = $_itemColumn<String>('iglesia_id');
+    if ($_column == null) return null;
+    final manager = $$IglesiasTableTableManager(
+      $_db,
+      $_db.iglesias,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_iglesiaIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static MultiTypedResultKey<$AportesTable, List<Aporte>> _aportesRefsTable(
     _$AppDatabase db,
@@ -1338,6 +2159,29 @@ class $$FeligresesTableFilterComposer
     column: $table.tipoFeligres,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$IglesiasTableFilterComposer get iglesiaId {
+    final $$IglesiasTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.iglesiaId,
+      referencedTable: $db.iglesias,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$IglesiasTableFilterComposer(
+            $db: $db,
+            $table: $db.iglesias,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<bool> aportesRefs(
     Expression<bool> Function($$AportesTableFilterComposer f) f,
@@ -1438,6 +2282,29 @@ class $$FeligresesTableOrderingComposer
     column: $table.tipoFeligres,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$IglesiasTableOrderingComposer get iglesiaId {
+    final $$IglesiasTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.iglesiaId,
+      referencedTable: $db.iglesias,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$IglesiasTableOrderingComposer(
+            $db: $db,
+            $table: $db.iglesias,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$FeligresesTableAnnotationComposer
@@ -1502,6 +2369,29 @@ class $$FeligresesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  $$IglesiasTableAnnotationComposer get iglesiaId {
+    final $$IglesiasTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.iglesiaId,
+      referencedTable: $db.iglesias,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$IglesiasTableAnnotationComposer(
+            $db: $db,
+            $table: $db.iglesias,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
   Expression<T> aportesRefs<T extends Object>(
     Expression<T> Function($$AportesTableAnnotationComposer a) f,
   ) {
@@ -1541,7 +2431,7 @@ class $$FeligresesTableTableManager
           $$FeligresesTableUpdateCompanionBuilder,
           (Feligrese, $$FeligresesTableReferences),
           Feligrese,
-          PrefetchHooks Function({bool aportesRefs})
+          PrefetchHooks Function({bool iglesiaId, bool aportesRefs})
         > {
   $$FeligresesTableTableManager(_$AppDatabase db, $FeligresesTable table)
     : super(
@@ -1569,6 +2459,7 @@ class $$FeligresesTableTableManager
                 Value<bool> bautizadoAgua = const Value.absent(),
                 Value<bool> bautizadoEspiritu = const Value.absent(),
                 Value<String> tipoFeligres = const Value.absent(),
+                Value<String?> iglesiaId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion(
                 id: id,
@@ -1584,6 +2475,7 @@ class $$FeligresesTableTableManager
                 bautizadoAgua: bautizadoAgua,
                 bautizadoEspiritu: bautizadoEspiritu,
                 tipoFeligres: tipoFeligres,
+                iglesiaId: iglesiaId,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1601,6 +2493,7 @@ class $$FeligresesTableTableManager
                 Value<bool> bautizadoAgua = const Value.absent(),
                 Value<bool> bautizadoEspiritu = const Value.absent(),
                 Value<String> tipoFeligres = const Value.absent(),
+                Value<String?> iglesiaId = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion.insert(
                 id: id,
@@ -1616,6 +2509,7 @@ class $$FeligresesTableTableManager
                 bautizadoAgua: bautizadoAgua,
                 bautizadoEspiritu: bautizadoEspiritu,
                 tipoFeligres: tipoFeligres,
+                iglesiaId: iglesiaId,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -1626,11 +2520,42 @@ class $$FeligresesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({aportesRefs = false}) {
+          prefetchHooksCallback: ({iglesiaId = false, aportesRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [if (aportesRefs) db.aportes],
-              addJoins: null,
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (iglesiaId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.iglesiaId,
+                                referencedTable: $$FeligresesTableReferences
+                                    ._iglesiaIdTable(db),
+                                referencedColumn: $$FeligresesTableReferences
+                                    ._iglesiaIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (aportesRefs)
@@ -1672,7 +2597,7 @@ typedef $$FeligresesTableProcessedTableManager =
       $$FeligresesTableUpdateCompanionBuilder,
       (Feligrese, $$FeligresesTableReferences),
       Feligrese,
-      PrefetchHooks Function({bool aportesRefs})
+      PrefetchHooks Function({bool iglesiaId, bool aportesRefs})
     >;
 typedef $$AportesTableCreateCompanionBuilder =
     AportesCompanion Function({
@@ -2018,6 +2943,8 @@ typedef $$AportesTableProcessedTableManager =
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
+  $$IglesiasTableTableManager get iglesias =>
+      $$IglesiasTableTableManager(_db, _db.iglesias);
   $$FeligresesTableTableManager get feligreses =>
       $$FeligresesTableTableManager(_db, _db.feligreses);
   $$AportesTableTableManager get aportes =>
