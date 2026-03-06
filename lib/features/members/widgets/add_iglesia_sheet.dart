@@ -62,12 +62,7 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
   void _guardarIglesia() async {
     if (_formKey.currentState!.validate()) {
       if (_distritoSeleccionado == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Por favor, selecciona un distrito'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        CustomSnackBar.showWarning(context, 'Por favor selecciona un distrito');
         return;
       }
 
@@ -75,7 +70,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
       // Capture the navigator BEFORE async operations
       final navigator = Navigator.of(context);
-      final messenger = ScaffoldMessenger.of(context);
 
       final database = ref.read(databaseProvider);
       final authService = ref.read(authServiceProvider);
@@ -119,23 +113,14 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
         // Close window using the safe variable
         navigator.pop();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.iglesiaParaEditar == null
-                  ? 'Sede registrada correctamente'
-                  : 'Sede actualizada correctamente',
-            ),
-            backgroundColor: Colors.green,
-          ),
+        CustomSnackBar.showSuccess(
+          context,
+          widget.iglesiaParaEditar == null
+              ? 'Sede registrada correctamente'
+              : 'Sede actualizada correctamente',
         );
       } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        CustomSnackBar.showError(context, 'Error al guardar: $e');
       } finally {
         if (mounted) setState(() => _isSaving = false);
       }
@@ -222,7 +207,7 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
       if (mounted) {
         Navigator.pop(context);
-        CustomSnackBar.showSuccess(context, 'Sede eliminada permanentemente');
+        CustomSnackBar.showWarning(context, 'Sede eliminada permanentemente');
       }
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error al eliminar: $e');

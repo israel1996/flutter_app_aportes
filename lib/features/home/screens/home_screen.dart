@@ -60,20 +60,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      // We directly ask the absolute source of truth (the cloud) if this user has any churches.
-      // RLS policies will ensure it only counts churches belonging to this specific user.
-      final response = await supabase.from('iglesias').select('id').limit(1);
+      // --- THE FIX: ABORT IF USER IS PENDING ---
+      // This prevents the modal from flashing during the 1-second auto-login window after signUp.
+      final userData = await supabase
+          .from('usuarios_app')
+          .select('estado')
+          .eq('id', user.id)
+          .maybeSingle();
 
-      // If Supabase confirms they have 0 churches, we force the registration modal
+      if (userData != null && userData['estado'] == 'pendiente') {
+        return; // Abort silently. The AuthService will log them out in a millisecond anyway.
+      }
+
+      // 1. MODAL TIMING & STRICT QUERY FIX
+      final response = await supabase
+          .from('iglesias')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
+
       if (response.isEmpty && mounted) {
-        showModalBottomSheet(
-          context: context,
-          isDismissible: false,
-          enableDrag: false,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => const AddIglesiaSheet(),
-        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            showModalBottomSheet(
+              context: context,
+              isDismissible: false,
+              enableDrag: false,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const AddIglesiaSheet(),
+            );
+          }
+        });
       }
     } catch (e) {
       debugPrint('Error verifying cloud churches: $e');
@@ -92,11 +110,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           connectivity.contains(ConnectivityResult.ethernet);
 
       if (!hasInternet) {
-        if (mounted)
+        if (mounted) {
           CustomSnackBar.showWarning(
             context,
             'Modo Offline: Sin conexión a Internet',
           );
+        }
         return;
       }
 
@@ -108,11 +127,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       await syncService.syncAll();
 
-      if (mounted)
+      if (mounted) {
         CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         CustomSnackBar.showError(context, 'Error al sincronizar: $e');
+      }
     } finally {
       if (mounted) {
         setState(() => _isSyncing = false);
@@ -159,6 +180,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     try {
       await database.clearAllData();
       await authService.signOut();
+
+      // 2. CLEAR GHOST DATA FIX
+      // Wipes the church from memory so a new user doesn't inherit it
+      ref.read(currentIglesiaProvider.notifier).state = null;
     } catch (e) {}
 
     if (mounted) {
@@ -178,6 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     // --- ESTADO GLOBAL DE NAVEGACIÓN ---
     final selectedIndex = ref.watch(navIndexProvider);
+    final currentIglesia = ref.watch(currentIglesiaProvider);
 
     return userRoleAsync.when(
       loading: () => const Scaffold(
@@ -371,7 +397,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ), // <--- ADDED HERE
+                                ),
                                 const SizedBox(width: 16),
                                 Flexible(
                                   child: FittedBox(
@@ -440,12 +466,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     if (!isDesktop)
                       _buildMobileIglesiaSelector(colorScheme, isDark),
 
+                    // --- 3. HARD UI BLOCK FIX ---
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                        child: selectedIndex < pages.length
-                            ? pages[selectedIndex]
-                            : pages[0],
+                        child: currentIglesia == null
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(
+                                      Icons.church_outlined,
+                                      size: 80,
+                                      color: Colors.grey,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Bienvenido.\nPara comenzar a usar el sistema, debe registrar una Sede.',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        color: Colors.grey,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 24),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          isDismissible: false,
+                                          enableDrag: false,
+                                          backgroundColor: Colors.transparent,
+                                          builder: (_) =>
+                                              const AddIglesiaSheet(),
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 12,
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.add),
+                                      label: Text(
+                                        'Registrar Primera Sede',
+                                        style: GoogleFonts.poppins(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : (selectedIndex < pages.length
+                                  ? pages[selectedIndex]
+                                  : pages[0]),
                       ),
                     ),
                   ],
@@ -504,7 +581,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         case 1:
           return 'APORTES';
         case 2:
-          return 'EXPORTAR';
+          return 'REPORTES';
         case 3:
           return 'PANEL DE APROBACIÓN';
         default:
@@ -517,7 +594,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         case 1:
           return 'FELIGRESES';
         case 2:
-          return 'EXPORTAR';
+          return 'REPORTES';
         case 3:
           return 'PANEL DE APROBACIÓN';
         default:
@@ -697,8 +774,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         context: context,
                         isScrollControlled: true,
                         backgroundColor: Colors.transparent,
-                        builder: (_) =>
-                            const AddIglesiaSheet(), // No parameters = Create Mode
+                        builder: (_) => const AddIglesiaSheet(),
                       );
                     },
                   ),
@@ -775,8 +851,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return GestureDetector(
       onTap: () {
         ref.read(environmentProvider.notifier).state = target;
-        ref.read(navIndexProvider.notifier).state =
-            0; // Regresa al dashboard al cambiar
+        ref.read(navIndexProvider.notifier).state = 0;
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -866,15 +941,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Iglesia? validDropdownValue;
 
             if (iglesias.isNotEmpty) {
-              // 2. AUTO-SELECT THE CHURCH
               if (currentIglesia != null &&
                   iglesias.any((i) => i.id == currentIglesia.id)) {
                 validDropdownValue = iglesias.firstWhere(
                   (i) => i.id == currentIglesia.id,
                 );
               } else {
-                // If there is no current church selected (e.g., app just started),
-                // default to the first one on the list so they never start with a null church.
                 validDropdownValue = iglesias.first;
                 Future.microtask(
                   () => ref.read(currentIglesiaProvider.notifier).state =
@@ -907,7 +979,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     Expanded(
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<Iglesia>(
-                          // Pass the validated instance here
                           value: validDropdownValue,
                           icon: const Icon(Icons.arrow_drop_down, size: 20),
                           isExpanded: true,
@@ -933,7 +1004,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                       ),
                     ),
-
                     IconButton(
                       icon: const Icon(
                         Icons.add_circle_outline,
@@ -948,8 +1018,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              const AddIglesiaSheet(), // No parameters = Create Mode
+                          builder: (_) => const AddIglesiaSheet(),
                         );
                       },
                     ),

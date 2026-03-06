@@ -64,7 +64,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   Future<void> _saveFeligres() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedGender == null) {
-      CustomSnackBar.showWarning(context, 'Please select a gender');
+      CustomSnackBar.showWarning(context, 'Por favor seleccione un género');
       return;
     }
 
@@ -73,7 +73,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
     if (currentIglesia == null) {
       CustomSnackBar.showError(
         context,
-        'You must register or select a Church (Sede) from the main menu first.',
+        'Debes registrar o seleccionar una Iglesia (Sede) del menú principal.',
       );
       return;
     }
@@ -133,11 +133,11 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(
           context,
-          'Parishioner registered in ${currentIglesia.nombre}',
+          'Feligrés registrado en ${currentIglesia.nombre}',
         );
       }
     } catch (e) {
-      if (mounted) CustomSnackBar.showError(context, 'Error saving locally:$e');
+      if (mounted) CustomSnackBar.showError(context, 'Error al guardar:$e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

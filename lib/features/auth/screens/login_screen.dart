@@ -34,7 +34,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       );
     } catch (e) {
       if (mounted) {
-        CustomSnackBar.showError(context, 'Error al iniciar sesión: $e');
+        final errorMessage = e.toString();
+
+        // Check if the error is related to a pending account
+        if (errorMessage.contains('pendiente')) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    color: Colors.orange,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Cuenta Inactiva',
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Debe contactarse con el administrador para activar la cuenta antes de poder iniciar sesión.',
+                style: GoogleFonts.poppins(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Entendido',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // For any other error, clean the text and show the SnackBar
+          final cleanError = errorMessage.replaceAll('Exception: ', '');
+          CustomSnackBar.showError(context, cleanError);
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -202,11 +250,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: () {
-                            // OPEN THE NEW VERIFICATION DIALOG!
                             showDialog(
                               context: context,
-                              barrierDismissible:
-                                  false, // Prevents closing by tapping outside
+                              barrierDismissible: false,
                               builder: (context) => const RecoveryDialog(),
                             );
                           },

@@ -26,7 +26,7 @@ class AuthService {
         if (estado == 'pendiente') {
           await signOut();
           throw Exception(
-            'Su cuenta está pendiente de aprobación por el administrador.',
+            'Su cuenta está pendiente. Debe contactarse con el administrador para activar la cuenta.',
           );
         } else if (estado == 'inactivo') {
           await signOut();
