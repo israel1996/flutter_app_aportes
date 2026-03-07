@@ -89,6 +89,8 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
             syncStatus: const drift.Value(0), // Mark for cloud sync
           );
           await database.into(database.iglesias).insert(nuevaIglesia);
+          ref.read(currentIglesiaProvider.notifier).state =
+              nuevaIglesia as Iglesia?;
         } else {
           // MODE: EDIT EXISTING
           await database
