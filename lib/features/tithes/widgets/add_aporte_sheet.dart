@@ -76,7 +76,7 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Save locally to SQLite
+      // 1. Save locally to SQLite (Instant)
       await database.insertAporte(
         AportesCompanion.insert(
           id: const Uuid().v4(),
@@ -88,31 +88,26 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
         ),
       );
 
-      // 2. Opportunistic Background Sync
-      try {
-        final connectivity = await Connectivity().checkConnectivity();
+      // 2. Close & Show Success IMMEDIATELY
+      if (mounted) {
+        Navigator.pop(context);
+        CustomSnackBar.showSuccess(context, 'Aporte registrado exitosamente');
+      }
+
+      // 3. Opportunistic Background Sync (NO 'await')
+      Connectivity().checkConnectivity().then((connectivity) {
         final hasInternet =
             connectivity.contains(ConnectivityResult.mobile) ||
             connectivity.contains(ConnectivityResult.wifi) ||
             connectivity.contains(ConnectivityResult.ethernet);
 
-        if (hasInternet) {
-          final authService = ref.read(authServiceProvider);
-          if (authService.currentUser != null) {
-            final syncService = SyncService(database);
-            await syncService.syncAll();
-            debugPrint("✅ Auto-sync background complete.");
-          }
+        if (hasInternet && ref.read(authServiceProvider).currentUser != null) {
+          final syncService = SyncService(database);
+          syncService.syncAll().catchError(
+            (e) => debugPrint("Auto-sync failed: $e"),
+          );
         }
-      } catch (syncError) {
-        debugPrint("⚠️ Auto-sync skipped or failed: $syncError");
-      }
-
-      // 3. Close & Show Success
-      if (mounted) {
-        Navigator.pop(context);
-        CustomSnackBar.showSuccess(context, 'Aporte registrado exitosamente');
-      }
+      });
     } catch (e) {
       if (mounted) {
         CustomSnackBar.showError(context, 'Error al guardar localmente: $e');

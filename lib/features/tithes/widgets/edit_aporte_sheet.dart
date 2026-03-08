@@ -65,28 +65,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
     }
   }
 
-  // --- BACKGROUND SYNC HELPER ---
-  Future<void> _triggerBackgroundSync() async {
-    try {
-      final connectivity = await Connectivity().checkConnectivity();
-      final hasInternet =
-          connectivity.contains(ConnectivityResult.mobile) ||
-          connectivity.contains(ConnectivityResult.wifi) ||
-          connectivity.contains(ConnectivityResult.ethernet);
-
-      if (hasInternet) {
-        final authService = ref.read(authServiceProvider);
-        if (authService.currentUser != null) {
-          final syncService = SyncService(ref.read(databaseProvider));
-          await syncService.syncAll();
-        }
-      }
-    } catch (e) {
-      debugPrint("Auto-sync skipped: $e");
-    }
-  }
-
-  // --- UPDATE LOGIC ---
   Future<void> _updateAporte() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -94,6 +72,7 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
     final database = ref.read(databaseProvider);
 
     try {
+      // 1. Update locally
       await database
           .update(database.aportes)
           .replace(
@@ -101,20 +80,23 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
               monto: double.parse(_montoController.text.trim()),
               tipo: _selectedTipo,
               fecha: _selectedDate,
-              syncStatus: 0, // Mark as pending sync
+              syncStatus: 0,
             ),
           );
 
-      await _triggerBackgroundSync();
-
+      // 2. Close window instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Aporte actualizado');
       }
+
+      // 3. Trigger background sync without awaiting
+      final syncService = SyncService(database);
+      syncService.syncAll().catchError(
+        (e) => debugPrint("Auto-sync skipped: $e"),
+      );
     } catch (e) {
-      if (mounted) {
-        CustomSnackBar.showError(context, 'Error: $e');
-      }
+      if (mounted) CustomSnackBar.showError(context, 'Error: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -148,7 +130,7 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Check internet connection
+      // 1. Check internet connection for secure deletion
       final connectivity = await Connectivity().checkConnectivity();
       final hasInternet =
           connectivity.contains(ConnectivityResult.mobile) ||
@@ -157,19 +139,23 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
 
       if (!hasInternet) {
         throw Exception(
-          'Se requiere conexión a internet para eliminar un registro financiero permanentemente de la nube.',
+          'Se requiere conexión a internet para eliminar un registro financiero.',
         );
       }
 
-      // 2. Delete from Supabase FIRST
+      // 2. DELTA SYNC FLAG: Soft delete from Supabase FIRST
       final supabase = Supabase.instance.client;
       await supabase
           .from('aportes')
-          .delete()
+          .update({
+            'is_deleted': true,
+            'updated_at': DateTime.now()
+                .toUtc()
+                .toIso8601String(), // Force timestamp update
+          })
           .eq('id', widget.aporteItem.aporte.id);
 
-      // 3. If cloud deletion succeeds, delete from local SQLite
-      // Using a direct query ensures Drift deletes the exact ID properly
+      // 3. Hard delete from local SQLite
       await (database.delete(
         database.aportes,
       )..where((tbl) => tbl.id.equals(widget.aporteItem.aporte.id))).go();
@@ -178,10 +164,18 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
         Navigator.pop(context);
         CustomSnackBar.showWarning(context, 'Aporte eliminado permanentemente');
       }
+
+      // 4. Trigger background sync to propagate the deletion to other devices
+      Future.microtask(() {
+        final authService = ref.read(authServiceProvider);
+        if (authService.currentUser != null) {
+          SyncService(
+            database,
+          ).syncAll().catchError((e) => debugPrint("Sync error: $e"));
+        }
+      });
     } catch (e) {
-      if (mounted) {
-        CustomSnackBar.showError(context, 'Error al eliminar: $e');
-      }
+      if (mounted) CustomSnackBar.showError(context, 'Error al eliminar: $e');
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

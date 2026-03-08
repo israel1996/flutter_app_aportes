@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -195,22 +196,54 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
     setState(() => _isSaving = true);
 
     try {
-      // 3. DELETE FROM CLOUD FIRST
+      // 1. Check internet connection
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasInternet =
+          connectivity.contains(ConnectivityResult.mobile) ||
+          connectivity.contains(ConnectivityResult.wifi) ||
+          connectivity.contains(ConnectivityResult.ethernet);
+
+      if (!hasInternet) {
+        throw Exception(
+          'Se requiere conexión a internet para eliminar una Sede.',
+        );
+      }
+
+      // 2. DELTA SYNC FLAG: Soft delete from Supabase FIRST
       final supabase = Supabase.instance.client;
       await supabase
           .from('iglesias')
-          .delete()
+          .update({
+            'is_deleted': true,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
           .eq('id', widget.iglesiaParaEditar!.id);
 
-      // 4. DELETE FROM LOCAL DATABASE
+      // 3. Hard delete from local SQLite
       await (database.delete(
         database.iglesias,
       )..where((tbl) => tbl.id.equals(widget.iglesiaParaEditar!.id))).go();
+
+      // 4. If the user deleted the church they currently had selected, reset the state
+      final currentSelected = ref.read(currentIglesiaProvider);
+      if (currentSelected?.id == widget.iglesiaParaEditar!.id) {
+        ref.read(currentIglesiaProvider.notifier).state = null;
+      }
 
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showWarning(context, 'Sede eliminada permanentemente');
       }
+
+      // 5. Trigger background sync
+      Future.microtask(() {
+        final authService = ref.read(authServiceProvider);
+        if (authService.currentUser != null) {
+          SyncService(
+            database,
+          ).syncAll().catchError((e) => debugPrint("Sync error: $e"));
+        }
+      });
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error al eliminar: $e');
     } finally {

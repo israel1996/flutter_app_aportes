@@ -38,10 +38,10 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   bool _bautizadoEspiritu = false;
 
   final List<String> _estadosCiviles = [
-    'Soltero',
-    'Casado',
-    'Divorciado',
-    'Viudo',
+    'Soltero(a)',
+    'Casado(a)',
+    'Divorciado(a)',
+    'Viudo(a)',
     'Unión Libre',
   ];
   final List<String> _tiposFeligres = ['simpatizante', 'feligres', 'visita'];
@@ -67,7 +67,13 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     _cedulaController = TextEditingController(
       text: widget.feligres.cedula ?? '',
     );
-    _estadoCivil = widget.feligres.estadoCivil;
+    // Safe fallback: Only assign if the value exists in our list
+    final dbEstado = widget.feligres.estadoCivil;
+    if (dbEstado != null && _estadosCiviles.contains(dbEstado)) {
+      _estadoCivil = dbEstado;
+    } else {
+      _estadoCivil = null;
+    }
     _tipoFeligres = widget.feligres.tipoFeligres ?? 'feligres';
     _poseeDiscapacidad = widget.feligres.poseeDiscapacidad;
     _bautizadoAgua = widget.feligres.bautizadoAgua;
@@ -96,26 +102,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     }
   }
 
-  Future<void> _triggerBackgroundSync() async {
-    try {
-      final connectivity = await Connectivity().checkConnectivity();
-      final hasInternet =
-          connectivity.contains(ConnectivityResult.mobile) ||
-          connectivity.contains(ConnectivityResult.wifi) ||
-          connectivity.contains(ConnectivityResult.ethernet);
-
-      if (hasInternet) {
-        final authService = ref.read(authServiceProvider);
-        if (authService.currentUser != null) {
-          final syncService = SyncService(ref.read(databaseProvider));
-          await syncService.syncAll();
-        }
-      }
-    } catch (e) {
-      debugPrint("Auto-sync skipped: $e");
-    }
-  }
-
   Future<void> _updateFeligres() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -123,6 +109,7 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
+      // 1. Update Locally
       await database
           .update(database.feligreses)
           .replace(
@@ -135,7 +122,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
               ),
               genero: drift.Value(_selectedGender),
               fechaNacimiento: drift.Value(_selectedDate),
-              // --- SAVE NEW FIELDS ---
               cedula: drift.Value(
                 _cedulaController.text.trim().isEmpty
                     ? null
@@ -150,12 +136,17 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
             ),
           );
 
-      await _triggerBackgroundSync();
-
+      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Feligrés actualizado');
       }
+
+      // 3. Trigger sync in background
+      final syncService = SyncService(database);
+      syncService.syncAll().catchError(
+        (e) => debugPrint("Auto-sync skipped: $e"),
+      );
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error: $e');
     } finally {
@@ -164,7 +155,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   }
 
   Future<void> _deleteFeligres() async {
-    // (Your existing delete logic remains identical)
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -192,15 +182,22 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
+      // 1. Update Locally (Soft Delete)
       await database
           .update(database.feligreses)
           .replace(widget.feligres.copyWith(activo: 0, syncStatus: 0));
-      await _triggerBackgroundSync();
 
+      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showWarning(context, 'Feligrés eliminado');
       }
+
+      // 3. Trigger sync in background (NO 'await')
+      final syncService = SyncService(database);
+      syncService.syncAll().catchError(
+        (e) => debugPrint("Auto-sync skipped: $e"),
+      );
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error: $e');
     } finally {
@@ -213,14 +210,22 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
+      // 1. Update Locally (Restore)
       await database
           .update(database.feligreses)
           .replace(widget.feligres.copyWith(activo: 1, syncStatus: 0));
-      await _triggerBackgroundSync();
+
+      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Feligrés restaurado con éxito');
       }
+
+      // 3. Trigger sync in background (NO 'await')
+      final syncService = SyncService(database);
+      syncService.syncAll().catchError(
+        (e) => debugPrint("Auto-sync skipped: $e"),
+      );
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error: $e');
     } finally {

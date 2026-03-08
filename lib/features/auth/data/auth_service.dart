@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../providers.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -40,7 +42,8 @@ class AuthService {
           );
         }
       } catch (e) {
-        if (e.toString().contains('Su cuenta')) {
+        if (e.toString().contains('Su cuenta') ||
+            e.toString().contains('solicitado')) {
           rethrow;
         } else {
           await signOut();
@@ -54,7 +57,26 @@ class AuthService {
     return response;
   }
 
-  Future<void> signOut() async {
+  // UPDATED SIGNOUT METHOD FOR DELTA SYNC
+  Future<void> signOut({dynamic ref}) async {
+    if (ref != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('last_sync_time');
+
+        final db = ref.read(databaseProvider);
+        await db.delete(db.aportes).go();
+        await db.delete(db.feligreses).go();
+        await db.delete(db.iglesias).go();
+
+        // 3. Reset the UI selection
+        ref.read(currentIglesiaProvider.notifier).state = null;
+      } catch (e) {
+        print("Error clearing local data during logout: $e");
+      }
+    }
+
+    // 4. Always sign out from Supabase
     await _supabase.auth.signOut();
   }
 

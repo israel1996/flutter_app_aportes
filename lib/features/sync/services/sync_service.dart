@@ -1,207 +1,272 @@
 import 'package:flutter/foundation.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:drift/drift.dart' as drift;
+
 import '../../../core/database/database.dart';
 
 class SyncService {
-  final AppDatabase localDb;
-  final SupabaseClient cloudDb;
+  final AppDatabase database;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  SyncService(this.localDb) : cloudDb = Supabase.instance.client;
+  SyncService(this.database);
 
+  /// Main entry point for the Delta Sync architecture
   Future<void> syncAll() async {
-    final session = cloudDb.auth.currentSession;
+    final connectivity = await Connectivity().checkConnectivity();
+    final hasInternet =
+        connectivity.contains(ConnectivityResult.mobile) ||
+        connectivity.contains(ConnectivityResult.wifi) ||
+        connectivity.contains(ConnectivityResult.ethernet);
 
-    if (session == null || session.isExpired) {
-      debugPrint("⚠️ No active session yet. Skipping cloud sync for now.");
-      return;
-    }
+    if (!hasInternet || _supabase.auth.currentUser == null) return;
 
-    await pushLocalChanges();
-    await pullFromCloud();
+    // Yield the thread to prevent UI freezing
+    await Future.microtask(() async {
+      try {
+        debugPrint("--- STARTING DELTA SYNC ---");
+
+        // 1. PUSH: Upload local changes to the cloud first
+        await _pushLocalChanges();
+
+        // 2. GET TIMESTAMP: Retrieve the exact time of the last sync
+        final prefs = await SharedPreferences.getInstance();
+        final lastSyncStr = prefs.getString('last_sync_time');
+
+        // 3. PULL: Download only the data modified AFTER the last sync
+        await _pullIglesias(lastSyncStr);
+        await _pullFeligreses(lastSyncStr);
+        await _pullAportes(lastSyncStr);
+
+        // 4. UPDATE TIMESTAMP: Save the new sync time
+        final now = DateTime.now().toUtc().toIso8601String();
+        await prefs.setString('last_sync_time', now);
+
+        debugPrint("--- DELTA SYNC COMPLETE ---");
+      } catch (e) {
+        debugPrint("Background sync failed: $e");
+      }
+    });
   }
 
-  Future<void> pushLocalChanges() async {
-    final currentUser = cloudDb.auth.currentUser;
-    if (currentUser == null) return;
+  // =========================================================================
+  // PUSH PHASE (Local to Cloud)
+  // =========================================================================
 
-    // 1. SYNC CHURCHES
-    final pendingIglesias = await (localDb.select(
-      localDb.iglesias,
-    )..where((tbl) => tbl.syncStatus.equals(0))).get();
-    for (var iglesia in pendingIglesias) {
-      try {
-        await cloudDb.from('iglesias').upsert({
-          'id': iglesia.id,
-          'user_id': currentUser.id, // Assign to current pastor
-          'nombre': iglesia.nombre,
-          'distrito': iglesia.distrito,
-          'fecha_llegada': iglesia.fechaLlegada?.toIso8601String(),
-          'fecha_salida': iglesia.fechaSalida?.toIso8601String(),
-          'categoria': iglesia.categoria,
-          'sync_status': 1,
-        });
-        await (localDb.update(localDb.iglesias)
-              ..where((tbl) => tbl.id.equals(iglesia.id)))
-            .write(IglesiasCompanion(syncStatus: const drift.Value(1)));
-        debugPrint("Uploaded Church: ${iglesia.nombre}");
-      } catch (e) {
-        debugPrint("Error pushing church: $e");
-      }
-    }
+  Future<void> _pushLocalChanges() async {
+    await _pushIglesias();
+    await _pushFeligreses();
+    await _pushAportes();
+  }
 
-    final pendingMembers = await (localDb.select(
-      localDb.feligreses,
+  Future<void> _pushIglesias() async {
+    final pending = await (database.select(
+      database.iglesias,
     )..where((tbl) => tbl.syncStatus.equals(0))).get();
 
-    for (var person in pendingMembers) {
+    for (final local in pending) {
       try {
-        await cloudDb.from('feligreses').upsert({
-          'id': person.id,
-          'nombre': person.nombre,
-          'telefono': person.telefono,
-          'genero': person.genero,
-          'fechanacimiento': person.fechaNacimiento?.toIso8601String(),
-          'activo': person.activo,
-          'cedula': person.cedula,
-          'estado_civil': person.estadoCivil,
-          'tipo_feligres': person.tipoFeligres,
-          'posee_discapacidad': person.poseeDiscapacidad,
-          'bautizado_agua': person.bautizadoAgua,
-          'bautizado_espiritu': person.bautizadoEspiritu,
-          'iglesia_id': person.iglesiaId,
-        });
-        await (localDb.update(localDb.feligreses)
-              ..where((tbl) => tbl.id.equals(person.id)))
-            .write(FeligresesCompanion(syncStatus: const drift.Value(1)));
-        debugPrint("Uploaded: ${person.nombre}");
-      } catch (e) {
-        debugPrint("Error pushing member ${person.nombre}: $e");
-      }
-    }
-
-    final pendingAportes = await (localDb.select(
-      localDb.aportes,
-    )..where((tbl) => tbl.syncStatus.equals(0))).get();
-
-    for (var item in pendingAportes) {
-      try {
-        await cloudDb.from('aportes').upsert({
-          'id': item.id,
-          'feligres_id': item.feligresId,
-          'monto': item.monto,
-          'tipo': item.tipo,
-          'fecha': item.fecha.toIso8601String(),
+        await _supabase.from('iglesias').upsert({
+          'id': local.id,
+          'nombre': local.nombre,
+          'distrito': local.distrito,
+          'categoria': local.categoria,
+          'fecha_llegada': local.fechaLlegada?.toIso8601String(),
+          'fecha_salida': local.fechaSalida?.toIso8601String(),
+          'user_id': _supabase.auth.currentUser!.id,
+          'is_deleted': false, // Soft delete flag
         });
 
-        await (localDb.update(localDb.aportes)
-              ..where((tbl) => tbl.id.equals(item.id)))
-            .write(AportesCompanion(syncStatus: const drift.Value(1)));
-        debugPrint("Uploaded Tithe: \$${item.monto}");
+        // Mark as synced locally
+        await (database.update(database.iglesias)
+              ..where((tbl) => tbl.id.equals(local.id)))
+            .write(const IglesiasCompanion(syncStatus: drift.Value(1)));
       } catch (e) {
-        debugPrint("Error pushing tithe: $e");
+        debugPrint("Push Iglesia Error: $e");
       }
     }
   }
 
-  Future<void> pullFromCloud() async {
-    try {
-      final currentUser = cloudDb.auth.currentUser;
-      if (currentUser == null) throw Exception("User not logged in");
-      // 1. PULL ONLY THIS USER'S CHURCHES
-      final List<dynamic> cloudIglesias = await cloudDb
-          .from('iglesias')
-          .select()
-          .eq('user_id', currentUser.id); // Filter by pastor
+  Future<void> _pushFeligreses() async {
+    final pending = await (database.select(
+      database.feligreses,
+    )..where((tbl) => tbl.syncStatus.equals(0))).get();
 
-      debugPrint("Downloaded ${cloudIglesias.length} iglesias from cloud.");
+    for (final local in pending) {
+      try {
+        await _supabase.from('feligreses').upsert({
+          'id': local.id,
+          'iglesia_id': local.iglesiaId,
+          'user_id': _supabase.auth.currentUser!.id,
+          'nombre': local.nombre,
+          'genero': local.genero,
+          'telefono': local.telefono,
+          'fechanacimiento': local.fechaNacimiento?.toIso8601String(),
+          'cedula': local.cedula,
+          'estado_civil': local.estadoCivil,
+          'posee_discapacidad': local.poseeDiscapacidad,
+          'bautizado_agua': local.bautizadoAgua,
+          'bautizado_espiritu': local.bautizadoEspiritu,
+          'tipo_feligres': local.tipoFeligres,
+          'activo': local.activo,
+        });
 
-      for (var data in cloudIglesias) {
-        await localDb
-            .into(localDb.iglesias)
-            .insertOnConflictUpdate(
-              IglesiasCompanion(
-                id: drift.Value(data['id']),
-                userId: drift.Value(data['user_id']),
-                nombre: drift.Value(data['nombre']),
-                distrito: drift.Value(data['distrito']),
-                categoria: drift.Value(data['categoria']),
-                fechaLlegada: drift.Value(
-                  data['fecha_llegada'] != null
-                      ? DateTime.parse(data['fecha_llegada'])
-                      : null,
-                ),
-                fechaSalida: drift.Value(
-                  data['fecha_salida'] != null
-                      ? DateTime.parse(data['fecha_salida'])
-                      : null,
-                ),
-                syncStatus: const drift.Value(1),
-              ),
-            );
+        await (database.update(database.feligreses)
+              ..where((tbl) => tbl.id.equals(local.id)))
+            .write(const FeligresesCompanion(syncStatus: drift.Value(1)));
+      } catch (e) {
+        debugPrint("Push Feligres Error: $e");
       }
-
-      final List<dynamic> cloudMembers = await cloudDb
-          .from('feligreses')
-          .select();
-
-      debugPrint("Downloaded ${cloudMembers.length} members from cloud.");
-
-      for (var data in cloudMembers) {
-        await localDb
-            .into(localDb.feligreses)
-            .insertOnConflictUpdate(
-              FeligresesCompanion(
-                id: drift.Value(data['id']),
-                nombre: drift.Value(data['nombre']),
-                telefono: drift.Value(data['telefono']),
-                activo: drift.Value(
-                  data['activo'] == 1 || data['activo'] == true ? 1 : 0,
-                ),
-                syncStatus: const drift.Value(1),
-                genero: drift.Value(data['genero']),
-                fechaNacimiento: drift.Value(
-                  data['fechanacimiento'] != null
-                      ? DateTime.tryParse(data['fechanacimiento'].toString())
-                      : null,
-                ),
-                cedula: drift.Value(data['cedula']),
-                estadoCivil: drift.Value(data['estado_civil']),
-                tipoFeligres: drift.Value(data['tipo_feligres']),
-                poseeDiscapacidad: drift.Value(data['posee_discapacidad']),
-                bautizadoAgua: drift.Value(data['bautizado_agua']),
-                bautizadoEspiritu: drift.Value(data['bautizado_espiritu']),
-                iglesiaId: drift.Value(data['iglesia_id']),
-              ),
-            );
-      }
-
-      debugPrint("Local DB updated successfully.");
-
-      final List<dynamic> cloudAportes = await cloudDb.from('aportes').select();
-
-      for (var data in cloudAportes) {
-        await localDb
-            .into(localDb.aportes)
-            .insertOnConflictUpdate(
-              AportesCompanion(
-                id: drift.Value(data['id']),
-                feligresId: drift.Value(data['feligres_id']),
-                monto: drift.Value(
-                  data['monto'] is int
-                      ? (data['monto'] as int).toDouble()
-                      : data['monto'],
-                ), // Handle numeric conversion safely
-                tipo: drift.Value(data['tipo']),
-                fecha: drift.Value(DateTime.parse(data['fecha'])),
-                syncStatus: const drift.Value(1), // Synced!
-              ),
-            );
-      }
-      debugPrint("Tithes downloaded successfully.");
-    } catch (e) {
-      debugPrint("Error pulling data: $e");
-      rethrow; // Pass the error to the UI
     }
+  }
+
+  Future<void> _pushAportes() async {
+    final pending = await (database.select(
+      database.aportes,
+    )..where((tbl) => tbl.syncStatus.equals(0))).get();
+
+    for (final local in pending) {
+      try {
+        await _supabase.from('aportes').upsert({
+          'id': local.id,
+          'feligres_id': local.feligresId,
+          'user_id': _supabase.auth.currentUser!.id,
+          'monto': local.monto,
+          'tipo': local.tipo,
+          'fecha': local.fecha.toIso8601String(),
+          'is_deleted': false,
+        });
+
+        await (database.update(database.aportes)
+              ..where((tbl) => tbl.id.equals(local.id)))
+            .write(const AportesCompanion(syncStatus: drift.Value(1)));
+      } catch (e) {
+        debugPrint("Push Aporte Error: $e");
+      }
+    }
+  }
+
+  // =========================================================================
+  // PULL PHASE (Cloud to Local - DELTA SYNC)
+  // =========================================================================
+
+  Future<void> _pullIglesias(String? lastSyncStr) async {
+    var query = _supabase.from('iglesias').select();
+    if (lastSyncStr != null) {
+      query = query.gt('updated_at', lastSyncStr);
+    }
+
+    final List<dynamic> cloudData = await query;
+    if (cloudData.isEmpty) return;
+
+    await database.batch((batch) {
+      for (final row in cloudData) {
+        if (row['is_deleted'] == true) {
+          batch.deleteWhere(
+            database.iglesias,
+            (tbl) => tbl.id.equals(row['id']),
+          );
+        } else {
+          batch.insert(
+            database.iglesias,
+            IglesiasCompanion.insert(
+              id: row['id'],
+              userId: row['user_id'],
+              nombre: row['nombre'],
+              distrito: row['distrito'],
+              categoria: drift.Value(row['categoria']),
+              fechaLlegada: drift.Value(
+                row['fecha_llegada'] != null
+                    ? DateTime.parse(row['fecha_llegada'])
+                    : null,
+              ),
+              fechaSalida: drift.Value(
+                row['fecha_salida'] != null
+                    ? DateTime.parse(row['fecha_salida'])
+                    : null,
+              ),
+              syncStatus: const drift.Value(1),
+            ),
+            mode: drift.InsertMode.insertOrReplace,
+          );
+        }
+      }
+    });
+  }
+
+  Future<void> _pullFeligreses(String? lastSyncStr) async {
+    var query = _supabase.from('feligreses').select();
+    if (lastSyncStr != null) {
+      query = query.gt('updated_at', lastSyncStr);
+    }
+
+    final List<dynamic> cloudData = await query;
+    if (cloudData.isEmpty) return;
+
+    await database.batch((batch) {
+      for (final row in cloudData) {
+        batch.insert(
+          database.feligreses,
+          FeligresesCompanion.insert(
+            id: row['id'],
+            iglesiaId: drift.Value(row['iglesia_id']),
+            nombre: row['nombre'],
+            telefono: drift.Value(row['telefono']),
+            fechaNacimiento: drift.Value(
+              row['fechanacimiento'] != null
+                  ? DateTime.parse(row['fechanacimiento'])
+                  : null,
+            ),
+            genero: drift.Value(row['genero']),
+            cedula: drift.Value(row['cedula']),
+            estadoCivil: drift.Value(row['estado_civil']),
+            poseeDiscapacidad: drift.Value(row['posee_discapacidad'] ?? false),
+            bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
+            bautizadoEspiritu: drift.Value(row['bautizado_espiritu'] ?? false),
+            tipoFeligres: drift.Value(row['tipo_feligres']),
+            activo: drift.Value(
+              row['activo'],
+            ), // Handles Soft Deletes automatically
+            syncStatus: const drift.Value(1),
+          ),
+          mode: drift.InsertMode.insertOrReplace,
+        );
+      }
+    });
+  }
+
+  Future<void> _pullAportes(String? lastSyncStr) async {
+    var query = _supabase.from('aportes').select();
+    if (lastSyncStr != null) {
+      query = query.gt('updated_at', lastSyncStr);
+    }
+
+    final List<dynamic> cloudData = await query;
+    if (cloudData.isEmpty) return;
+
+    await database.batch((batch) {
+      for (final row in cloudData) {
+        if (row['is_deleted'] == true) {
+          batch.deleteWhere(
+            database.aportes,
+            (tbl) => tbl.id.equals(row['id']),
+          );
+        } else {
+          batch.insert(
+            database.aportes,
+            AportesCompanion.insert(
+              id: row['id'],
+              feligresId: row['feligres_id'],
+              monto: (row['monto'] as num).toDouble(),
+              tipo: row['tipo'],
+              fecha: drift.Value(DateTime.parse(row['fecha'])),
+              syncStatus: const drift.Value(1),
+            ),
+            mode: drift.InsertMode.insertOrReplace,
+          );
+        }
+      }
+    });
   }
 }

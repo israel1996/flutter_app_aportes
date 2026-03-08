@@ -32,7 +32,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   bool _isSyncing = false;
   late AnimationController _syncAnimationController;
-  bool _hasPromptedForChurch = false;
 
   @override
   void initState() {
@@ -178,13 +177,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final authService = ref.read(authServiceProvider);
     try {
-      await database.clearAllData();
-      await authService.signOut();
-
-      // 2. CLEAR GHOST DATA FIX
-      // Wipes the church from memory so a new user doesn't inherit it
-      ref.read(currentIglesiaProvider.notifier).state = null;
-    } catch (e) {}
+      await authService.signOut(ref: ref);
+    } catch (e) {
+      debugPrint('Error al cerrar sesión: $e');
+    }
 
     if (mounted) {
       Navigator.pushAndRemoveUntil(
@@ -704,17 +700,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Iglesia? validDropdownValue;
             if (iglesias.isEmpty) return const SizedBox.shrink();
 
-            if (currentIglesia != null &&
-                iglesias.any((i) => i.id == currentIglesia.id)) {
-              validDropdownValue = iglesias.firstWhere(
-                (i) => i.id == currentIglesia.id,
-              );
-            } else {
-              validDropdownValue = iglesias.first;
-              Future.microtask(
-                () => ref.read(currentIglesiaProvider.notifier).state =
-                    validDropdownValue,
-              );
+            if (iglesias.isNotEmpty) {
+              if (currentIglesia != null &&
+                  iglesias.any((i) => i.id == currentIglesia.id)) {
+                validDropdownValue = iglesias.firstWhere(
+                  (i) => i.id == currentIglesia.id,
+                );
+              } else {
+                // Safely ask the provider to evaluate the cloud preference
+                Future.microtask(() {
+                  ref
+                      .read(currentIglesiaProvider.notifier)
+                      .setIglesiaFromListSafe(iglesias);
+                });
+              }
             }
 
             return Container(
@@ -947,11 +946,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   (i) => i.id == currentIglesia.id,
                 );
               } else {
-                validDropdownValue = iglesias.first;
-                Future.microtask(
-                  () => ref.read(currentIglesiaProvider.notifier).state =
-                      validDropdownValue,
-                );
+                // Safely ask the provider to evaluate the cloud preference
+                Future.microtask(() {
+                  ref
+                      .read(currentIglesiaProvider.notifier)
+                      .setIglesiaFromListSafe(iglesias);
+                });
               }
             }
 

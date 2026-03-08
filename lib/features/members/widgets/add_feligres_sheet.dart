@@ -34,10 +34,10 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   bool _bautizadoEspiritu = false;
 
   final List<String> _estadosCiviles = [
-    'Soltero',
-    'Casado',
-    'Divorciado',
-    'Viudo',
+    'Soltero(a)',
+    'Casado(a)',
+    'Divorciado(a)',
+    'Viudo(a)',
     'Unión Libre',
   ];
   final List<String> _tiposFeligres = ['simpatizante', 'feligres', 'visita'];
@@ -82,12 +82,11 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
+      // 1. Save locally
       await database.insertFeligres(
         FeligresesCompanion.insert(
           id: const Uuid().v4(),
-          iglesiaId: drift.Value(
-            currentIglesia.id,
-          ), // 2. ASSIGN THE CHURCH TO THE PARISHIONER
+          iglesiaId: drift.Value(currentIglesia.id),
           nombre: _nombreController.text.trim(),
           telefono: drift.Value(
             _telefonoController.text.trim().isEmpty
@@ -111,24 +110,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         ),
       );
 
-      // ... rest of the code (sync and success messages) remains the same ...
-      try {
-        final connectivity = await Connectivity().checkConnectivity();
-        final hasInternet =
-            connectivity.contains(ConnectivityResult.mobile) ||
-            connectivity.contains(ConnectivityResult.wifi) ||
-            connectivity.contains(ConnectivityResult.ethernet);
-        if (hasInternet) {
-          final authService = ref.read(authServiceProvider);
-          if (authService.currentUser != null) {
-            final syncService = SyncService(database);
-            await syncService.syncAll();
-          }
-        }
-      } catch (syncError) {
-        debugPrint("⚠️ Auto-sync skipped or failed: $syncError");
-      }
-
+      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(
@@ -136,6 +118,19 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
           'Feligrés registrado en ${currentIglesia.nombre}',
         );
       }
+
+      // 3. Background Sync (NO 'await')
+      Connectivity().checkConnectivity().then((connectivity) {
+        final hasInternet =
+            connectivity.contains(ConnectivityResult.mobile) ||
+            connectivity.contains(ConnectivityResult.wifi) ||
+            connectivity.contains(ConnectivityResult.ethernet);
+
+        if (hasInternet && ref.read(authServiceProvider).currentUser != null) {
+          final syncService = SyncService(database);
+          syncService.syncAll().catchError((e) => debugPrint("Sync error: $e"));
+        }
+      });
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error al guardar:$e');
     } finally {
