@@ -7,6 +7,20 @@ import 'package:intl/intl.dart';
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
 
+// --- GLOBAL CURRENCY FORMATTERS ---
+// For exact values (e.g., $ 1,250.50)
+final _currencyFormat = NumberFormat.currency(
+  locale: 'en_US',
+  symbol: '\$ ',
+  decimalDigits: 2,
+);
+// For the Y-axis of the charts (e.g., $ 1,250 without cents to save space)
+final _axisFormat = NumberFormat.currency(
+  locale: 'en_US',
+  symbol: '\$ ',
+  decimalDigits: 0,
+);
+
 class DashboardSummary extends ConsumerWidget {
   const DashboardSummary({super.key});
 
@@ -17,10 +31,9 @@ class DashboardSummary extends ConsumerWidget {
     final panelColor = Theme.of(context).colorScheme.surface;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
 
-    // LEER LA IGLESIA ACTUAL
+    // READ CURRENT CHURCH
     final currentIglesia = ref.watch(currentIglesiaProvider);
 
-    // Si no hay iglesia seleccionada, mostramos el mensaje de advertencia
     if (currentIglesia == null) {
       return Center(
         child: Text(
@@ -39,34 +52,41 @@ class DashboardSummary extends ConsumerWidget {
             final rawAportes = historySnapshot.data ?? [];
             final allMembers = membersSnapshot.data ?? [];
 
-            // 1. FILTRAR APORTES POR LA IGLESIA SELECCIONADA
             final aportes = rawAportes
                 .where((a) => a.feligres.iglesiaId == currentIglesia.id)
                 .toList();
 
-            // 2. FILTRAR FELIGRESES POR LA IGLESIA SELECCIONADA
             final activeMembers = allMembers
                 .where((m) => m.activo == 1 && m.iglesiaId == currentIglesia.id)
                 .toList();
 
             double totalAportes = 0;
+            double dineroEsteMes = 0;
             final now = DateTime.now();
             int aportesEsteMes = 0;
 
-            // Group data by month for the chart
             List<double> monthlyData = List.filled(12, 0.0);
 
             for (var a in aportes) {
               totalAportes += a.aporte.monto;
-              monthlyData[a.aporte.fecha.month - 1] += a.aporte.monto;
+              // Ensure we only add to the chart for the current year
+              if (a.aporte.fecha.year == now.year) {
+                monthlyData[a.aporte.fecha.month - 1] += a.aporte.monto;
+              }
 
               if (a.aporte.fecha.year == now.year &&
                   a.aporte.fecha.month == now.month) {
                 aportesEsteMes++;
+                dineroEsteMes += a.aporte.monto;
               }
             }
 
-            // Scale the chart Y-axis dynamically
+            // --- CALCULATING THE ANNUAL TOTAL FOR THE CHART ---
+            final totalAnual = monthlyData.fold<double>(
+              0,
+              (prev, amount) => prev + amount,
+            );
+
             double maxY = 10;
             if (aportes.isNotEmpty) {
               maxY = monthlyData.reduce(
@@ -75,7 +95,7 @@ class DashboardSummary extends ConsumerWidget {
               maxY = maxY == 0 ? 10 : maxY * 1.2;
             }
 
-            // --- 1. TOP 5 CONTRIBUTORS (THIS MONTH) ---
+            // --- 1. TOP 5 ---
             final Map<String, double> top5Map = {};
             for (var a in aportes) {
               if (a.aporte.fecha.year == now.year &&
@@ -88,7 +108,7 @@ class DashboardSummary extends ConsumerWidget {
               ..sort((a, b) => b.value.compareTo(a.value));
             final top5 = top5List.take(5).toList();
 
-            // --- 2. TOTAL BY GENDER ---
+            // --- 2. GENDER ---
             double totalMasculino = 0;
             double totalFemenino = 0;
 
@@ -104,37 +124,31 @@ class DashboardSummary extends ConsumerWidget {
               }
             }
 
-            // --- 3. TOTAL BY AGE BRACKETS (CURRENT MONTH) ---
-            double ninos = 0; // 0-11
-            double adolescentes = 0; // 12-17
-            double jovenes = 0; // 18-29
-            double adultos = 0; // 30-59
-            double mayores = 0; // 60+
-
+            // --- 3. AGES ---
+            double ninos = 0,
+                adolescentes = 0,
+                jovenes = 0,
+                adultos = 0,
+                mayores = 0;
             for (var a in aportes) {
               if (a.aporte.fecha.year == now.year &&
                   a.aporte.fecha.month == now.month) {
                 final birthDate = a.feligres.fechaNacimiento;
-
                 if (birthDate != null) {
                   int age = now.year - birthDate.year;
                   if (now.month < birthDate.month ||
-                      (now.month == birthDate.month &&
-                          now.day < birthDate.day)) {
+                      (now.month == birthDate.month && now.day < birthDate.day))
                     age--;
-                  }
-
-                  if (age <= 11) {
+                  if (age <= 11)
                     ninos += a.aporte.monto;
-                  } else if (age <= 17) {
+                  else if (age <= 17)
                     adolescentes += a.aporte.monto;
-                  } else if (age <= 29) {
+                  else if (age <= 29)
                     jovenes += a.aporte.monto;
-                  } else if (age <= 59) {
+                  else if (age <= 59)
                     adultos += a.aporte.monto;
-                  } else {
+                  else
                     mayores += a.aporte.monto;
-                  }
                 }
               }
             }
@@ -144,9 +158,6 @@ class DashboardSummary extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 10),
-                  // ---------------------------------------------------
-                  // 2. GRADIENT CARDS ROW
-                  // ---------------------------------------------------
                   LayoutBuilder(
                     builder: (context, constraints) {
                       if (constraints.maxWidth < 600) {
@@ -154,7 +165,7 @@ class DashboardSummary extends ConsumerWidget {
                           children: [
                             _buildTotalCard(total: totalAportes),
                             const SizedBox(height: 16),
-                            _buildMembersCard(activeMembers.length.toString()),
+                            _buildMonthlyIncomeCard(dineroEsteMes),
                             const SizedBox(height: 16),
                             _buildActivityCard(aportesEsteMes.toString()),
                           ],
@@ -165,9 +176,7 @@ class DashboardSummary extends ConsumerWidget {
                           Expanded(child: _buildTotalCard(total: totalAportes)),
                           const SizedBox(width: 20),
                           Expanded(
-                            child: _buildMembersCard(
-                              activeMembers.length.toString(),
-                            ),
+                            child: _buildMonthlyIncomeCard(dineroEsteMes),
                           ),
                           const SizedBox(width: 20),
                           Expanded(
@@ -182,13 +191,9 @@ class DashboardSummary extends ConsumerWidget {
 
                   const SizedBox(height: 40),
 
-                  // ---------------------------------------------------
-                  // 4. TOP 5 AND DEMOGRAPHICS ROW
-                  // ---------------------------------------------------
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final isStacked = constraints.maxWidth < 800;
-
                       if (isStacked) {
                         return Column(
                           children: [
@@ -247,7 +252,6 @@ class DashboardSummary extends ConsumerWidget {
                   ),
 
                   const SizedBox(height: 40),
-
                   _buildAgeBracketChart(
                     ninos,
                     adolescentes,
@@ -259,11 +263,10 @@ class DashboardSummary extends ConsumerWidget {
                     isDark,
                     Theme.of(context).colorScheme,
                   ),
-
                   const SizedBox(height: 40),
 
                   // ---------------------------------------------------
-                  // 3. NEON CURVED CHART AREA
+                  // 3. NEON CURVED CHART AREA (ANNUAL TREND)
                   // ---------------------------------------------------
                   Container(
                     height: 400,
@@ -283,19 +286,57 @@ class DashboardSummary extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Tendencia de Aportes Anual',
-                          style: GoogleFonts.poppins(
-                            color: textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        // --- HERE WE ADD THE ANNUAL TOTAL ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              // <-- Wrap the title in Expanded
+                              child: Text(
+                                'Tendencia de Aportes Anual',
+                                style: GoogleFonts.poppins(
+                                  color: textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow
+                                    .ellipsis, // <-- Add this to cut off long text gracefully
+                              ),
+                            ),
+                            const SizedBox(width: 8), // <-- Add a small gap
+                            Text(
+                              _currencyFormat.format(totalAnual),
+                              style: GoogleFonts.montserrat(
+                                color: const Color(0xFF00C9FF),
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 30),
 
                         Expanded(
                           child: LineChart(
                             LineChartData(
+                              // --- IMPROVED TOOLTIP WITH CURRENCY FORMAT ---
+                              lineTouchData: LineTouchData(
+                                enabled: true,
+                                touchTooltipData: LineTouchTooltipData(
+                                  getTooltipItems: (touchedSpots) {
+                                    return touchedSpots.map((spot) {
+                                      return LineTooltipItem(
+                                        _currencyFormat.format(spot.y),
+                                        const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      );
+                                    }).toList();
+                                  },
+                                ),
+                              ),
                               gridData: FlGridData(
                                 show: true,
                                 drawVerticalLine: false,
@@ -359,16 +400,19 @@ class DashboardSummary extends ConsumerWidget {
                                 leftTitles: AxisTitles(
                                   sideTitles: SideTitles(
                                     showTitles: true,
-                                    reservedSize: 45,
+                                    reservedSize:
+                                        55, // More space for large numbers
                                     getTitlesWidget: (value, meta) {
                                       if (value == maxY || value == 0)
                                         return const SizedBox.shrink();
+                                      // Y-axis formatting
                                       return Text(
-                                        '\$${value.toInt()}',
+                                        _axisFormat.format(value),
                                         style: const TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 11,
                                           color: Colors.grey,
                                         ),
+                                        overflow: TextOverflow.ellipsis,
                                       );
                                     },
                                   ),
@@ -469,7 +513,6 @@ class DashboardSummary extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-
           if (top5.isEmpty)
             isStacked
                 ? const Padding(
@@ -535,7 +578,7 @@ class DashboardSummary extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   trailing: Text(
-                    '\$${amount.toStringAsFixed(2)}',
+                    _currencyFormat.format(amount),
                     style: GoogleFonts.montserrat(
                       fontWeight: FontWeight.bold,
                       color: Colors.greenAccent,
@@ -586,10 +629,8 @@ class DashboardSummary extends ConsumerWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           if (!isStacked) const Spacer(),
           if (isStacked) const SizedBox(height: 30),
-
           if (total == 0)
             SizedBox(
               height: 200,
@@ -616,7 +657,7 @@ class DashboardSummary extends ConsumerWidget {
                             value: masculino,
                             color: const Color(0xFF00C9FF),
                             title:
-                                '${pctMasc.toStringAsFixed(1)}%\n\$${masculino.toStringAsFixed(2)}',
+                                '${pctMasc.toStringAsFixed(1)}%\n${_currencyFormat.format(masculino)}',
                             radius: 45,
                             titleStyle: const TextStyle(
                               fontSize: 11,
@@ -629,7 +670,7 @@ class DashboardSummary extends ConsumerWidget {
                             value: femenino,
                             color: const Color(0xFFFF007F),
                             title:
-                                '${pctFem.toStringAsFixed(1)}%\n\$${femenino.toStringAsFixed(2)}',
+                                '${pctFem.toStringAsFixed(1)}%\n${_currencyFormat.format(femenino)}',
                             radius: 45,
                             titleStyle: const TextStyle(
                               fontSize: 11,
@@ -651,9 +692,9 @@ class DashboardSummary extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        '\$${total.toStringAsFixed(0)}',
+                        _currencyFormat.format(total),
                         style: GoogleFonts.montserrat(
-                          fontSize: 18,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -662,9 +703,7 @@ class DashboardSummary extends ConsumerWidget {
                 ],
               ),
             ),
-
           const SizedBox(height: 30),
-
           Center(
             child: Wrap(
               alignment: WrapAlignment.center,
@@ -676,7 +715,6 @@ class DashboardSummary extends ConsumerWidget {
               ],
             ),
           ),
-
           if (!isStacked) const Spacer(),
         ],
       ),
@@ -694,7 +732,7 @@ class DashboardSummary extends ConsumerWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          '$title: \$${amount.toStringAsFixed(2)}',
+          '$title: ${_currencyFormat.format(amount)}',
           style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500),
         ),
       ],
@@ -704,7 +742,7 @@ class DashboardSummary extends ConsumerWidget {
   Widget _buildTotalCard({double total = 0}) {
     return GradientSummaryCard(
       title: 'Total Histórico',
-      value: '\$${total.toStringAsFixed(2)}',
+      value: _currencyFormat.format(total), // Using the formatter
       subtitle: 'Acumulado global',
       gradient: const LinearGradient(
         colors: [Color(0xFF89216B), Color(0xFFDA4453)],
@@ -715,17 +753,17 @@ class DashboardSummary extends ConsumerWidget {
     );
   }
 
-  Widget _buildMembersCard(String count) {
+  Widget _buildMonthlyIncomeCard(double amount) {
     return GradientSummaryCard(
-      title: 'Feligreses Activos',
-      value: count,
-      subtitle: 'Registrados en sistema',
+      title: 'Ingresos del Mes',
+      value: _currencyFormat.format(amount),
+      subtitle: 'Recaudado este mes',
       gradient: const LinearGradient(
         colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      icon: Icons.people_alt,
+      icon: Icons.monetization_on_outlined,
     );
   }
 
@@ -804,7 +842,7 @@ Widget _buildAgeBracketChart(
                 touchTooltipData: BarTouchTooltipData(
                   getTooltipItem: (group, groupIndex, rod, rodIndex) {
                     return BarTooltipItem(
-                      '\$${rod.toY.toStringAsFixed(2)}',
+                      _currencyFormat.format(rod.toY),
                       const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -868,16 +906,17 @@ Widget _buildAgeBracketChart(
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 45,
+                    reservedSize: 55, // More space for long labels
                     getTitlesWidget: (value, meta) {
                       if (value == 0 || value >= chartMaxY)
                         return const SizedBox.shrink();
                       return Text(
-                        '\$${value.toInt()}',
+                        _axisFormat.format(value),
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.grey,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       );
                     },
                   ),
