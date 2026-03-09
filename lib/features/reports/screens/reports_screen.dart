@@ -12,7 +12,6 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -25,7 +24,6 @@ class ReportesScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportesScreenState extends ConsumerState<ReportesScreen> {
-  // Exclusive key to capture ONLY the chart
   final GlobalKey _chartExportKey = GlobalKey();
 
   late Stream<List<AporteConFeligres>> _historyStream;
@@ -33,26 +31,48 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   late FocusNode _searchFocusNode;
 
   DateTimeRange? _dateRange;
-  int _groupingMode = 1; // 1 = Feligrés, 2 = Tipo
+  int _groupingMode =
+      1; // 0 = Sin agrupación, 1 = Mensual, 2 = Feligrés, 3 = Tipo
 
-  // Navigation State (Detail)
+  // Master Sorting
+  String _masterSortBy = 'Aportes más altos';
+  final List<String> _masterSortOptions = [
+    'Aportes más altos',
+    'Aportes más bajos',
+    'Nombre (A-Z)',
+    'Nombre (Z-A)',
+  ];
+
+  // Detail Sorting
+  String _detailSortBy = 'Más recientes primero';
+  final List<String> _detailSortOptions = [
+    'Más recientes primero',
+    'Más antiguos primero',
+    'Aportes más altos',
+    'Aportes más bajos',
+  ];
+
   String? _selectedDetailId;
   String _selectedDetailName = '';
 
-  // Pagination States
   int _masterCurrentPage = 1;
   int _detailCurrentPage = 1;
   int _itemsPerPage = 10;
   final List<int> _pageOptions = [10, 20, 50, 100];
 
-  // Chart Filters
   final Map<String, bool> _activeChartTypes = {
     'Diezmo': true,
     'Ofrenda': true,
-    'Promesa': true,
+    'Primicia': true,
     'Pro-Templo': true,
     'Especial': true,
   };
+
+  final _currencyFormat = NumberFormat.currency(
+    locale: 'en_US',
+    symbol: '\$ ',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
@@ -69,36 +89,35 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDateRange() async {
+  Future<void> _pickDateRange(bool isDetail) async {
     final range = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDateRange: _dateRange,
+      builder: (context, child) =>
+          Theme(data: Theme.of(context), child: child!),
     );
     if (range != null) {
       setState(() {
         _dateRange = range;
-        _detailCurrentPage = 1;
+        if (isDetail) {
+          _detailCurrentPage = 1;
+        } else {
+          _masterCurrentPage = 1;
+        }
       });
     }
   }
 
-  // ==========================================
-  // CLEAN NATIVE PDF EXPORT LOGIC
-  // ==========================================
-
-  // 1. Export Master List (Grouped Summary)
   Future<void> _exportMasterToPDF(
     List<Map<String, dynamic>> displayList,
   ) async {
     CustomSnackBar.showInfo(context, 'Generando Reporte PDF...');
     final pdf = pw.Document();
 
-    // Native PDF table configuration
     pdf.addPage(
       pw.MultiPage(
-        // MultiPage creates pages automatically if the table is very long
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
         build: (pw.Context context) {
@@ -109,7 +128,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Reporte Financiero Resumido',
+                    'Reporte Financiero',
                     style: pw.TextStyle(
                       fontSize: 24,
                       fontWeight: pw.FontWeight.bold,
@@ -122,7 +141,13 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: ['Nombre / Tipo', 'Cantidad de Aportes', 'Monto Total'],
+              headers: _groupingMode == 0
+                  ? ['Feligrés / Tipo', 'Fecha', 'Monto']
+                  : [
+                      'Categoría / Nombre',
+                      'Cantidad de Aportes',
+                      'Monto Total',
+                    ],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
@@ -140,8 +165,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   .map(
                     (item) => [
                       item['name'].toString(),
-                      item['count'].toString(),
-                      '\$${(item['total'] as double).toStringAsFixed(2)}',
+                      _groupingMode == 0
+                          ? item['subtitle'].toString()
+                          : item['count'].toString(),
+                      _currencyFormat.format(item['total'] as double),
                     ],
                   )
                   .toList(),
@@ -150,44 +177,36 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         },
       ),
     );
-    // GENERATE THE BYTES
-    final bytes = await pdf.save();
 
-    // GET DOWNLOADS FOLDER AND SAVE DIRECTLY
+    final bytes = await pdf.save();
     final directory = await getDownloadsDirectory();
+
     if (directory != null) {
       final fileName =
           'Reporte_General_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
-
       await file.writeAsBytes(bytes);
-
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showSuccess(
           context,
           'PDF guardado en Descargas: $fileName',
         );
-      }
     } else {
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showError(
           context,
           'No se pudo encontrar la carpeta de Descargas',
         );
-      }
     }
   }
 
-  // 2. Export Detail View (Chart + Transactions)
   Future<void> _exportDetailToPDF(
     List<AporteConFeligres> targetData,
     String title,
   ) async {
     CustomSnackBar.showInfo(context, 'Capturando gráfico y generando PDF...');
-
     Uint8List? chartBytes;
     try {
-      // Extracts ONLY the chart as a high-quality image
       RenderRepaintBoundary boundary =
           _chartExportKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
@@ -225,8 +244,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
             ),
             pw.SizedBox(height: 10),
-
-            // If the chart was captured, we embed it cleanly
             if (chartBytes != null) ...[
               pw.Container(
                 height: 200,
@@ -238,17 +255,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
               pw.SizedBox(height: 20),
             ],
-
             pw.Text(
               'Lista de Transacciones Filtradas',
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
-
-            // Native table with ALL filtered data (ignores the UI's pagination)
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: ['Fecha', 'Tipo de Aporte', 'Monto'],
+              headers: ['Fecha', 'Tipo de Aporte', 'Feligrés', 'Monto'],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
@@ -270,7 +284,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         'es',
                       ).format(item.aporte.fecha),
                       item.aporte.tipo,
-                      '\$${item.aporte.monto.toStringAsFixed(2)}',
+                      item.feligres.nombre,
+                      _currencyFormat.format(item.aporte.monto),
                     ],
                   )
                   .toList(),
@@ -280,38 +295,29 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       ),
     );
 
-    // GENERATE THE BYTES
     final bytes = await pdf.save();
-
-    // GET DOWNLOADS FOLDER AND SAVE DIRECTLY
     final directory = await getDownloadsDirectory();
+
     if (directory != null) {
       final safeTitle = title.replaceAll(' ', '_');
       final fileName =
           'Detalle_${safeTitle}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
-
       await file.writeAsBytes(bytes);
-
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showSuccess(
           context,
           'PDF guardado en Descargas: $fileName',
         );
-      }
     } else {
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showError(
           context,
           'No se pudo encontrar la carpeta de Descargas',
         );
-      }
     }
   }
 
-  // ==========================================
-  // MAIN WIDGET BUILDER
-  // ==========================================
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -328,6 +334,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
           var allData = snapshot.data ?? [];
 
+          // Filter by Current Church
           allData = allData
               .where(
                 (item) =>
@@ -336,14 +343,37 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               )
               .toList();
 
+          // HYBRID SEARCH FILTER (Name, Type, Amount)
           if (_searchController.text.isNotEmpty) {
-            allData = allData
-                .where(
-                  (item) => item.feligres.nombre.toLowerCase().contains(
-                    _searchController.text.toLowerCase(),
-                  ),
-                )
-                .toList();
+            final query = _searchController.text.toLowerCase().trim();
+            final isNumber =
+                double.tryParse(query.replaceAll(RegExp(r'[^\d.]'), '')) !=
+                null;
+
+            allData = allData.where((item) {
+              final matchName = item.feligres.nombre.toLowerCase().contains(
+                query,
+              );
+              final matchType = item.aporte.tipo.toLowerCase().contains(query);
+              final matchAmount =
+                  isNumber &&
+                  item.aporte.monto.toString().contains(
+                    query.replaceAll(RegExp(r'[^\d.]'), ''),
+                  );
+              return matchName || matchType || matchAmount;
+            }).toList();
+          }
+
+          // GLOBAL DATE FILTER
+          if (_dateRange != null) {
+            allData = allData.where((item) {
+              return item.aporte.fecha.isAfter(
+                    _dateRange!.start.subtract(const Duration(days: 1)),
+                  ) &&
+                  item.aporte.fecha.isBefore(
+                    _dateRange!.end.add(const Duration(days: 1)),
+                  );
+            }).toList();
           }
 
           if (_selectedDetailId != null) {
@@ -365,20 +395,69 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     bool isDark,
   ) {
     final groupedMap = <String, Map<String, dynamic>>{};
-    for (var item in data) {
-      final key = _groupingMode == 1 ? item.feligres.id : item.aporte.tipo;
-      final name = _groupingMode == 1 ? item.feligres.nombre : item.aporte.tipo;
 
-      if (!groupedMap.containsKey(key))
-        groupedMap[key] = {'id': key, 'name': name, 'total': 0.0, 'count': 0};
-      groupedMap[key]!['total'] += item.aporte.monto;
-      groupedMap[key]!['count'] += 1;
+    if (_groupingMode == 0) {
+      // MODE 0: NO GROUPING
+      int idx = 0;
+      for (var item in data) {
+        groupedMap['$idx'] = {
+          'id': item.aporte.id,
+          'name': '${item.feligres.nombre} • ${item.aporte.tipo}',
+          'subtitle': DateFormat(
+            'dd MMM yyyy, hh:mm a',
+            'es',
+          ).format(item.aporte.fecha),
+          'total': item.aporte.monto,
+          'count': 1,
+        };
+        idx++;
+      }
+    } else {
+      // OTHER GROUPING MODES
+      for (var item in data) {
+        String key;
+        String name;
+
+        if (_groupingMode == 1) {
+          // General (Mes)
+          key = DateFormat('yyyy-MM').format(item.aporte.fecha);
+          name = DateFormat(
+            'MMMM yyyy',
+            'es',
+          ).format(item.aporte.fecha).toUpperCase();
+        } else if (_groupingMode == 2) {
+          // Feligrés
+          key = item.feligres.id;
+          name = item.feligres.nombre;
+        } else {
+          // Tipo
+          key = item.aporte.tipo;
+          name = item.aporte.tipo;
+        }
+
+        if (!groupedMap.containsKey(key)) {
+          groupedMap[key] = {'id': key, 'name': name, 'total': 0.0, 'count': 0};
+        }
+        groupedMap[key]!['total'] += item.aporte.monto;
+        groupedMap[key]!['count'] += 1;
+      }
     }
 
-    final displayList = groupedMap.values.toList()
-      ..sort((a, b) => (b['total'] as double).compareTo(a['total'] as double));
+    final displayList = groupedMap.values.toList();
 
-    // Master Pagination Logic
+    // Master Sorting
+    displayList.sort((a, b) {
+      if (_masterSortBy == 'Aportes más altos')
+        return (b['total'] as double).compareTo(a['total'] as double);
+      if (_masterSortBy == 'Aportes más bajos')
+        return (a['total'] as double).compareTo(b['total'] as double);
+      if (_masterSortBy == 'Nombre (A-Z)')
+        return a['name'].toString().compareTo(b['name'].toString());
+      if (_masterSortBy == 'Nombre (Z-A)')
+        return b['name'].toString().compareTo(a['name'].toString());
+      return 0;
+    });
+
     final totalPages = (displayList.length / _itemsPerPage).ceil() == 0
         ? 1
         : (displayList.length / _itemsPerPage).ceil();
@@ -391,6 +470,33 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         : startIndex + _itemsPerPage;
     final paginatedMasterList = displayList.sublist(startIndex, endIndex);
 
+    Widget buildFilterChip(String label, int modeValue) {
+      final isSelected = _groupingMode == modeValue;
+      return ChoiceChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            color: isSelected
+                ? (isDark ? Colors.white : colorScheme.primary)
+                : (isDark ? Colors.white70 : Colors.black87),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        selected: isSelected,
+        selectedColor: colorScheme.primary.withOpacity(0.2),
+        backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        side: BorderSide(
+          color: isSelected
+              ? colorScheme.primary.withOpacity(0.5)
+              : Colors.transparent,
+        ),
+        onSelected: (v) => setState(() {
+          _groupingMode = modeValue;
+          _masterCurrentPage = 1;
+        }),
+      );
+    }
+
     return Column(
       children: [
         Container(
@@ -402,7 +508,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Search & Export
               Row(
                 children: [
                   Expanded(
@@ -410,23 +518,23 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                       controller: _searchController,
                       focusNode: _searchFocusNode,
                       decoration: InputDecoration(
-                        hintText: 'Buscar...',
+                        hintText: 'Buscar por nombre, tipo o cantidad...',
                         prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.black12
+                            : Colors.grey.shade100,
                       ),
-                      onChanged: (val) => setState(() {
-                        _masterCurrentPage = 1;
-                      }),
+                      onChanged: (val) =>
+                          setState(() => _masterCurrentPage = 1),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // NATIVE EXPORT BUTTON (Summary)
                   ElevatedButton.icon(
-                    onPressed: () => _exportMasterToPDF(
-                      displayList,
-                    ), // Passes the FULL list, not the paginated one
+                    onPressed: () => _exportMasterToPDF(displayList),
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                     style: ElevatedButton.styleFrom(
@@ -439,27 +547,122 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // Intuitive Controls (Sort & Dates)
+              Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: DropdownButtonFormField<String>(
+                      value: _masterSortBy,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Ordenar lista por',
+                        prefixIcon: const Icon(Icons.sort),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: _masterSortOptions
+                          .map(
+                            (o) => DropdownMenuItem(
+                              value: o,
+                              child: Text(
+                                o,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) => setState(() => _masterSortBy = val!),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _pickDateRange(false),
+                      icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                      label: const Text('Fechas'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        backgroundColor: colorScheme.primary.withOpacity(0.1),
+                        foregroundColor: colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              if (_dateRange != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.filter_alt,
+                        size: 16,
+                        color: Colors.green,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${DateFormat('dd MMM yy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => setState(() {
+                          _dateRange = null;
+                          _masterCurrentPage = 1;
+                        }),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 16),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
-                    ChoiceChip(
-                      label: const Text('Agrupar por Feligrés'),
-                      selected: _groupingMode == 1,
-                      onSelected: (v) => setState(() {
-                        _groupingMode = 1;
-                        _masterCurrentPage = 1;
-                      }),
-                    ),
+                    buildFilterChip('Sin agrupación', 0),
                     const SizedBox(width: 8),
-                    ChoiceChip(
-                      label: const Text('Agrupar por Tipo'),
-                      selected: _groupingMode == 2,
-                      onSelected: (v) => setState(() {
-                        _groupingMode = 2;
-                        _masterCurrentPage = 1;
-                      }),
-                    ),
+                    buildFilterChip('Mensual', 1),
+                    const SizedBox(width: 8),
+                    buildFilterChip('Por Feligrés', 2),
+                    const SizedBox(width: 8),
+                    buildFilterChip('Por Tipo', 3),
                   ],
                 ),
               ),
@@ -493,7 +696,13 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         leading: CircleAvatar(
                           backgroundColor: colorScheme.primary.withOpacity(0.1),
                           child: Icon(
-                            _groupingMode == 1 ? Icons.person : Icons.category,
+                            _groupingMode == 0
+                                ? Icons.monetization_on
+                                : (_groupingMode == 1
+                                      ? Icons.calendar_today
+                                      : (_groupingMode == 2
+                                            ? Icons.person
+                                            : Icons.category)),
                             color: colorScheme.primary,
                           ),
                         ),
@@ -503,34 +712,64 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        subtitle: Text('${item['count']} aportes'),
-                        trailing: Text(
-                          '\$${item['total'].toStringAsFixed(2)}',
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: colorScheme.primary,
-                          ),
+                        subtitle: Text(
+                          _groupingMode == 0
+                              ? item['subtitle']
+                              : '${item['count']} aportes',
                         ),
-                        onTap: () {
-                          setState(() {
-                            _selectedDetailId = item['id'];
-                            _selectedDetailName = item['name'];
-                            _dateRange = null;
-                            _detailCurrentPage = 1;
-                          });
-                        },
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _currencyFormat.format(item['total']),
+                              style: GoogleFonts.montserrat(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                            if (_groupingMode != 0) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey.shade400,
+                              ),
+                            ],
+                          ],
+                        ),
+                        onTap: _groupingMode == 0
+                            ? null // Disable tap when showing raw ungrouped items
+                            : () {
+                                setState(() {
+                                  _selectedDetailId = item['id'];
+                                  _selectedDetailName = item['name'];
+                                  _detailCurrentPage = 1;
+                                });
+                              },
                       ),
                     );
                   },
                 ),
         ),
 
-        // UI Pagination
         if (displayList.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-            color: colorScheme.surface,
+            padding: const EdgeInsets.only(
+              top: 16,
+              bottom: 32,
+              left: 20,
+              right: 80,
+            ),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Text(
@@ -563,16 +802,25 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.chevron_left),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: _masterCurrentPage > 1
                       ? () => setState(() => _masterCurrentPage--)
                       : null,
                 ),
-                Text(
-                  'Pág $_masterCurrentPage de $totalPages',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    'Pág $_masterCurrentPage de $totalPages',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+                const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: _masterCurrentPage < totalPages
                       ? () => setState(() => _masterCurrentPage++)
                       : null,
@@ -595,39 +843,39 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     final Map<String, Color> typeColors = {
       'Diezmo': const Color(0xFF4FACFE),
       'Ofrenda': const Color(0xFF92FE9D),
-      'Promesa': const Color(0xFF89216B),
+      'Primicia': const Color(0xFF89216B),
       'Pro-Templo': Colors.orangeAccent,
       'Especial': const Color(0xFFFF007F),
     };
 
     var targetData = allData.where((item) {
-      if (_groupingMode == 1) return item.feligres.id == _selectedDetailId;
+      if (_groupingMode == 1)
+        return DateFormat('yyyy-MM').format(item.aporte.fecha) ==
+            _selectedDetailId;
+      if (_groupingMode == 2) return item.feligres.id == _selectedDetailId;
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
 
-    if (_dateRange != null) {
-      targetData = targetData
-          .where(
-            (item) =>
-                item.aporte.fecha.isAfter(
-                  _dateRange!.start.subtract(const Duration(days: 1)),
-                ) &&
-                item.aporte.fecha.isBefore(
-                  _dateRange!.end.add(const Duration(days: 1)),
-                ),
-          )
-          .toList();
-    }
-
-    if (_groupingMode == 1) {
+    // Chart toggle filter (Only relevant when grouping by Person or Date)
+    if (_groupingMode == 1 || _groupingMode == 2) {
       targetData = targetData
           .where((item) => _activeChartTypes[item.aporte.tipo] == true)
           .toList();
     }
 
-    targetData.sort((a, b) => b.aporte.fecha.compareTo(a.aporte.fecha));
+    // Intuitive Sorting for Transactions
+    targetData.sort((a, b) {
+      if (_detailSortBy == 'Más recientes primero')
+        return b.aporte.fecha.compareTo(a.aporte.fecha);
+      if (_detailSortBy == 'Más antiguos primero')
+        return a.aporte.fecha.compareTo(b.aporte.fecha);
+      if (_detailSortBy == 'Aportes más altos')
+        return b.aporte.monto.compareTo(a.aporte.monto);
+      if (_detailSortBy == 'Aportes más bajos')
+        return a.aporte.monto.compareTo(b.aporte.monto);
+      return 0;
+    });
 
-    // Detail Pagination Logic
     final totalDetailPages = (targetData.length / _itemsPerPage).ceil() == 0
         ? 1
         : (targetData.length / _itemsPerPage).ceil();
@@ -653,7 +901,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     ).reversed.toList();
 
     Map<String, Map<String, double>> groupedMonthlyData = {};
-    if (_groupingMode == 1) {
+    if (_groupingMode == 1 || _groupingMode == 2) {
       for (var type in _activeChartTypes.keys.where(
         (k) => _activeChartTypes[k] == true,
       )) {
@@ -690,7 +938,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
       monthlyTotals.forEach((month, value) {
         spots.add(FlSpot(xIndex.toDouble(), value));
-        if (_groupingMode == 2) {
+        if (_groupingMode == 3) {
           barGroups.add(
             BarChartGroupData(
               x: xIndex,
@@ -708,7 +956,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         xIndex++;
       });
 
-      if (_groupingMode == 1) {
+      if (_groupingMode == 1 || _groupingMode == 2) {
         lineBars.add(
           LineChartBarData(
             spots: spots,
@@ -751,13 +999,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   ),
                 ),
               ),
-
-              // NATIVE EXPORT BUTTON (Detail)
               ElevatedButton.icon(
-                onPressed: () => _exportDetailToPDF(
-                  targetData,
-                  _selectedDetailName,
-                ), // We pass ALL the filtered data, not just the paginated ones
+                onPressed: () =>
+                    _exportDetailToPDF(targetData, _selectedDetailName),
                 icon: const Icon(Icons.picture_as_pdf),
                 label: const Text('Exportar PDF'),
               ),
@@ -775,57 +1019,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      InkWell(
-                        onTap: _pickDateRange,
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: colorScheme.primary),
-                            borderRadius: BorderRadius.circular(16),
-                            color: colorScheme.primary.withOpacity(0.05),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.date_range,
-                                color: colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _dateRange == null
-                                    ? 'Filtrar por Rango de Fechas'
-                                    : '${DateFormat('dd MMM yyyy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yyyy').format(_dateRange!.end)}',
-                                style: GoogleFonts.poppins(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (_dateRange != null) ...[
-                                const Spacer(),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.close,
-                                    color: Colors.redAccent,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => setState(() {
-                                    _dateRange = null;
-                                    _detailCurrentPage = 1;
-                                  }),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      if (_groupingMode == 1)
+                      if (_groupingMode == 1 || _groupingMode == 2)
                         Wrap(
                           spacing: 8,
                           children: _activeChartTypes.keys.map((type) {
@@ -861,7 +1055,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         ),
                       const SizedBox(height: 20),
 
-                      // BOUNDARY ONLY FOR THE CHART
                       RepaintBoundary(
                         key: _chartExportKey,
                         child: Container(
@@ -876,9 +1069,28 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                             ),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: _groupingMode == 1
+                          child: _groupingMode == 1 || _groupingMode == 2
                               ? LineChart(
                                   LineChartData(
+                                    lineTouchData: LineTouchData(
+                                      touchTooltipData: LineTouchTooltipData(
+                                        getTooltipItems: (touchedSpots) {
+                                          return touchedSpots
+                                              .map(
+                                                (spot) => LineTooltipItem(
+                                                  _currencyFormat.format(
+                                                    spot.y,
+                                                  ),
+                                                  const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              )
+                                              .toList();
+                                        },
+                                      ),
+                                    ),
                                     clipData: const FlClipData.none(),
                                     gridData: const FlGridData(
                                       show: true,
@@ -904,7 +1116,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 value == maxY * 1.2)
                                               return const SizedBox.shrink();
                                             return Text(
-                                              value.toInt().toString(),
+                                              NumberFormat.compactCurrency(
+                                                symbol: '\$',
+                                              ).format(value),
                                               style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey,
@@ -954,6 +1168,20 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                 )
                               : BarChart(
                                   BarChartData(
+                                    barTouchData: BarTouchData(
+                                      touchTooltipData: BarTouchTooltipData(
+                                        getTooltipItem:
+                                            (group, groupIndex, rod, rodIndex) {
+                                              return BarTooltipItem(
+                                                _currencyFormat.format(rod.toY),
+                                                const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              );
+                                            },
+                                      ),
+                                    ),
                                     alignment: BarChartAlignment.spaceAround,
                                     maxY: maxY * 1.2,
                                     titlesData: FlTitlesData(
@@ -976,7 +1204,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 value == maxY * 1.2)
                                               return const SizedBox.shrink();
                                             return Text(
-                                              value.toInt().toString(),
+                                              NumberFormat.compactCurrency(
+                                                symbol: '\$',
+                                              ).format(value),
                                               style: const TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey,
@@ -1028,12 +1258,48 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                       ),
 
                       const SizedBox(height: 30),
-                      Text(
-                        'Historial de Transacciones',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Historial de Transacciones',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+
+                          SizedBox(
+                            width: 180,
+                            child: DropdownButtonFormField<String>(
+                              value: _detailSortBy,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.sort, size: 18),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              items: _detailSortOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setState(() => _detailSortBy = val!),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 10),
 
@@ -1054,19 +1320,16 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                     Colors.green,
                               ),
                               title: Text(
-                                item.aporte.tipo,
+                                item.feligres.nombre,
                                 style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               subtitle: Text(
-                                DateFormat(
-                                  'dd MMM yyyy, hh:mm a',
-                                  'es',
-                                ).format(item.aporte.fecha),
+                                '${item.aporte.tipo} • ${DateFormat('dd MMM yyyy, hh:mm a', 'es').format(item.aporte.fecha)}',
                               ),
                               trailing: Text(
-                                '\$${item.aporte.monto.toStringAsFixed(2)}',
+                                _currencyFormat.format(item.aporte.monto),
                                 style: GoogleFonts.montserrat(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -1081,11 +1344,22 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
                 if (targetData.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 24,
+                    padding: const EdgeInsets.only(
+                      top: 16,
+                      bottom: 32,
+                      left: 20,
+                      right: 80,
                     ),
-                    color: colorScheme.surface,
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
                     child: Row(
                       children: [
                         Text(
@@ -1121,18 +1395,27 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.chevron_left),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                           onPressed: _detailCurrentPage > 1
                               ? () => setState(() => _detailCurrentPage--)
                               : null,
                         ),
-                        Text(
-                          'Pág $_detailCurrentPage de $totalDetailPages',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'Pág $_detailCurrentPage de $totalDetailPages',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.chevron_right),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                           onPressed: _detailCurrentPage < totalDetailPages
                               ? () => setState(() => _detailCurrentPage++)
                               : null,
