@@ -24,20 +24,16 @@ class NaturalCurrencyInputFormatter extends TextInputFormatter {
       return newValue.copyWith(text: '');
     }
 
-    // Remove existing commas to get the raw string
     String text = newValue.text.replaceAll(',', '');
 
-    // Split into integer and decimal parts based on the dot
     List<String> parts = text.split('.');
     String integerPart = parts[0];
     String decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
 
-    // Prevent more than 2 decimal digits
     if (parts.length > 1 && parts[1].length > 2) {
       decimalPart = '.${parts[1].substring(0, 2)}';
     }
 
-    // Format the integer part with thousands separators
     if (integerPart.isNotEmpty) {
       final number = int.tryParse(integerPart);
       if (number != null) {
@@ -67,10 +63,13 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   final _montoController = TextEditingController();
   final _dateController = TextEditingController();
 
+  TextEditingController? _searchController;
+
   String? _selectedFeligresId;
   String? _selectedTipo = 'Diezmo';
   DateTime _selectedDate = DateTime.now();
   bool _isSaving = false;
+  bool _noResults = false;
 
   final List<String> _tiposAporte = [
     'Diezmo',
@@ -87,6 +86,18 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
       'dd MMM yyyy',
       'es',
     ).format(_selectedDate);
+  }
+
+  // --- NUEVA FUNCIÓN NORMALIZADORA ---
+  // Convierte todo a minúsculas y reemplaza las vocales con tilde/diéresis por vocales simples
+  String _normalizeString(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áäâà]'), 'a')
+        .replaceAll(RegExp(r'[éëêè]'), 'e')
+        .replaceAll(RegExp(r'[íïîì]'), 'i')
+        .replaceAll(RegExp(r'[óöôò]'), 'o')
+        .replaceAll(RegExp(r'[úüûù]'), 'u');
   }
 
   Future<void> _pickDate() async {
@@ -109,7 +120,6 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   Future<void> _saveAporte() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // LECTURA DIRECTA DEL MONTO NATURAL
     final double? montoFinal = double.tryParse(
       _montoController.text.replaceAll(',', '').trim(),
     );
@@ -251,35 +261,62 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                         displayStringForOption: (Feligrese option) =>
                             option.nombre,
                         optionsBuilder: (TextEditingValue textEditingValue) {
-                          if (textEditingValue.text.isEmpty) return members;
-                          return members.where((Feligrese member) {
-                            return member.nombre.toLowerCase().contains(
-                              textEditingValue.text.toLowerCase(),
+                          if (textEditingValue.text.isEmpty) {
+                            Future.microtask(() {
+                              if (mounted && _noResults)
+                                setState(() => _noResults = false);
+                            });
+                            return const Iterable<Feligrese>.empty();
+                          }
+
+                          // APLICACIÓN DE LA NORMALIZACIÓN EN LA BÚSQUEDA
+                          final query = _normalizeString(textEditingValue.text);
+                          final matches = members.where((Feligrese member) {
+                            final nombreNormalizado = _normalizeString(
+                              member.nombre,
                             );
+                            return nombreNormalizado.contains(query);
                           });
+
+                          Future.microtask(() {
+                            if (mounted && _noResults != matches.isEmpty) {
+                              setState(() => _noResults = matches.isEmpty);
+                            }
+                          });
+
+                          return matches;
                         },
                         onSelected: (Feligrese selection) {
-                          setState(() => _selectedFeligresId = selection.id);
+                          setState(() {
+                            _selectedFeligresId = selection.id;
+                            _noResults = false;
+                          });
                         },
                         fieldViewBuilder:
                             (context, controller, focusNode, onFieldSubmitted) {
+                              _searchController = controller;
+
                               return TextFormField(
                                 controller: controller,
                                 focusNode: focusNode,
-                                // NUEVO: Selecciona la primera coincidencia al dar "Enter"
+                                readOnly: _selectedFeligresId != null,
                                 onFieldSubmitted: (String value) {
                                   if (value.isNotEmpty) {
+                                    // APLICACIÓN DE LA NORMALIZACIÓN AL DAR ENTER
+                                    final query = _normalizeString(value);
                                     final match = members
                                         .where(
-                                          (m) => m.nombre
-                                              .toLowerCase()
-                                              .contains(value.toLowerCase()),
+                                          (m) => _normalizeString(
+                                            m.nombre,
+                                          ).contains(query),
                                         )
                                         .firstOrNull;
+
                                     if (match != null) {
                                       setState(() {
                                         _selectedFeligresId = match.id;
                                         controller.text = match.nombre;
+                                        _noResults = false;
                                       });
                                     }
                                   }
@@ -289,20 +326,60 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                                   labelText: 'Buscar Feligrés *',
                                   hintText: 'Escriba el nombre...',
                                   prefixIcon: const Icon(Icons.search),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.red,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  focusedErrorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                      color: Colors.red,
+                                      width: 2,
+                                    ),
+                                  ),
                                   suffixIcon: _selectedFeligresId != null
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
+                                      ? IconButton(
+                                          icon: const Icon(
+                                            Icons.close,
+                                            color: Colors.redAccent,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _selectedFeligresId = null;
+                                              controller.clear();
+                                              _noResults = false;
+                                              focusNode.requestFocus();
+                                            });
+                                          },
                                         )
                                       : null,
                                 ),
                                 validator: (value) =>
                                     _selectedFeligresId == null
-                                    ? 'Seleccione un feligrés'
+                                    ? 'Debe seleccionar un feligrés'
                                     : null,
                               );
                             },
                       ),
+
+                      if (_noResults && _selectedFeligresId == null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6.0, right: 8.0),
+                          child: Text(
+                            'No existe el feligrés',
+                            style: GoogleFonts.poppins(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
 
                       const SizedBox(height: 4),
                       TextButton.icon(
@@ -312,7 +389,15 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             builder: (context) => const AddFeligresSheet(),
-                          );
+                          ).then((_) {
+                            if (mounted) {
+                              setState(() {
+                                _selectedFeligresId = null;
+                                _searchController?.clear();
+                                _noResults = false;
+                              });
+                            }
+                          });
                         },
                         icon: const Icon(Icons.person_add_alt_1, size: 18),
                         label: Text(
@@ -332,15 +417,33 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
               const SizedBox(height: 8),
 
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     flex: 3,
                     child: DropdownButtonFormField<String>(
                       isExpanded: true,
                       value: _selectedTipo,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Tipo *',
-                        prefixIcon: Icon(Icons.category_outlined),
+                        prefixIcon: const Icon(Icons.category_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
                       ),
                       dropdownColor: colorScheme.surface,
                       items: _tiposAporte.map((tipo) {
@@ -358,21 +461,34 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      // USE THE NEW FORMATTER HERE:
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[\d.,]'),
-                        ), // Allow digits, dots, and commas
+                        FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
                         NaturalCurrencyInputFormatter(),
                       ],
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Monto *',
                         prefixText: '\$ ',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
+                            width: 2,
+                          ),
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty)
                           return 'Obligatorio';
-                        // Ignore commas for validation
                         if (double.tryParse(value.replaceAll(',', '')) == null)
                           return 'Inválido';
                         return null;
@@ -387,10 +503,13 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                 controller: _dateController,
                 readOnly: true,
                 onTap: _pickDate,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Fecha del Aporte',
-                  prefixIcon: Icon(Icons.calendar_month_outlined),
-                  suffixIcon: Icon(Icons.arrow_drop_down),
+                  prefixIcon: const Icon(Icons.calendar_month_outlined),
+                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
