@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/members/widgets/add_feligres_sheet.dart';
@@ -13,6 +14,47 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
 
+class NaturalCurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Remove existing commas to get the raw string
+    String text = newValue.text.replaceAll(',', '');
+
+    // Split into integer and decimal parts based on the dot
+    List<String> parts = text.split('.');
+    String integerPart = parts[0];
+    String decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
+
+    // Prevent more than 2 decimal digits
+    if (parts.length > 1 && parts[1].length > 2) {
+      decimalPart = '.${parts[1].substring(0, 2)}';
+    }
+
+    // Format the integer part with thousands separators
+    if (integerPart.isNotEmpty) {
+      final number = int.tryParse(integerPart);
+      if (number != null) {
+        final formatter = NumberFormat('#,###', 'en_US');
+        integerPart = formatter.format(number);
+      }
+    }
+
+    String finalString = integerPart + decimalPart;
+
+    return TextEditingValue(
+      text: finalString,
+      selection: TextSelection.collapsed(offset: finalString.length),
+    );
+  }
+}
+
 class AddAporteSheet extends ConsumerStatefulWidget {
   const AddAporteSheet({super.key});
 
@@ -23,44 +65,60 @@ class AddAporteSheet extends ConsumerStatefulWidget {
 class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   final _formKey = GlobalKey<FormState>();
   final _montoController = TextEditingController();
+  final _dateController = TextEditingController();
 
   String? _selectedFeligresId;
-  String? _selectedTipo;
-  DateTime _selectedDate = DateTime.now(); // Defaults to right now
+  String? _selectedTipo = 'Diezmo';
+  DateTime _selectedDate = DateTime.now();
   bool _isSaving = false;
 
   final List<String> _tiposAporte = [
     'Diezmo',
     'Ofrenda',
-    'Promesa',
+    'Primicia',
     'Pro-Templo',
     'Especial',
   ];
 
-  // --- MODERN DATE PICKER ---
+  @override
+  void initState() {
+    super.initState();
+    _dateController.text = DateFormat(
+      'dd MMM yyyy',
+      'es',
+    ).format(_selectedDate);
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(data: Theme.of(context), child: child!);
-      },
+      builder: (context, child) =>
+          Theme(data: Theme.of(context), child: child!),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = DateFormat('dd MMM yyyy', 'es').format(picked);
+      });
     }
   }
 
-  // --- SAVE & AUTO-SYNC LOGIC ---
   Future<void> _saveAporte() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // LECTURA DIRECTA DEL MONTO NATURAL
+    final double? montoFinal = double.tryParse(
+      _montoController.text.replaceAll(',', '').trim(),
+    );
+
     final currentIglesia = ref.read(currentIglesiaProvider);
     if (currentIglesia == null) {
       CustomSnackBar.showError(
         context,
-        'Debes registrar o seleccionar una Sede en el menú principal primero.',
+        'Debes registrar o seleccionar una Sede.',
       );
       return;
     }
@@ -71,30 +129,31 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
       );
       return;
     }
+    if (montoFinal == null || montoFinal <= 0) {
+      CustomSnackBar.showWarning(context, 'El monto debe ser mayor a \$0.00');
+      return;
+    }
 
     setState(() => _isSaving = true);
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Save locally to SQLite (Instant)
       await database.insertAporte(
         AportesCompanion.insert(
           id: const Uuid().v4(),
           feligresId: _selectedFeligresId!,
-          monto: double.parse(_montoController.text.trim()),
+          monto: montoFinal,
           tipo: _selectedTipo!,
           fecha: drift.Value(_selectedDate),
           syncStatus: const drift.Value(0),
         ),
       );
 
-      // 2. Close & Show Success IMMEDIATELY
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Aporte registrado exitosamente');
       }
 
-      // 3. Opportunistic Background Sync (NO 'await')
       Connectivity().checkConnectivity().then((connectivity) {
         final hasInternet =
             connectivity.contains(ConnectivityResult.mobile) ||
@@ -120,6 +179,7 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   @override
   void dispose() {
     _montoController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -183,35 +243,70 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                           )
                           .toList() ??
                       [];
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: _selectedFeligresId,
-                        decoration: const InputDecoration(
-                          labelText: 'Feligrés *',
-                          prefixIcon: Icon(Icons.person),
-                        ),
-                        dropdownColor: colorScheme.surface,
-                        items: members.map((member) {
-                          return DropdownMenuItem(
-                            value: member.id,
-                            child: Text(member.nombre),
-                          );
-                        }).toList(),
-                        onChanged: (value) =>
-                            setState(() => _selectedFeligresId = value),
-                        hint: members.isEmpty
-                            ? const Text('No hay feligreses registrados')
-                            : const Text('Seleccione un feligrés'),
+                      Autocomplete<Feligrese>(
+                        displayStringForOption: (Feligrese option) =>
+                            option.nombre,
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) return members;
+                          return members.where((Feligrese member) {
+                            return member.nombre.toLowerCase().contains(
+                              textEditingValue.text.toLowerCase(),
+                            );
+                          });
+                        },
+                        onSelected: (Feligrese selection) {
+                          setState(() => _selectedFeligresId = selection.id);
+                        },
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                // NUEVO: Selecciona la primera coincidencia al dar "Enter"
+                                onFieldSubmitted: (String value) {
+                                  if (value.isNotEmpty) {
+                                    final match = members
+                                        .where(
+                                          (m) => m.nombre
+                                              .toLowerCase()
+                                              .contains(value.toLowerCase()),
+                                        )
+                                        .firstOrNull;
+                                    if (match != null) {
+                                      setState(() {
+                                        _selectedFeligresId = match.id;
+                                        controller.text = match.nombre;
+                                      });
+                                    }
+                                  }
+                                  onFieldSubmitted();
+                                },
+                                decoration: InputDecoration(
+                                  labelText: 'Buscar Feligrés *',
+                                  hintText: 'Escriba el nombre...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _selectedFeligresId != null
+                                      ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                      : null,
+                                ),
+                                validator: (value) =>
+                                    _selectedFeligresId == null
+                                    ? 'Seleccione un feligrés'
+                                    : null,
+                              );
+                            },
                       ),
 
-                      // --- EL NUEVO BOTÓN DE REDIRECCIÓN MÁGICA ---
                       const SizedBox(height: 4),
                       TextButton.icon(
                         onPressed: () {
-                          // Abre el formulario de feligrés ENCIMA del de aportes
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
@@ -257,20 +352,29 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: TextFormField(
                       controller: _montoController,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      // USE THE NEW FORMATTER HERE:
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[\d.,]'),
+                        ), // Allow digits, dots, and commas
+                        NaturalCurrencyInputFormatter(),
+                      ],
                       decoration: const InputDecoration(
-                        labelText: 'Monto (\$)',
-                        prefixIcon: Icon(Icons.attach_money),
+                        labelText: 'Monto *',
+                        prefixText: '\$ ',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty)
                           return 'Obligatorio';
-                        if (double.tryParse(value) == null) return 'Inválido';
+                        // Ignore commas for validation
+                        if (double.tryParse(value.replaceAll(',', '')) == null)
+                          return 'Inválido';
                         return null;
                       },
                     ),
@@ -279,20 +383,18 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
               ),
               const SizedBox(height: 16),
 
-              // INPUT: Fecha
               TextFormField(
+                controller: _dateController,
                 readOnly: true,
                 onTap: _pickDate,
-                decoration: InputDecoration(
-                  labelText:
-                      'Fecha: ${DateFormat('dd MMM yyyy', 'es').format(_selectedDate)}',
-                  prefixIcon: const Icon(Icons.calendar_month_outlined),
-                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                decoration: const InputDecoration(
+                  labelText: 'Fecha del Aporte',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                  suffixIcon: Icon(Icons.arrow_drop_down),
                 ),
               ),
               const SizedBox(height: 32),
 
-              // GLOWING SUBMIT BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -301,10 +403,7 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                     borderRadius: BorderRadius.circular(12),
                     gradient: LinearGradient(
                       colors: isDark
-                          ? [
-                              const Color(0xFF89216B),
-                              const Color(0xFFDA4453),
-                            ] // Pink/Purple Neon for Money
+                          ? [const Color(0xFF89216B), const Color(0xFFDA4453)]
                           : [colorScheme.secondary, Colors.redAccent],
                     ),
                     boxShadow: isDark

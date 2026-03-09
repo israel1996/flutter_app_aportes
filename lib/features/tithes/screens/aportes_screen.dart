@@ -21,18 +21,24 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
   late TextEditingController _searchController;
 
   DateTimeRange? _dateRange;
-  String _sortBy = 'Fecha (Descendente)';
+  String _sortBy = 'Fecha (Recientes)';
   int _currentPage = 1;
   int _itemsPerPage = 10;
 
   final List<String> _sortOptions = [
-    'Fecha (Descendente)',
-    'Fecha (Ascendente)',
-    'Nombre (A-Z)',
-    'Nombre (Z-A)',
+    'Fecha (Recientes)',
+    'Fecha (Antiguos)',
+    'Monto (Mayor)',
+    'Monto (Menor)',
   ];
 
   final List<int> _pageOptions = [10, 20, 50];
+
+  final _currencyFormat = NumberFormat.currency(
+    locale: 'en_US',
+    symbol: '\$ ',
+    decimalDigits: 2,
+  );
 
   @override
   void initState() {
@@ -103,21 +109,33 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
       body: StreamBuilder<List<AporteConFeligres>>(
         stream: _historyStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           final allAportes = snapshot.data ?? [];
 
-          // 1. Filter
+          final query = _searchController.text.toLowerCase().trim();
+          final isSearchingNumber =
+              double.tryParse(
+                query.replaceAll('\$', '').replaceAll(',', '').trim(),
+              ) !=
+              null;
+
           var filtered = allAportes.where((item) {
-            // FILTRO MULTI-SEDE: Verifica que el feligrés pertenezca a la iglesia actual
             final matchIglesia =
                 currentIglesia == null ||
                 item.feligres.iglesiaId == currentIglesia.id;
-
             final matchName = item.feligres.nombre.toLowerCase().contains(
-              _searchController.text.toLowerCase(),
+              query,
             );
+            final matchAmount =
+                isSearchingNumber &&
+                item.aporte.monto.toString().contains(
+                  query.replaceAll('\$', '').replaceAll(',', '').trim(),
+                );
+
+            bool matchSearch = matchName || matchAmount;
 
             bool matchDate = true;
             if (_dateRange != null) {
@@ -130,26 +148,21 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                   );
             }
 
-            // Retornamos true solo si cumple con la iglesia, el nombre y la fecha
-            return matchIglesia && matchName && matchDate;
+            return matchIglesia && matchSearch && matchDate;
           }).toList();
-          // 2. Sort
+
           filtered.sort((a, b) {
-            switch (_sortBy) {
-              case 'Fecha (Descendente)':
-                return b.aporte.fecha.compareTo(a.aporte.fecha);
-              case 'Fecha (Ascendente)':
-                return a.aporte.fecha.compareTo(b.aporte.fecha);
-              case 'Nombre (A-Z)':
-                return a.feligres.nombre.compareTo(b.feligres.nombre);
-              case 'Nombre (Z-A)':
-                return b.feligres.nombre.compareTo(a.feligres.nombre);
-              default:
-                return 0;
-            }
+            if (_sortBy == 'Fecha (Recientes)')
+              return b.aporte.fecha.compareTo(a.aporte.fecha);
+            if (_sortBy == 'Fecha (Antiguos)')
+              return a.aporte.fecha.compareTo(b.aporte.fecha);
+            if (_sortBy == 'Monto (Mayor)')
+              return b.aporte.monto.compareTo(a.aporte.monto);
+            if (_sortBy == 'Monto (Menor)')
+              return a.aporte.monto.compareTo(b.aporte.monto);
+            return 0;
           });
 
-          // 3. Paginate
           final totalPages = (filtered.length / _itemsPerPage).ceil() == 0
               ? 1
               : (filtered.length / _itemsPerPage).ceil();
@@ -162,7 +175,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
           return Column(
             children: [
-              // HEADER CONTROLS
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -173,7 +185,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Date Range Button (Highly Visible)
                     InkWell(
                       onTap: _pickDateRange,
                       borderRadius: BorderRadius.circular(16),
@@ -187,28 +198,33 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                           borderRadius: BorderRadius.circular(16),
                           color: colorScheme.primary.withOpacity(0.05),
                         ),
+                        // NUEVO: Corrección de desbordamiento en Rango de Fechas
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.date_range, color: colorScheme.primary),
                             const SizedBox(width: 8),
-                            Text(
-                              _dateRange == null
-                                  ? 'Seleccionar Rango de Fechas'
-                                  : '${DateFormat('dd MMM yyyy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yyyy').format(_dateRange!.end)}',
-                              style: GoogleFonts.poppins(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                _dateRange == null
+                                    ? 'Seleccionar Rango de Fechas'
+                                    : '${DateFormat('dd MMM yy').format(_dateRange!.start)} - ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
+                                style: GoogleFonts.poppins(
+                                  color: colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (_dateRange != null) ...[
-                              const Spacer(),
                               IconButton(
                                 icon: const Icon(
                                   Icons.close,
                                   color: Colors.redAccent,
                                   size: 20,
                                 ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
                                 onPressed: () => setState(() {
                                   _dateRange = null;
                                   _currentPage = 1;
@@ -220,13 +236,12 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Search & Sorting (Stacked vertically to prevent overflow)
                     Column(
                       children: [
                         TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
-                            hintText: 'Buscar feligrés...',
+                            hintText: 'Buscar feligrés o monto...',
                             prefixIcon: const Icon(Icons.search),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -241,8 +256,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           value: _sortBy,
-                          isExpanded:
-                              true, // Prevents text overflow inside the dropdown
+                          isExpanded: true,
                           decoration: InputDecoration(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -257,7 +271,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                   value: o,
                                   child: Text(
                                     o,
-                                    style: const TextStyle(fontSize: 12),
+                                    style: const TextStyle(fontSize: 14),
                                   ),
                                 ),
                               )
@@ -270,7 +284,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 ),
               ),
 
-              // LIST
               Expanded(
                 child: filtered.isEmpty
                     ? Center(
@@ -330,7 +343,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                 ),
                               ),
                               trailing: Text(
-                                '\$${item.aporte.monto.toStringAsFixed(2)}',
+                                _currencyFormat.format(item.aporte.monto),
                                 style: GoogleFonts.montserrat(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -343,13 +356,12 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       ),
               ),
 
-              // PAGINATION WITH DROPDOWN
+              // NUEVO: Corrección de desbordamiento en la barra de paginación
               Container(
-                // Added extra padding on the right (80) and bottom (32) to prevent FAB overlap
                 padding: const EdgeInsets.only(
                   top: 16,
                   bottom: 32,
-                  left: 24,
+                  left: 20, // Padding ligeramente reducido
                   right: 80,
                 ),
                 decoration: BoxDecoration(
@@ -371,7 +383,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                         color: Colors.grey,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     DropdownButton<int>(
                       value: _itemsPerPage,
                       underline: const SizedBox(),
@@ -396,16 +408,25 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.chevron_left),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: _currentPage > 1
                           ? () => setState(() => _currentPage--)
                           : null,
                     ),
-                    Text(
-                      'Pág $_currentPage de $totalPages',
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Pág $_currentPage de $totalPages',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.chevron_right),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                       onPressed: _currentPage < totalPages
                           ? () => setState(() => _currentPage++)
                           : null,

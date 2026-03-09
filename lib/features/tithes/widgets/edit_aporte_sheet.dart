@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
@@ -10,6 +11,47 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
+
+class NaturalCurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.isEmpty) {
+      return newValue.copyWith(text: '');
+    }
+
+    // Remove existing commas to get the raw string
+    String text = newValue.text.replaceAll(',', '');
+
+    // Split into integer and decimal parts based on the dot
+    List<String> parts = text.split('.');
+    String integerPart = parts[0];
+    String decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
+
+    // Prevent more than 2 decimal digits
+    if (parts.length > 1 && parts[1].length > 2) {
+      decimalPart = '.${parts[1].substring(0, 2)}';
+    }
+
+    // Format the integer part with thousands separators
+    if (integerPart.isNotEmpty) {
+      final number = int.tryParse(integerPart);
+      if (number != null) {
+        final formatter = NumberFormat('#,###', 'en_US');
+        integerPart = formatter.format(number);
+      }
+    }
+
+    String finalString = integerPart + decimalPart;
+
+    return TextEditingValue(
+      text: finalString,
+      selection: TextSelection.collapsed(offset: finalString.length),
+    );
+  }
+}
 
 class EditAporteSheet extends ConsumerStatefulWidget {
   final AporteConFeligres aporteItem;
@@ -23,6 +65,7 @@ class EditAporteSheet extends ConsumerStatefulWidget {
 class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _montoController;
+  final _dateController = TextEditingController();
 
   late String _selectedTipo;
   late DateTime _selectedDate;
@@ -31,7 +74,7 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   final List<String> _tiposAporte = [
     'Diezmo',
     'Ofrenda',
-    'Promesa',
+    'Primicia',
     'Pro-Templo',
     'Especial',
   ];
@@ -39,16 +82,20 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   @override
   void initState() {
     super.initState();
-    // Pre-fill the form with existing contribution data
+    // Extraemos solo el número, ej: "10.50"
+    final formatter = NumberFormat('#,##0.##', 'en_US');
     _montoController = TextEditingController(
-      text: widget.aporteItem.aporte.monto.toString(),
+      text: formatter.format(widget.aporteItem.aporte.monto),
     );
 
-    // Safely load the type, defaulting to 'Diezmo' if there's a typo in the DB
     final tipo = widget.aporteItem.aporte.tipo.trim();
     _selectedTipo = _tiposAporte.contains(tipo) ? tipo : _tiposAporte.first;
 
     _selectedDate = widget.aporteItem.aporte.fecha;
+    _dateController.text = DateFormat(
+      'dd MMM yyyy',
+      'es',
+    ).format(_selectedDate);
   }
 
   Future<void> _pickDate() async {
@@ -61,36 +108,45 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
           Theme(data: Theme.of(context), child: child!),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = DateFormat('dd MMM yyyy', 'es').format(picked);
+      });
     }
   }
 
   Future<void> _updateAporte() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final double? montoFinal = double.tryParse(
+      _montoController.text.replaceAll(',', '').trim(),
+    );
+
+    if (montoFinal == null || montoFinal <= 0) {
+      CustomSnackBar.showWarning(context, 'El monto debe ser mayor a \$0.00');
+      return;
+    }
+
     setState(() => _isSaving = true);
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Update locally
       await database
           .update(database.aportes)
           .replace(
             widget.aporteItem.aporte.copyWith(
-              monto: double.parse(_montoController.text.trim()),
+              monto: montoFinal,
               tipo: _selectedTipo,
               fecha: _selectedDate,
               syncStatus: 0,
             ),
           );
 
-      // 2. Close window instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Aporte actualizado');
       }
 
-      // 3. Trigger background sync without awaiting
       final syncService = SyncService(database);
       syncService.syncAll().catchError(
         (e) => debugPrint("Auto-sync skipped: $e"),
@@ -130,7 +186,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Check internet connection for secure deletion
       final connectivity = await Connectivity().checkConnectivity();
       final hasInternet =
           connectivity.contains(ConnectivityResult.mobile) ||
@@ -143,19 +198,15 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
         );
       }
 
-      // 2. DELTA SYNC FLAG: Soft delete from Supabase FIRST
       final supabase = Supabase.instance.client;
       await supabase
           .from('aportes')
           .update({
             'is_deleted': true,
-            'updated_at': DateTime.now()
-                .toUtc()
-                .toIso8601String(), // Force timestamp update
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           })
           .eq('id', widget.aporteItem.aporte.id);
 
-      // 3. Hard delete from local SQLite
       await (database.delete(
         database.aportes,
       )..where((tbl) => tbl.id.equals(widget.aporteItem.aporte.id))).go();
@@ -165,7 +216,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
         CustomSnackBar.showWarning(context, 'Aporte eliminado permanentemente');
       }
 
-      // 4. Trigger background sync to propagate the deletion to other devices
       Future.microtask(() {
         final authService = ref.read(authServiceProvider);
         if (authService.currentUser != null) {
@@ -184,6 +234,7 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   @override
   void dispose() {
     _montoController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -210,7 +261,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -241,7 +291,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
               ),
               const SizedBox(height: 20),
 
-              // DUAL INPUTS: Tipo & Monto
               Row(
                 children: [
                   Expanded(
@@ -268,20 +317,29 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: TextFormField(
                       controller: _montoController,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      // USE THE NEW FORMATTER HERE:
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[\d.,]'),
+                        ), // Allow digits, dots, and commas
+                        NaturalCurrencyInputFormatter(),
+                      ],
                       decoration: const InputDecoration(
-                        labelText: 'Monto (\$)',
-                        prefixIcon: Icon(Icons.attach_money),
+                        labelText: 'Monto *',
+                        prefixText: '\$ ',
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty)
                           return 'Obligatorio';
-                        if (double.tryParse(value) == null) return 'Inválido';
+                        // Ignore commas for validation
+                        if (double.tryParse(value.replaceAll(',', '')) == null)
+                          return 'Inválido';
                         return null;
                       },
                     ),
@@ -290,20 +348,18 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
               ),
               const SizedBox(height: 16),
 
-              // INPUT: Fecha
               TextFormField(
+                controller: _dateController,
                 readOnly: true,
                 onTap: _pickDate,
-                decoration: InputDecoration(
-                  labelText:
-                      'Fecha: ${DateFormat('dd MMM yyyy', 'es').format(_selectedDate)}',
-                  prefixIcon: const Icon(Icons.calendar_month_outlined),
-                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                decoration: const InputDecoration(
+                  labelText: 'Fecha del Aporte',
+                  prefixIcon: Icon(Icons.calendar_month_outlined),
+                  suffixIcon: Icon(Icons.arrow_drop_down),
                 ),
               ),
               const SizedBox(height: 32),
 
-              // GLOWING UPDATE BUTTON
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -347,10 +403,8 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
 
-              // DELETE BUTTON
               SizedBox(
                 width: double.infinity,
                 child: TextButton.icon(
