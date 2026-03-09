@@ -78,20 +78,30 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
       try {
         if (widget.iglesiaParaEditar == null) {
-          // MODE: CREATE NEW
+          // 1. Generate the ID before inserting
+          final newId = const Uuid().v4();
+
           final nuevaIglesia = IglesiasCompanion.insert(
-            id: const Uuid().v4(),
+            id: newId,
             userId: userId,
             nombre: _nombreController.text.trim(),
             distrito: _distritoSeleccionado!,
             categoria: drift.Value(_categoriaSeleccionada),
             fechaLlegada: drift.Value(_fechaLlegada),
             fechaSalida: drift.Value(_fechaSalida),
-            syncStatus: const drift.Value(0), // Mark for cloud sync
+            syncStatus: const drift.Value(0),
           );
+
+          // 2. Insert into the SQLite database
           await database.into(database.iglesias).insert(nuevaIglesia);
-          ref.read(currentIglesiaProvider.notifier).state =
-              nuevaIglesia as Iglesia?;
+
+          // 3. FIX: Fetch the actual object back from the database
+          final iglesiaGuardada = await (database.select(
+            database.iglesias,
+          )..where((tbl) => tbl.id.equals(newId))).getSingle();
+
+          // 4. Assign the real object to the Riverpod state
+          ref.read(currentIglesiaProvider.notifier).state = iglesiaGuardada;
         } else {
           // MODE: EDIT EXISTING
           await database
@@ -103,18 +113,17 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                   categoria: drift.Value(_categoriaSeleccionada),
                   fechaLlegada: drift.Value(_fechaLlegada),
                   fechaSalida: drift.Value(_fechaSalida),
-                  syncStatus: 0, // Mark for sync again
+                  syncStatus: 0,
                 ),
               );
         }
 
-        // Attempt background sync (without stopping the flow)
+        // Trigger background sync
         final syncService = SyncService(database);
         syncService.syncAll().catchError(
           (e) => debugPrint("Background sync failed: $e"),
         );
 
-        // Close window using the safe variable
         navigator.pop();
         CustomSnackBar.showSuccess(
           context,

@@ -152,7 +152,12 @@ class SyncService {
   // =========================================================================
 
   Future<void> _pullIglesias(String? lastSyncStr) async {
-    var query = _supabase.from('iglesias').select();
+    // FIX: Filter strictly by the logged-in user's ID
+    var query = _supabase
+        .from('iglesias')
+        .select()
+        .eq('user_id', _supabase.auth.currentUser!.id);
+
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }
@@ -196,7 +201,12 @@ class SyncService {
   }
 
   Future<void> _pullFeligreses(String? lastSyncStr) async {
-    var query = _supabase.from('feligreses').select();
+    // FIX: Filter strictly by the logged-in user's ID
+    var query = _supabase
+        .from('feligreses')
+        .select()
+        .eq('user_id', _supabase.auth.currentUser!.id);
+
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }
@@ -237,7 +247,12 @@ class SyncService {
   }
 
   Future<void> _pullAportes(String? lastSyncStr) async {
-    var query = _supabase.from('aportes').select();
+    // FIX: Filter strictly by the logged-in user's ID
+    var query = _supabase
+        .from('aportes')
+        .select()
+        .eq('user_id', _supabase.auth.currentUser!.id);
+
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }

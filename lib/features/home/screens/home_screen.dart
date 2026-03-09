@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // REQUIRED FOR WIPING CACHE
 import 'package:flutter_app_aportes/core/database/database.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
@@ -59,8 +60,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      // --- THE FIX: ABORT IF USER IS PENDING ---
-      // This prevents the modal from flashing during the 1-second auto-login window after signUp.
       final userData = await supabase
           .from('usuarios_app')
           .select('estado')
@@ -68,10 +67,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .maybeSingle();
 
       if (userData != null && userData['estado'] == 'pendiente') {
-        return; // Abort silently. The AuthService will log them out in a millisecond anyway.
+        return;
       }
 
-      // 1. MODAL TIMING & STRICT QUERY FIX
       final response = await supabase
           .from('iglesias')
           .select('id')
@@ -175,9 +173,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (proceed != true) return;
     }
 
-    final authService = ref.read(authServiceProvider);
     try {
-      await authService.signOut(ref: ref);
+      // 1. HARD WIPE LOCAL STORAGE AND DATABASE
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('last_sync_time');
+
+      await database.delete(database.aportes).go();
+      await database.delete(database.feligreses).go();
+      await database.delete(database.iglesias).go();
+
+      ref.read(currentIglesiaProvider.notifier).state = null;
+
+      // 2. SIGN OUT
+      final authService = ref.read(authServiceProvider);
+      await authService.signOut();
     } catch (e) {
       debugPrint('Error al cerrar sesión: $e');
     }
@@ -197,7 +206,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final currentEnv = ref.watch(environmentProvider);
     final isFinance = currentEnv == AppEnvironment.finanzas;
 
-    // --- ESTADO GLOBAL DE NAVEGACIÓN ---
     final selectedIndex = ref.watch(navIndexProvider);
     final currentIglesia = ref.watch(currentIglesiaProvider);
 
@@ -215,22 +223,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final isDesktop = MediaQuery.of(context).size.width > 800;
 
-        // --- PÁGINAS AISLADAS POR ENTORNO ---
         final List<Widget> pages = isFinance
             ? [
-                const DashboardSummary(), // 0
-                const AportesScreen(), // 1 (Reemplazó a Feligreses)
-                const ReportesScreen(), // 2
-                if (isSuperAdmin) const AdminUsersScreen(), // 3
+                const DashboardSummary(),
+                const AportesScreen(),
+                const ReportesScreen(),
+                if (isSuperAdmin) const AdminUsersScreen(),
               ]
             : [
-                const DashboardSecretaria(), // 0
-                const FeligresesScreen(), // 1 (Exclusivo de Secretaría)
-                const ReportesSecretariaScreen(), // 2
-                if (isSuperAdmin) const AdminUsersScreen(), // 3
+                const DashboardSecretaria(),
+                const FeligresesScreen(),
+                const ReportesSecretariaScreen(),
+                if (isSuperAdmin) const AdminUsersScreen(),
               ];
 
-        // Protección contra desbordamiento de índice al cambiar de entorno
         if (selectedIndex >= pages.length) {
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => ref.read(navIndexProvider.notifier).state = 0,
@@ -298,7 +304,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         ),
                       ),
 
-                      // --- MENÚ LATERAL DINÁMICO ---
                       _buildNavItem(
                         0,
                         Icons.grid_view_rounded,
@@ -325,7 +330,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           isDark,
                           selectedIndex,
                         ),
-                      // REEMPLAZAMOS EXPORTAR POR REPORTES:
                       _buildNavItem(
                         2,
                         Icons.analytics,
@@ -462,7 +466,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     if (!isDesktop)
                       _buildMobileIglesiaSelector(colorScheme, isDark),
 
-                    // --- 3. HARD UI BLOCK FIX ---
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 32.0),
@@ -527,7 +530,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
 
-          // --- BARRA INFERIOR (MÓVIL) DINÁMICA ---
           bottomNavigationBar: isDesktop
               ? null
               : NavigationBar(
@@ -552,7 +554,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         icon: Icon(Icons.account_balance_wallet_outlined),
                         label: 'Aportes',
                       ),
-                    // REEMPLAZAMOS EXPORTAR POR REPORTES:
                     const NavigationDestination(
                       icon: Icon(Icons.analytics),
                       label: 'Reportes',
@@ -692,9 +693,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       builder: (context, ref, child) {
         final database = ref.watch(databaseProvider);
         final currentIglesia = ref.watch(currentIglesiaProvider);
+        final authService = ref.watch(authServiceProvider);
+        final userId = authService.currentUser?.id ?? '';
 
+        // ONLY WATCH CHURCHES THAT BELONG TO THE LOGGED IN USER
         return StreamBuilder<List<Iglesia>>(
-          stream: database.select(database.iglesias).watch(),
+          stream: (database.select(
+            database.iglesias,
+          )..where((tbl) => tbl.userId.equals(userId))).watch(),
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
@@ -707,7 +713,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   (i) => i.id == currentIglesia.id,
                 );
               } else {
-                // Safely ask the provider to evaluate the cloud preference
                 Future.microtask(() {
                   ref
                       .read(currentIglesiaProvider.notifier)
@@ -932,9 +937,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       builder: (context, ref, child) {
         final database = ref.watch(databaseProvider);
         final currentIglesia = ref.watch(currentIglesiaProvider);
+        final authService = ref.watch(authServiceProvider);
+        final userId = authService.currentUser?.id ?? '';
 
+        // ONLY WATCH CHURCHES THAT BELONG TO THE LOGGED IN USER
         return StreamBuilder<List<Iglesia>>(
-          stream: database.select(database.iglesias).watch(),
+          stream: (database.select(
+            database.iglesias,
+          )..where((tbl) => tbl.userId.equals(userId))).watch(),
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
@@ -946,7 +956,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   (i) => i.id == currentIglesia.id,
                 );
               } else {
-                // Safely ask the provider to evaluate the cloud preference
                 Future.microtask(() {
                   ref
                       .read(currentIglesiaProvider.notifier)
