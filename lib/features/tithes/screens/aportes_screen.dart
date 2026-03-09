@@ -21,15 +21,15 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
   late TextEditingController _searchController;
 
   DateTimeRange? _dateRange;
-  String _sortBy = 'Fecha (Recientes)';
+  String _sortBy = 'Más recientes primero';
   int _currentPage = 1;
   int _itemsPerPage = 10;
 
   final List<String> _sortOptions = [
-    'Fecha (Recientes)',
-    'Fecha (Antiguos)',
-    'Monto (Mayor)',
-    'Monto (Menor)',
+    'Más recientes primero',
+    'Más antiguos primero',
+    'Aportes más altos',
+    'Aportes más bajos',
   ];
 
   final List<int> _pageOptions = [10, 20, 50];
@@ -59,6 +59,8 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
       initialDateRange: _dateRange,
+      builder: (context, child) =>
+          Theme(data: Theme.of(context), child: child!),
     );
     if (range != null) {
       setState(() {
@@ -152,13 +154,13 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
           }).toList();
 
           filtered.sort((a, b) {
-            if (_sortBy == 'Fecha (Recientes)')
+            if (_sortBy == 'Más recientes primero')
               return b.aporte.fecha.compareTo(a.aporte.fecha);
-            if (_sortBy == 'Fecha (Antiguos)')
+            if (_sortBy == 'Más antiguos primero')
               return a.aporte.fecha.compareTo(b.aporte.fecha);
-            if (_sortBy == 'Monto (Mayor)')
+            if (_sortBy == 'Aportes más altos')
               return b.aporte.monto.compareTo(a.aporte.monto);
-            if (_sortBy == 'Monto (Menor)')
+            if (_sortBy == 'Aportes más bajos')
               return a.aporte.monto.compareTo(b.aporte.monto);
             return 0;
           });
@@ -175,6 +177,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
           return Column(
             children: [
+              // --- REDESIGNED INTUITIVE HEADER ---
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -184,106 +187,143 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                   ),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    InkWell(
-                      onTap: _pickDateRange,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
+                    // 1. Search Bar at the top (Natural flow)
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar feligrés o monto...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: colorScheme.primary),
-                          borderRadius: BorderRadius.circular(16),
-                          color: colorScheme.primary.withOpacity(0.05),
-                        ),
-                        // NUEVO: Corrección de desbordamiento en Rango de Fechas
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.date_range, color: colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _dateRange == null
-                                    ? 'Seleccionar Rango de Fechas'
-                                    : '${DateFormat('dd MMM yy').format(_dateRange!.start)} - ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
-                                style: GoogleFonts.poppins(
-                                  color: colorScheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (_dateRange != null) ...[
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.redAccent,
-                                  size: 20,
-                                ),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () => setState(() {
-                                  _dateRange = null;
-                                  _currentPage = 1;
-                                }),
-                              ),
-                            ],
-                          ],
-                        ),
+                        filled: true,
+                        fillColor: isDark
+                            ? Colors.black12
+                            : Colors.grey.shade100,
                       ),
+                      onChanged: (val) => setState(() => _currentPage = 1),
                     ),
-                    const SizedBox(height: 16),
-                    Column(
+                    const SizedBox(height: 12),
+
+                    // 2. Sort Dropdown and Date Button side-by-side
+                    Row(
                       children: [
-                        TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: 'Buscar feligrés o monto...',
-                            prefixIcon: const Icon(Icons.search),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        Expanded(
+                          flex: 5,
+                          child: DropdownButtonFormField<String>(
+                            value: _sortBy,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Ordenar lista por',
+                              prefixIcon: const Icon(Icons.sort),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            filled: true,
-                            fillColor: isDark
-                                ? Colors.black12
-                                : Colors.grey.shade100,
-                          ),
-                          onChanged: (val) => setState(() => _currentPage = 1),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _sortBy,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: _sortOptions
-                              .map(
-                                (o) => DropdownMenuItem(
-                                  value: o,
-                                  child: Text(
-                                    o,
-                                    style: const TextStyle(fontSize: 14),
+                            items: _sortOptions
+                                .map(
+                                  (o) => DropdownMenuItem(
+                                    value: o,
+                                    child: Text(
+                                      o,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) => setState(() => _sortBy = val!),
+                                )
+                                .toList(),
+                            onChanged: (val) => setState(() => _sortBy = val!),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 3,
+                          child: ElevatedButton.icon(
+                            onPressed: _pickDateRange,
+                            icon: const Icon(
+                              Icons.calendar_month_outlined,
+                              size: 18,
+                            ),
+                            label: const Text('Fechas'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 18,
+                              ), // Match height with dropdown
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                              backgroundColor: colorScheme.primary.withOpacity(
+                                0.1,
+                              ),
+                              foregroundColor: colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ],
                     ),
+
+                    // 3. Active Date Filter Chip (Only shows when dates are selected)
+                    if (_dateRange != null) ...[
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.filter_alt,
+                              size: 16,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${DateFormat('dd MMM yy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => setState(() {
+                                _dateRange = null;
+                                _currentPage = 1;
+                              }),
+                              child: const Icon(
+                                Icons.close,
+                                size: 18,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
 
+              // --- LIST ---
               Expanded(
                 child: filtered.isEmpty
                     ? Center(
@@ -356,12 +396,12 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       ),
               ),
 
-              // NUEVO: Corrección de desbordamiento en la barra de paginación
+              // --- PAGINATION ---
               Container(
                 padding: const EdgeInsets.only(
                   top: 16,
                   bottom: 32,
-                  left: 20, // Padding ligeramente reducido
+                  left: 20,
                   right: 80,
                 ),
                 decoration: BoxDecoration(
