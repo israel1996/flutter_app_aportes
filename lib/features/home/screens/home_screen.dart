@@ -1,6 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // REQUIRED FOR WIPING CACHE
 import 'package:flutter_app_aportes/core/database/database.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/admin/screens/admin_users_screen.dart';
@@ -14,6 +13,7 @@ import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
 import 'package:flutter_app_aportes/features/tithes/screens/aportes_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../auth/screens/force_password_screen.dart';
 import '../../reports/screens/reports_screen.dart';
@@ -52,6 +52,67 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void dispose() {
     _syncAnimationController.dispose();
     super.dispose();
+  }
+
+  // LÓGICA ROBUSTA CENTRALIZADA PARA CARGAR LA PREFERENCIA
+  Future<void> _cargarIglesiaPreferida({required bool offline}) async {
+    try {
+      final database = ref.read(databaseProvider);
+      String? targetId;
+
+      if (offline) {
+        // 1. Lectura rápida de la caché local
+        final prefs = await SharedPreferences.getInstance();
+        targetId = prefs.getString('ultima_iglesia_id_local');
+      } else {
+        // 2. Lectura precisa desde la nube (Supabase)
+        final user = Supabase.instance.client.auth.currentUser;
+        if (user != null) {
+          final userData = await Supabase.instance.client
+              .from('usuarios_app')
+              .select('ultima_iglesia_id')
+              .eq('id', user.id)
+              .maybeSingle();
+
+          if (userData != null && userData['ultima_iglesia_id'] != null) {
+            // Explicitly convert the dynamic database value to a safe Dart String
+            targetId = userData['ultima_iglesia_id'].toString();
+
+            final prefs = await SharedPreferences.getInstance();
+            // The '!' is no longer needed here
+            await prefs.setString('ultima_iglesia_id_local', targetId);
+          }
+        }
+      }
+
+      // Aplicar la iglesia encontrada
+      if (targetId != null) {
+        final savedChurch = await (database.select(
+          database.iglesias,
+        )..where((tbl) => tbl.id.equals(targetId!))).getSingleOrNull();
+
+        if (savedChurch != null && mounted) {
+          ref.read(currentIglesiaProvider.notifier).state = savedChurch;
+          return; // Éxito, terminamos aquí
+        }
+      }
+
+      // FALLBACK: Si no hay preferencia guardada o no se encontró, seleccionar la primera local
+      if (ref.read(currentIglesiaProvider) == null && mounted) {
+        final user = Supabase.instance.client.auth.currentUser;
+        final firstChurch =
+            await (database.select(database.iglesias)
+                  ..where((tbl) => tbl.userId.equals(user?.id ?? ''))
+                  ..limit(1))
+                .getSingleOrNull();
+
+        if (firstChurch != null && mounted) {
+          ref.read(currentIglesiaProvider.notifier).state = firstChurch;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading church preference: $e');
+    }
   }
 
   Future<void> _checkIfUserNeedsChurch() async {
@@ -100,6 +161,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _syncAnimationController.repeat();
 
     try {
+      // Intentar asignar la iglesia localmente AL INSTANTE de arrancar la app
+      await _cargarIglesiaPreferida(offline: true);
+
       final connectivity = await Connectivity().checkConnectivity();
       final hasInternet =
           connectivity.contains(ConnectivityResult.mobile) ||
@@ -107,12 +171,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           connectivity.contains(ConnectivityResult.ethernet);
 
       if (!hasInternet) {
-        if (mounted) {
+        if (mounted)
           CustomSnackBar.showWarning(
             context,
             'Modo Offline: Sin conexión a Internet',
           );
-        }
         return;
       }
 
@@ -124,13 +187,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       await syncService.syncAll();
 
+      // Verificar y actualizar con la preferencia oficial de la nube tras sincronizar
+      await _cargarIglesiaPreferida(offline: false);
+
       if (mounted) {
         CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         CustomSnackBar.showError(context, 'Error al sincronizar: $e');
-      }
     } finally {
       if (mounted) {
         setState(() => _isSyncing = false);
@@ -174,9 +239,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     try {
-      // 1. HARD WIPE LOCAL STORAGE AND DATABASE
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('last_sync_time');
+      await prefs.remove('ultima_iglesia_id_local');
 
       await database.delete(database.aportes).go();
       await database.delete(database.feligreses).go();
@@ -184,7 +249,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       ref.read(currentIglesiaProvider.notifier).state = null;
 
-      // 2. SIGN OUT
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
     } catch (e) {
@@ -696,7 +760,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final authService = ref.watch(authServiceProvider);
         final userId = authService.currentUser?.id ?? '';
 
-        // ONLY WATCH CHURCHES THAT BELONG TO THE LOGGED IN USER
         return StreamBuilder<List<Iglesia>>(
           stream: (database.select(
             database.iglesias,
@@ -706,19 +769,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Iglesia? validDropdownValue;
             if (iglesias.isEmpty) return const SizedBox.shrink();
 
-            if (iglesias.isNotEmpty) {
-              if (currentIglesia != null &&
-                  iglesias.any((i) => i.id == currentIglesia.id)) {
-                validDropdownValue = iglesias.firstWhere(
-                  (i) => i.id == currentIglesia.id,
-                );
-              } else {
-                Future.microtask(() {
-                  ref
-                      .read(currentIglesiaProvider.notifier)
-                      .setIglesiaFromListSafe(iglesias);
-                });
-              }
+            // LA INTERFAZ YA NO TOMA DECISIONES, SOLO SE ADAPTA A LA PREFERENCIA CARGADA
+            if (currentIglesia != null &&
+                iglesias.any((i) => i.id == currentIglesia.id)) {
+              validDropdownValue = iglesias.firstWhere(
+                (i) => i.id == currentIglesia.id,
+              );
             }
 
             return Container(
@@ -743,6 +799,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       child: DropdownButton<Iglesia>(
                         value: validDropdownValue,
                         isExpanded: true,
+                        hint: Text(
+                          'Cargando...',
+                          style: GoogleFonts.poppins(color: Colors.grey),
+                        ),
                         icon: const Icon(Icons.arrow_drop_down),
                         style: GoogleFonts.poppins(
                           fontSize: 14,
@@ -757,9 +817,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                           );
                         }).toList(),
-                        onChanged: (Iglesia? nueva) {
+                        onChanged: (Iglesia? nueva) async {
+                          if (nueva == null) return;
                           ref.read(currentIglesiaProvider.notifier).state =
                               nueva;
+
+                          try {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString(
+                              'ultima_iglesia_id_local',
+                              nueva.id,
+                            );
+
+                            await Supabase.instance.client
+                                .from('usuarios_app')
+                                .update({'ultima_iglesia_id': nueva.id})
+                                .eq('id', userId);
+                          } catch (e) {
+                            debugPrint('Error saving mobile preference: $e');
+                          }
                         },
                       ),
                     ),
@@ -940,7 +1016,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final authService = ref.watch(authServiceProvider);
         final userId = authService.currentUser?.id ?? '';
 
-        // ONLY WATCH CHURCHES THAT BELONG TO THE LOGGED IN USER
         return StreamBuilder<List<Iglesia>>(
           stream: (database.select(
             database.iglesias,
@@ -949,19 +1024,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
-            if (iglesias.isNotEmpty) {
-              if (currentIglesia != null &&
-                  iglesias.any((i) => i.id == currentIglesia.id)) {
-                validDropdownValue = iglesias.firstWhere(
-                  (i) => i.id == currentIglesia.id,
-                );
-              } else {
-                Future.microtask(() {
-                  ref
-                      .read(currentIglesiaProvider.notifier)
-                      .setIglesiaFromListSafe(iglesias);
-                });
-              }
+            // LA INTERFAZ YA NO TOMA DECISIONES, SOLO SE ADAPTA A LA PREFERENCIA CARGADA
+            if (iglesias.isNotEmpty &&
+                currentIglesia != null &&
+                iglesias.any((i) => i.id == currentIglesia.id)) {
+              validDropdownValue = iglesias.firstWhere(
+                (i) => i.id == currentIglesia.id,
+              );
             }
 
             return Padding(
@@ -992,6 +1061,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           icon: const Icon(Icons.arrow_drop_down, size: 20),
                           isExpanded: true,
                           dropdownColor: colorScheme.surface,
+                          hint: Text(
+                            'Cargando...',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.grey,
+                            ),
+                          ),
                           style: GoogleFonts.poppins(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -1006,9 +1082,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ),
                             );
                           }).toList(),
-                          onChanged: (Iglesia? nueva) {
+                          onChanged: (Iglesia? nueva) async {
+                            if (nueva == null) return;
                             ref.read(currentIglesiaProvider.notifier).state =
                                 nueva;
+
+                            try {
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setString(
+                                'ultima_iglesia_id_local',
+                                nueva.id,
+                              );
+
+                              await Supabase.instance.client
+                                  .from('usuarios_app')
+                                  .update({'ultima_iglesia_id': nueva.id})
+                                  .eq('id', userId);
+                            } catch (e) {
+                              debugPrint('Error saving desktop preference: $e');
+                            }
                           },
                         ),
                       ),
