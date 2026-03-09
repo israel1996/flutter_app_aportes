@@ -34,7 +34,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   int _groupingMode =
       1; // 0 = Sin agrupación, 1 = Mensual, 2 = Feligrés, 3 = Tipo
 
-  // Master Sorting
+  // NUEVA VARIABLE PARA CONTROLAR EL TEMA DEL GRÁFICO AL EXPORTAR
+  bool _isExportingChart = false;
+
   String _masterSortBy = 'Aportes más altos';
   final List<String> _masterSortOptions = [
     'Aportes más altos',
@@ -43,7 +45,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     'Nombre (Z-A)',
   ];
 
-  // Detail Sorting
   String _detailSortBy = 'Más recientes primero';
   final List<String> _detailSortOptions = [
     'Más recientes primero',
@@ -109,10 +110,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       });
     }
   }
-
-  // ==========================================
-  // ENTERPRISE NATIVE PDF EXPORT LOGIC
-  // ==========================================
 
   pw.Widget _buildHeader(
     String title,
@@ -204,7 +201,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         children: [
           pw.Column(
             children: [
-              // FIX: Added pw.BoxDecoration to hold the border
               pw.Container(
                 width: 150,
                 decoration: const pw.BoxDecoration(
@@ -220,7 +216,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           ),
           pw.Column(
             children: [
-              // FIX: Added pw.BoxDecoration to hold the border
               pw.Container(
                 width: 150,
                 decoration: const pw.BoxDecoration(
@@ -262,6 +257,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: 200,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (context) => _buildHeader(
@@ -381,21 +377,38 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     String title,
     Iglesia? currentIglesia,
   ) async {
-    CustomSnackBar.showInfo(context, 'Capturando gráfico y generando PDF...');
+    CustomSnackBar.showInfo(context, 'Preparando gráfico para exportación...');
+
+    // 1. FORZAMOS EL MODO CLARO TEMPORALMENTE
+    setState(() {
+      _isExportingChart = true;
+    });
+
+    // 2. ESPERAMOS A QUE FLUTTER REPINTE LA PANTALLA EN BLANCO (150 milisegundos)
+    await Future.delayed(const Duration(milliseconds: 150));
+
     Uint8List? chartBytes;
     try {
-      RenderRepaintBoundary boundary =
-          _chartExportKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      chartBytes = byteData!.buffer.asUint8List();
+      if (_chartExportKey.currentContext != null) {
+        RenderRepaintBoundary boundary =
+            _chartExportKey.currentContext!.findRenderObject()
+                as RenderRepaintBoundary;
+        ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        ByteData? byteData = await image.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        chartBytes = byteData!.buffer.asUint8List();
+      }
     } catch (e) {
       debugPrint('No se pudo capturar el gráfico: $e');
     }
 
+    // 3. RESTAURAMOS EL TEMA ORIGINAL DEL USUARIO INMEDIATAMENTE
+    setState(() {
+      _isExportingChart = false;
+    });
+
+    CustomSnackBar.showInfo(context, 'Generando documento PDF...');
     final pdf = pw.Document();
 
     double grandTotal = targetData.fold(
@@ -410,6 +423,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     pdf.addPage(
       pw.MultiPage(
+        maxPages: 200,
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (context) => _buildHeader(
@@ -617,9 +631,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     );
   }
 
-  // ==========================================
-  // VIEW 1: MASTER GROUPED LIST
-  // ==========================================
   Widget _buildMasterGroupedView(
     List<AporteConFeligres> data,
     ColorScheme colorScheme,
@@ -633,7 +644,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       for (var item in data) {
         groupedMap['$idx'] = {
           'id': item.aporte.id,
-          'name': '${item.feligres.nombre} • ${item.aporte.tipo}',
+          'name': '${item.feligres.nombre} - ${item.aporte.tipo}',
           'subtitle': DateFormat(
             'dd MMM yyyy, hh:mm a',
             'es',
@@ -777,7 +788,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               Row(
                 children: [
                   Expanded(
-                    flex: 5,
+                    flex: 6,
                     child: DropdownButtonFormField<String>(
                       value: _masterSortBy,
                       isExpanded: true,
@@ -785,7 +796,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         labelText: 'Ordenar lista por',
                         prefixIcon: const Icon(Icons.sort),
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 8,
                           vertical: 12,
                         ),
                         border: OutlineInputBorder(
@@ -796,11 +807,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           .map(
                             (o) => DropdownMenuItem(
                               value: o,
-                              child: Text(
-                                o,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  o,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1057,9 +1072,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     );
   }
 
-  // ==========================================
-  // VIEW 2: DETAIL AND CHARTS
-  // ==========================================
   Widget _buildDetailView(
     List<AporteConFeligres> allData,
     ColorScheme colorScheme,
@@ -1197,6 +1209,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       }
     });
 
+    // APLICACIÓN DEL TEMA FORZADO PARA EL PDF
+    final effectiveIsDark = _isExportingChart ? false : isDark;
+    final chartBgColor = effectiveIsDark
+        ? const Color(0xFF1E1E2C)
+        : Colors.white;
+    final gridLineColor = effectiveIsDark ? Colors.white10 : Colors.black12;
+    final textColor = effectiveIsDark ? Colors.grey : Colors.black87;
+
     return Column(
       children: [
         Container(
@@ -1287,9 +1307,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           height: 300,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF1E1E2C)
-                                : Colors.white,
+                            color: chartBgColor, // Tema dinámico/forzado
                             border: Border.all(
                               color: Colors.grey.withOpacity(0.3),
                             ),
@@ -1300,6 +1318,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                   LineChartData(
                                     lineTouchData: LineTouchData(
                                       touchTooltipData: LineTouchTooltipData(
+                                        getTooltipColor: (touchedSpot) =>
+                                            Colors.blueGrey.shade800,
                                         getTooltipItems: (touchedSpots) {
                                           return touchedSpots
                                               .map(
@@ -1318,9 +1338,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                       ),
                                     ),
                                     clipData: const FlClipData.none(),
-                                    gridData: const FlGridData(
+                                    gridData: FlGridData(
                                       show: true,
                                       drawVerticalLine: false,
+                                      getDrawingHorizontalLine: (value) =>
+                                          FlLine(
+                                            color: gridLineColor,
+                                            strokeWidth: 1,
+                                            dashArray: [5, 5],
+                                          ),
                                     ),
                                     titlesData: FlTitlesData(
                                       rightTitles: const AxisTitles(
@@ -1345,9 +1371,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                               NumberFormat.compactCurrency(
                                                 symbol: '\$',
                                               ).format(value),
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.grey,
+                                                color: textColor,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             );
                                           },
@@ -1372,9 +1399,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                   ).format(
                                                     last12Months[value.toInt()],
                                                   ),
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 10,
-                                                    color: Colors.grey,
+                                                    color: textColor,
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
                                               );
@@ -1396,6 +1424,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                   BarChartData(
                                     barTouchData: BarTouchData(
                                       touchTooltipData: BarTouchTooltipData(
+                                        getTooltipColor: (group) =>
+                                            Colors.blueGrey.shade800,
                                         getTooltipItem:
                                             (group, groupIndex, rod, rodIndex) {
                                               return BarTooltipItem(
@@ -1433,9 +1463,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                               NumberFormat.compactCurrency(
                                                 symbol: '\$',
                                               ).format(value),
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.grey,
+                                                color: textColor,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             );
                                           },
@@ -1460,9 +1491,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                   ).format(
                                                     last12Months[value.toInt()],
                                                   ),
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 10,
-                                                    color: Colors.grey,
+                                                    color: textColor,
+                                                    fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
                                               );
@@ -1473,9 +1505,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                       ),
                                     ),
                                     borderData: FlBorderData(show: false),
-                                    gridData: const FlGridData(
+                                    gridData: FlGridData(
                                       show: true,
                                       drawVerticalLine: false,
+                                      getDrawingHorizontalLine: (value) =>
+                                          FlLine(
+                                            color: gridLineColor,
+                                            strokeWidth: 1,
+                                            dashArray: [5, 5],
+                                          ),
                                     ),
                                     barGroups: barGroups,
                                   ),
