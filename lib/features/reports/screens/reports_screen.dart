@@ -110,35 +110,221 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     }
   }
 
+  // ==========================================
+  // ENTERPRISE NATIVE PDF EXPORT LOGIC
+  // ==========================================
+
+  pw.Widget _buildHeader(
+    String title,
+    Iglesia? currentIglesia,
+    String filterText,
+  ) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  currentIglesia?.nombre ?? 'Iglesia / Sede Principal',
+                  style: pw.TextStyle(
+                    fontSize: 22,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Reporte Financiero Oficial',
+                  style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+                ),
+              ],
+            ),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'Fecha de Emisión:',
+                  style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                ),
+                pw.Text(
+                  DateFormat(
+                    'dd MMM yyyy, hh:mm a',
+                    'es',
+                  ).format(DateTime.now()),
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 15),
+        pw.Divider(color: PdfColors.blue900, thickness: 2),
+        pw.SizedBox(height: 10),
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.Text(
+          filterText,
+          style: pw.TextStyle(
+            fontSize: 12,
+            color: PdfColors.grey600,
+            fontStyle: pw.FontStyle.italic,
+          ),
+        ),
+        pw.SizedBox(height: 20),
+      ],
+    );
+  }
+
+  pw.Widget _buildFooter(pw.Context context) {
+    return pw.Container(
+      alignment: pw.Alignment.centerRight,
+      margin: const pw.EdgeInsets.only(top: 10.0),
+      child: pw.Text(
+        'Página ${context.pageNumber} de ${context.pagesCount}',
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+      ),
+    );
+  }
+
+  pw.Widget _buildSignatureLines() {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 50),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        children: [
+          pw.Column(
+            children: [
+              // FIX: Added pw.BoxDecoration to hold the border
+              pw.Container(
+                width: 150,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(width: 1)),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Preparado por (Finanzas)',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          pw.Column(
+            children: [
+              // FIX: Added pw.BoxDecoration to hold the border
+              pw.Container(
+                width: 150,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(width: 1)),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Revisado / Aprobado por',
+                style: const pw.TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _exportMasterToPDF(
     List<Map<String, dynamic>> displayList,
+    Iglesia? currentIglesia,
   ) async {
-    CustomSnackBar.showInfo(context, 'Generando Reporte PDF...');
+    CustomSnackBar.showInfo(context, 'Generando Reporte PDF Profesional...');
     final pdf = pw.Document();
+
+    double grandTotal = 0;
+    int totalContributions = 0;
+    for (var item in displayList) {
+      grandTotal += item['total'] as double;
+      totalContributions += _groupingMode == 0 ? 1 : (item['count'] as int);
+    }
+
+    String filterText =
+        'Agrupación: ${_groupingMode == 0 ? "Sin Agrupación" : (_groupingMode == 1 ? "Mensual" : (_groupingMode == 2 ? "Por Feligrés" : "Por Tipo"))}';
+    if (_dateRange != null) {
+      filterText +=
+          ' | Fechas: ${DateFormat('dd MMM yy').format(_dateRange!.start)} al ${DateFormat('dd MMM yy').format(_dateRange!.end)}';
+    }
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(40),
+        header: (context) => _buildHeader(
+          'Resumen General de Aportes',
+          currentIglesia,
+          filterText,
+        ),
+        footer: _buildFooter,
         build: (pw.Context context) {
           return [
-            pw.Header(
-              level: 0,
+            pw.Container(
+              padding: const pw.EdgeInsets.all(15),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                border: pw.Border.all(color: PdfColors.grey300),
+              ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                 children: [
-                  pw.Text(
-                    'Reporte Financiero',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
+                  pw.Column(
+                    children: [
+                      pw.Text(
+                        'Total Recaudado',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                      pw.Text(
+                        _currencyFormat.format(grandTotal),
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.green800,
+                        ),
+                      ),
+                    ],
                   ),
-                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
+                  pw.Column(
+                    children: [
+                      pw.Text(
+                        'Registros Procesados',
+                        style: pw.TextStyle(
+                          fontSize: 12,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                      pw.Text(
+                        totalContributions.toString(),
+                        style: pw.TextStyle(
+                          fontSize: 18,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 25),
+
             pw.TableHelper.fromTextArray(
               context: context,
               headers: _groupingMode == 0
@@ -151,15 +337,22 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
+                fontSize: 11,
               ),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.blue800,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                vertical: 6,
+                horizontal: 8,
               ),
               rowDecoration: const pw.BoxDecoration(
                 border: pw.Border(
                   bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
                 ),
               ),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
               data: displayList
                   .map(
@@ -173,36 +366,20 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   )
                   .toList(),
             ),
+
+            _buildSignatureLines(),
           ];
         },
       ),
     );
 
-    final bytes = await pdf.save();
-    final directory = await getDownloadsDirectory();
-
-    if (directory != null) {
-      final fileName =
-          'Reporte_General_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      if (mounted)
-        CustomSnackBar.showSuccess(
-          context,
-          'PDF guardado en Descargas: $fileName',
-        );
-    } else {
-      if (mounted)
-        CustomSnackBar.showError(
-          context,
-          'No se pudo encontrar la carpeta de Descargas',
-        );
-    }
+    await _saveAndNotifyPDF(pdf, 'Reporte_General');
   }
 
   Future<void> _exportDetailToPDF(
     List<AporteConFeligres> targetData,
     String title,
+    Iglesia? currentIglesia,
   ) async {
     CustomSnackBar.showInfo(context, 'Capturando gráfico y generando PDF...');
     Uint8List? chartBytes;
@@ -221,60 +398,102 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     final pdf = pw.Document();
 
+    double grandTotal = targetData.fold(
+      0,
+      (sum, item) => sum + item.aporte.monto,
+    );
+    String filterText = 'Filtro Detallado Aplicado';
+    if (_dateRange != null) {
+      filterText =
+          'Fechas: ${DateFormat('dd MMM yy').format(_dateRange!.start)} al ${DateFormat('dd MMM yy').format(_dateRange!.end)}';
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(40),
+        header: (context) => _buildHeader(
+          'Historial Detallado: $title',
+          currentIglesia,
+          filterText,
+        ),
+        footer: _buildFooter,
         build: (pw.Context context) {
           return [
-            pw.Header(
-              level: 0,
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              margin: const pw.EdgeInsets.only(bottom: 20),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              ),
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Historial Detallado: $title',
+                    'Total de Aportes: ${targetData.length}',
                     style: pw.TextStyle(
-                      fontSize: 20,
+                      fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
                     ),
                   ),
-                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
+                  pw.Text(
+                    'Monto Total: ${_currencyFormat.format(grandTotal)}',
+                    style: pw.TextStyle(
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.green800,
+                    ),
+                  ),
                 ],
               ),
             ),
-            pw.SizedBox(height: 10),
+
             if (chartBytes != null) ...[
               pw.Container(
-                height: 200,
+                height: 180,
                 width: double.infinity,
                 child: pw.Image(
                   pw.MemoryImage(chartBytes),
                   fit: pw.BoxFit.contain,
                 ),
               ),
-              pw.SizedBox(height: 20),
+              pw.SizedBox(height: 25),
             ],
+
             pw.Text(
-              'Lista de Transacciones Filtradas',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              'Desglose de Transacciones',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue900,
+              ),
             ),
             pw.SizedBox(height: 10),
+
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: ['Fecha', 'Tipo de Aporte', 'Feligrés', 'Monto'],
+              headers: ['Fecha', 'Tipo', 'Feligrés', 'Monto'],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
+                fontSize: 10,
               ),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.blue800,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                vertical: 4,
+                horizontal: 6,
               ),
               rowDecoration: const pw.BoxDecoration(
                 border: pw.Border(
                   bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
                 ),
               ),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
               data: targetData
                   .map(
@@ -290,24 +509,29 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   )
                   .toList(),
             ),
+
+            _buildSignatureLines(),
           ];
         },
       ),
     );
 
+    await _saveAndNotifyPDF(pdf, 'Detalle_${title.replaceAll(' ', '_')}');
+  }
+
+  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
     final bytes = await pdf.save();
     final directory = await getDownloadsDirectory();
 
     if (directory != null) {
-      final safeTitle = title.replaceAll(' ', '_');
       final fileName =
-          'Detalle_${safeTitle}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
       if (mounted)
         CustomSnackBar.showSuccess(
           context,
-          'PDF guardado en Descargas: $fileName',
+          'PDF guardado en Descargas:\n$fileName',
         );
     } else {
       if (mounted)
@@ -334,7 +558,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
           var allData = snapshot.data ?? [];
 
-          // Filter by Current Church
           allData = allData
               .where(
                 (item) =>
@@ -343,7 +566,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               )
               .toList();
 
-          // HYBRID SEARCH FILTER (Name, Type, Amount)
           if (_searchController.text.isNotEmpty) {
             final query = _searchController.text.toLowerCase().trim();
             final isNumber =
@@ -364,7 +586,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             }).toList();
           }
 
-          // GLOBAL DATE FILTER
           if (_dateRange != null) {
             allData = allData.where((item) {
               return item.aporte.fecha.isAfter(
@@ -377,9 +598,19 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           }
 
           if (_selectedDetailId != null) {
-            return _buildDetailView(allData, colorScheme, isDark);
+            return _buildDetailView(
+              allData,
+              colorScheme,
+              isDark,
+              currentIglesia,
+            );
           } else {
-            return _buildMasterGroupedView(allData, colorScheme, isDark);
+            return _buildMasterGroupedView(
+              allData,
+              colorScheme,
+              isDark,
+              currentIglesia,
+            );
           }
         },
       ),
@@ -393,11 +624,11 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     List<AporteConFeligres> data,
     ColorScheme colorScheme,
     bool isDark,
+    Iglesia? currentIglesia,
   ) {
     final groupedMap = <String, Map<String, dynamic>>{};
 
     if (_groupingMode == 0) {
-      // MODE 0: NO GROUPING
       int idx = 0;
       for (var item in data) {
         groupedMap['$idx'] = {
@@ -413,24 +644,20 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         idx++;
       }
     } else {
-      // OTHER GROUPING MODES
       for (var item in data) {
         String key;
         String name;
 
         if (_groupingMode == 1) {
-          // General (Mes)
           key = DateFormat('yyyy-MM').format(item.aporte.fecha);
           name = DateFormat(
             'MMMM yyyy',
             'es',
           ).format(item.aporte.fecha).toUpperCase();
         } else if (_groupingMode == 2) {
-          // Feligrés
           key = item.feligres.id;
           name = item.feligres.nombre;
         } else {
-          // Tipo
           key = item.aporte.tipo;
           name = item.aporte.tipo;
         }
@@ -445,7 +672,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     final displayList = groupedMap.values.toList();
 
-    // Master Sorting
     displayList.sort((a, b) {
       if (_masterSortBy == 'Aportes más altos')
         return (b['total'] as double).compareTo(a['total'] as double);
@@ -510,7 +736,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search & Export
               Row(
                 children: [
                   Expanded(
@@ -534,7 +759,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
-                    onPressed: () => _exportMasterToPDF(displayList),
+                    onPressed: () =>
+                        _exportMasterToPDF(displayList, currentIglesia),
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                     style: ElevatedButton.styleFrom(
@@ -548,7 +774,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Intuitive Controls (Sort & Dates)
               Row(
                 children: [
                   Expanded(
@@ -738,7 +963,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           ],
                         ),
                         onTap: _groupingMode == 0
-                            ? null // Disable tap when showing raw ungrouped items
+                            ? null
                             : () {
                                 setState(() {
                                   _selectedDetailId = item['id'];
@@ -839,6 +1064,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     List<AporteConFeligres> allData,
     ColorScheme colorScheme,
     bool isDark,
+    Iglesia? currentIglesia,
   ) {
     final Map<String, Color> typeColors = {
       'Diezmo': const Color(0xFF4FACFE),
@@ -856,14 +1082,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
 
-    // Chart toggle filter (Only relevant when grouping by Person or Date)
     if (_groupingMode == 1 || _groupingMode == 2) {
       targetData = targetData
           .where((item) => _activeChartTypes[item.aporte.tipo] == true)
           .toList();
     }
 
-    // Intuitive Sorting for Transactions
     targetData.sort((a, b) {
       if (_detailSortBy == 'Más recientes primero')
         return b.aporte.fecha.compareTo(a.aporte.fecha);
@@ -893,7 +1117,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       endDetailIndex,
     );
 
-    // Prepare Chart
     final now = DateTime.now();
     List<DateTime> last12Months = List.generate(
       12,
@@ -1000,8 +1223,11 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () =>
-                    _exportDetailToPDF(targetData, _selectedDetailName),
+                onPressed: () => _exportDetailToPDF(
+                  targetData,
+                  _selectedDetailName,
+                  currentIglesia,
+                ),
                 icon: const Icon(Icons.picture_as_pdf),
                 label: const Text('Exportar PDF'),
               ),
