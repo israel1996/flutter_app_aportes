@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -23,14 +24,13 @@ class EditFeligresSheet extends ConsumerStatefulWidget {
 class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   final _formKey = GlobalKey<FormState>();
 
-  // Existing fields
   late TextEditingController _nombreController;
   late TextEditingController _telefonoController;
+  late TextEditingController _cedulaController;
+  late TextEditingController _dateController;
+
   String? _selectedGender;
   DateTime? _selectedDate;
-
-  // --- NEW SECRETARIAT FIELDS ---
-  late TextEditingController _cedulaController;
   String? _estadoCivil;
   String _tipoFeligres = 'feligres';
   bool _poseeDiscapacidad = false;
@@ -47,27 +47,33 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   final List<String> _tiposFeligres = ['simpatizante', 'feligres', 'visita'];
 
   bool _isSaving = false;
+  List<String> _nombresSimilares = []; // LIST TO HOLD MATCHES
   bool get _isDeleted => widget.feligres.activo == 0;
 
   @override
   void initState() {
     super.initState();
-    // Populate existing fields
     _nombreController = TextEditingController(text: widget.feligres.nombre);
     _telefonoController = TextEditingController(
       text: widget.feligres.telefono ?? '',
     );
+
     final g = widget.feligres.genero;
     if (g == 'Masculino' || g == 'Femenino') {
       _selectedGender = g;
     }
-    _selectedDate = widget.feligres.fechaNacimiento;
 
-    // Populate new secretariat fields for editing
+    _selectedDate = widget.feligres.fechaNacimiento;
+    _dateController = TextEditingController(
+      text: _selectedDate == null
+          ? ''
+          : DateFormat('dd MMM yyyy', 'es').format(_selectedDate!),
+    );
+
     _cedulaController = TextEditingController(
       text: widget.feligres.cedula ?? '',
     );
-    // Safe fallback: Only assign if the value exists in our list
+
     final dbEstado = widget.feligres.estadoCivil;
     if (dbEstado != null && _estadosCiviles.contains(dbEstado)) {
       _estadoCivil = dbEstado;
@@ -84,8 +90,68 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   void dispose() {
     _nombreController.dispose();
     _telefonoController.dispose();
-    _cedulaController.dispose(); // Don't forget to dispose the new controller!
+    _cedulaController.dispose();
+    _dateController.dispose();
     super.dispose();
+  }
+
+  String _normalizeString(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áäâà]'), 'a')
+        .replaceAll(RegExp(r'[éëêè]'), 'e')
+        .replaceAll(RegExp(r'[íïîì]'), 'i')
+        .replaceAll(RegExp(r'[óöôò]'), 'o')
+        .replaceAll(RegExp(r'[úüûù]'), 'u');
+  }
+
+  // --- LIVE PARTIAL MATCH SEARCH (Excludes Current User) ---
+  Future<void> _checkDuplicateName(String name) async {
+    final query = _normalizeString(name.trim());
+    if (query.length < 3) {
+      if (_nombresSimilares.isNotEmpty) {
+        setState(() => _nombresSimilares = []);
+      }
+      return;
+    }
+
+    final database = ref.read(databaseProvider);
+    final allFeligreses = await database.select(database.feligreses).get();
+
+    final matches = allFeligreses
+        .where(
+          (f) =>
+              f.id != widget.feligres.id &&
+              _normalizeString(f.nombre).contains(query),
+        )
+        .map((f) => f.nombre)
+        .take(3)
+        .toList();
+
+    setState(() => _nombresSimilares = matches);
+  }
+
+  bool _validarCedulaEcuatoriana(String cedula) {
+    if (cedula.length != 10) return false;
+    final int provincia = int.parse(cedula.substring(0, 2));
+    if (provincia < 1 || (provincia > 24 && provincia != 30)) return false;
+    final int tercerDigito = int.parse(cedula[2]);
+    if (tercerDigito >= 6) return false;
+
+    final List<int> coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    int suma = 0;
+    for (int i = 0; i < coeficientes.length; i++) {
+      int valor = int.parse(cedula[i]) * coeficientes[i];
+      if (valor > 9) valor -= 9;
+      suma += valor;
+    }
+
+    int digitoVerificador = int.parse(cedula[9]);
+    int decenaSuperior = ((suma + 9) ~/ 10) * 10;
+    int resultado = decenaSuperior - suma;
+    if (resultado == 10) resultado = 0;
+
+    return resultado == digitoVerificador;
   }
 
   Future<void> _pickDate() async {
@@ -98,7 +164,10 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
           Theme(data: Theme.of(context), child: child!),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = DateFormat('dd MMM yyyy', 'es').format(picked);
+      });
     }
   }
 
@@ -109,7 +178,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Update Locally
       await database
           .update(database.feligreses)
           .replace(
@@ -136,13 +204,11 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
             ),
           );
 
-      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Feligrés actualizado');
       }
 
-      // 3. Trigger sync in background
       final syncService = SyncService(database);
       syncService.syncAll().catchError(
         (e) => debugPrint("Auto-sync skipped: $e"),
@@ -182,18 +248,15 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Update Locally (Soft Delete)
       await database
           .update(database.feligreses)
           .replace(widget.feligres.copyWith(activo: 0, syncStatus: 0));
 
-      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showWarning(context, 'Feligrés eliminado');
       }
 
-      // 3. Trigger sync in background (NO 'await')
       final syncService = SyncService(database);
       syncService.syncAll().catchError(
         (e) => debugPrint("Auto-sync skipped: $e"),
@@ -210,18 +273,15 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Update Locally (Restore)
       await database
           .update(database.feligreses)
           .replace(widget.feligres.copyWith(activo: 1, syncStatus: 0));
 
-      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(context, 'Feligrés restaurado con éxito');
       }
 
-      // 3. Trigger sync in background (NO 'await')
       final syncService = SyncService(database);
       syncService.syncAll().catchError(
         (e) => debugPrint("Auto-sync skipped: $e"),
@@ -249,16 +309,12 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
         color: colorScheme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      // --- DYNAMIC VIEW: Show Read-Only if deleted, or Form if active ---
       child: _isDeleted
           ? _buildReadOnlyRestoreView(colorScheme)
           : _buildEditableForm(colorScheme, isDark),
     );
   }
 
-  // =========================================================================
-  // VIEW 1: READ-ONLY RESTORE MODE
-  // =========================================================================
   Widget _buildReadOnlyRestoreView(ColorScheme colorScheme) {
     return SingleChildScrollView(
       child: Column(
@@ -290,7 +346,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
           ),
           const SizedBox(height: 32),
 
-          // Fixed Data Card
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -336,7 +391,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
           ),
           const SizedBox(height: 40),
 
-          // Restore Button
           SizedBox(
             width: double.infinity,
             height: 55,
@@ -394,9 +448,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     );
   }
 
-  // =========================================================================
-  // VIEW 2: EDITABLE FORM MODE
-  // =========================================================================
   Widget _buildEditableForm(ColorScheme colorScheme, bool isDark) {
     return Form(
       key: _formKey,
@@ -427,26 +478,111 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
             ),
             const SizedBox(height: 20),
 
-            // Basic Info
             TextFormField(
               controller: _nombreController,
-              decoration: const InputDecoration(
+              onChanged: _checkDuplicateName,
+              inputFormatters: [LengthLimitingTextInputFormatter(100)],
+              decoration: InputDecoration(
                 labelText: 'Nombre Completo *',
-                prefixIcon: Icon(Icons.person_outline),
+                prefixIcon: Icon(
+                  Icons.person_outline,
+                  color: _nombresSimilares.isNotEmpty ? Colors.orange : null,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                enabledBorder: _nombresSimilares.isNotEmpty
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Colors.orange,
+                          width: 2,
+                        ),
+                      )
+                    : null,
+                focusedBorder: _nombresSimilares.isNotEmpty
+                    ? OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Colors.orange,
+                          width: 2,
+                        ),
+                      )
+                    : null,
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Colors.redAccent,
+                    width: 2,
+                  ),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Colors.redAccent,
+                    width: 2,
+                  ),
+                ),
               ),
               validator: (value) => value!.isEmpty ? 'Obligatorio' : null,
             ),
+            if (_nombresSimilares.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '⚠️ Hay ${_nombresSimilares.length} coincidencia(s) similar(es):',
+                      style: GoogleFonts.poppins(
+                        color: Colors.orange,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    ..._nombresSimilares
+                        .map(
+                          (n) => Text(
+                            '• $n',
+                            style: GoogleFonts.poppins(
+                              color: Colors.orange.shade700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ],
+                ),
+              ),
             const SizedBox(height: 16),
 
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     isExpanded: true,
                     value: _selectedGender,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Género *',
-                      prefixIcon: Icon(Icons.wc_outlined),
+                      prefixIcon: const Icon(Icons.wc_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Colors.redAccent,
+                          width: 2,
+                        ),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(
+                          color: Colors.redAccent,
+                          width: 2,
+                        ),
+                      ),
                     ),
                     dropdownColor: colorScheme.surface,
                     items: const [
@@ -461,16 +597,24 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                     ],
                     onChanged: (value) =>
                         setState(() => _selectedGender = value),
+                    validator: (value) => value == null ? 'Obligatorio' : null,
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: TextFormField(
                     controller: _telefonoController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
+                    decoration: InputDecoration(
                       labelText: 'Teléfono',
-                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixIcon: const Icon(Icons.phone_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -479,19 +623,20 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
             const SizedBox(height: 16),
 
             TextFormField(
+              controller: _dateController,
               readOnly: true,
               onTap: _pickDate,
               decoration: InputDecoration(
-                labelText: _selectedDate == null
-                    ? 'Fecha de Nacimiento'
-                    : 'Fecha: ${DateFormat('dd MMM yyyy', 'es').format(_selectedDate!)}',
+                labelText: 'Fecha de Nacimiento',
                 prefixIcon: const Icon(Icons.calendar_month_outlined),
                 suffixIcon: const Icon(Icons.arrow_drop_down),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 20),
 
-            // --- SECRETARIAT ADVANCED DATA (OPTIONAL) ---
             Theme(
               data: Theme.of(
                 context,
@@ -523,14 +668,27 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _cedulaController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(10),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Número de Cédula',
                       prefixIcon: const Icon(Icons.badge_outlined),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value != null && value.isNotEmpty) {
+                        if (value.length != 10)
+                          return 'Debe tener exactamente 10 dígitos';
+                        if (!_validarCedulaEcuatoriana(value))
+                          return 'Cédula Ecuatoriana inválida';
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
@@ -539,7 +697,7 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                       labelText: 'Estado Civil',
                       prefixIcon: const Icon(Icons.favorite_border),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     items: _estadosCiviles
@@ -559,7 +717,7 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                       labelText: 'Tipo de Membresía',
                       prefixIcon: const Icon(Icons.card_membership),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     items: _tiposFeligres
@@ -601,7 +759,6 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
             ),
             const SizedBox(height: 32),
 
-            // Actions (Update and Delete)
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -637,8 +794,10 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
                       : Text(
                           'ACTUALIZAR',
                           style: GoogleFonts.montserrat(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? const Color(0xFF1A1A2C)
+                                : Colors.white,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 1.5,
                           ),
                         ),

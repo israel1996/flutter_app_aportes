@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
 import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/sync/services/sync_service.dart';
@@ -13,9 +14,8 @@ import '../../../core/database/database.dart';
 import '../../../providers.dart';
 
 class AddFeligresSheet extends ConsumerStatefulWidget {
-  final bool initiallyExpanded; // ADD THIS VARIABLE
+  final bool initiallyExpanded;
 
-  // Update the constructor to accept the variable, defaulting to false
   const AddFeligresSheet({super.key, this.initiallyExpanded = false});
 
   @override
@@ -27,6 +27,8 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
   final _cedulaController = TextEditingController();
+  final _dateController = TextEditingController();
+
   String? _estadoCivil;
   String _tipoFeligres = 'feligres';
   bool _poseeDiscapacidad = false;
@@ -45,6 +47,63 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   String? _selectedGender;
   DateTime? _selectedDate;
   bool _isSaving = false;
+  List<String> _nombresSimilares = []; // LIST TO HOLD MATCHES
+
+  String _normalizeString(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áäâà]'), 'a')
+        .replaceAll(RegExp(r'[éëêè]'), 'e')
+        .replaceAll(RegExp(r'[íïîì]'), 'i')
+        .replaceAll(RegExp(r'[óöôò]'), 'o')
+        .replaceAll(RegExp(r'[úüûù]'), 'u');
+  }
+
+  // --- LIVE PARTIAL MATCH SEARCH ---
+  Future<void> _checkDuplicateName(String name) async {
+    final query = _normalizeString(name.trim());
+    // Only start searching if they typed at least 3 characters
+    if (query.length < 3) {
+      if (_nombresSimilares.isNotEmpty) {
+        setState(() => _nombresSimilares = []);
+      }
+      return;
+    }
+
+    final database = ref.read(databaseProvider);
+    final allFeligreses = await database.select(database.feligreses).get();
+
+    final matches = allFeligreses
+        .where((f) => _normalizeString(f.nombre).contains(query))
+        .map((f) => f.nombre)
+        .take(3) // Limit to 3 so the UI doesn't stretch too much
+        .toList();
+
+    setState(() => _nombresSimilares = matches);
+  }
+
+  bool _validarCedulaEcuatoriana(String cedula) {
+    if (cedula.length != 10) return false;
+    final int provincia = int.parse(cedula.substring(0, 2));
+    if (provincia < 1 || (provincia > 24 && provincia != 30)) return false;
+    final int tercerDigito = int.parse(cedula[2]);
+    if (tercerDigito >= 6) return false;
+
+    final List<int> coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    int suma = 0;
+    for (int i = 0; i < coeficientes.length; i++) {
+      int valor = int.parse(cedula[i]) * coeficientes[i];
+      if (valor > 9) valor -= 9;
+      suma += valor;
+    }
+
+    int digitoVerificador = int.parse(cedula[9]);
+    int decenaSuperior = ((suma + 9) ~/ 10) * 10;
+    int resultado = decenaSuperior - suma;
+    if (resultado == 10) resultado = 0;
+
+    return resultado == digitoVerificador;
+  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -57,18 +116,16 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _dateController.text = DateFormat('dd MMM yyyy', 'es').format(picked);
+      });
     }
   }
 
   Future<void> _saveFeligres() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedGender == null) {
-      CustomSnackBar.showWarning(context, 'Por favor seleccione un género');
-      return;
-    }
 
-    // 1. READ THE CURRENT CHURCH
     final currentIglesia = ref.read(currentIglesiaProvider);
     if (currentIglesia == null) {
       CustomSnackBar.showError(
@@ -82,7 +139,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
     final database = ref.read(databaseProvider);
 
     try {
-      // 1. Save locally
       await database.insertFeligres(
         FeligresesCompanion.insert(
           id: const Uuid().v4(),
@@ -110,7 +166,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         ),
       );
 
-      // 2. Close instantly
       if (mounted) {
         Navigator.pop(context);
         CustomSnackBar.showSuccess(
@@ -119,7 +174,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         );
       }
 
-      // 3. Background Sync (NO 'await')
       Connectivity().checkConnectivity().then((connectivity) {
         final hasInternet =
             connectivity.contains(ConnectivityResult.mobile) ||
@@ -143,6 +197,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
     _nombreController.dispose();
     _telefonoController.dispose();
     _cedulaController.dispose();
+    _dateController.dispose();
     super.dispose();
   }
 
@@ -172,7 +227,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 1. Wrap the title in Expanded
                   Expanded(
                     child: Text(
                       'Nuevo Feligrés',
@@ -194,24 +248,115 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
 
               TextFormField(
                 controller: _nombreController,
-                decoration: const InputDecoration(
+                onChanged: _checkDuplicateName,
+                inputFormatters: [LengthLimitingTextInputFormatter(100)],
+                decoration: InputDecoration(
                   labelText: 'Nombre Completo *',
-                  prefixIcon: Icon(Icons.person_outline),
+                  prefixIcon: Icon(
+                    Icons.person_outline,
+                    color: _nombresSimilares.isNotEmpty ? Colors.orange : null,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  // WARNING BORDERS
+                  enabledBorder: _nombresSimilares.isNotEmpty
+                      ? OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                        )
+                      : null,
+                  focusedBorder: _nombresSimilares.isNotEmpty
+                      ? OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.orange,
+                            width: 2,
+                          ),
+                        )
+                      : null,
+                  // ERROR BORDERS
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Colors.redAccent,
+                      width: 2,
+                    ),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Colors.redAccent,
+                      width: 2,
+                    ),
+                  ),
                 ),
-                validator: (value) =>
-                    value!.isEmpty ? 'El nombre es obligatorio' : null,
+                validator: (value) => value == null || value.isEmpty
+                    ? 'El nombre es obligatorio'
+                    : null,
               ),
+
+              // WARNING LIST UI
+              if (_nombresSimilares.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '⚠️ Hay ${_nombresSimilares.length} coincidencia(s) similar(es):',
+                        style: GoogleFonts.poppins(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      ..._nombresSimilares
+                          .map(
+                            (n) => Text(
+                              '• $n',
+                              style: GoogleFonts.poppins(
+                                color: Colors.orange.shade700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 16),
 
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       isExpanded: true,
                       value: _selectedGender,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Género *',
-                        prefixIcon: Icon(Icons.wc_outlined),
+                        prefixIcon: const Icon(Icons.wc_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.redAccent,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.redAccent,
+                            width: 2,
+                          ),
+                        ),
                       ),
                       dropdownColor: colorScheme.surface,
                       items: const [
@@ -226,16 +371,25 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                       ],
                       onChanged: (value) =>
                           setState(() => _selectedGender = value),
+                      validator: (value) =>
+                          value == null ? 'Obligatorio' : null,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: TextFormField(
                       controller: _telefonoController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
+                      decoration: InputDecoration(
                         labelText: 'Teléfono (Opcional)',
-                        prefixIcon: Icon(Icons.phone_outlined),
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
@@ -244,17 +398,19 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
               const SizedBox(height: 16),
 
               TextFormField(
+                controller: _dateController,
                 readOnly: true,
                 onTap: _pickDate,
                 decoration: InputDecoration(
-                  labelText: _selectedDate == null
-                      ? 'Fecha de Nacimiento (Opcional)'
-                      : 'Fecha: ${DateFormat('dd MMM yyyy', 'es').format(_selectedDate!)}',
+                  labelText: 'Fecha de Nacimiento (Opcional)',
                   prefixIcon: const Icon(Icons.calendar_month_outlined),
                   suffixIcon: const Icon(Icons.arrow_drop_down),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
 
               Theme(
                 data: Theme.of(
@@ -266,7 +422,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                   collapsedIconColor: colorScheme.primary,
                   iconColor: colorScheme.primary,
                   title: Text(
-                    'Datos Avanzados de Secretaría (Opcional)',
+                    'Datos Avanzados de Secretaría',
                     style: GoogleFonts.poppins(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.primary,
@@ -285,29 +441,56 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                   ),
                   children: [
                     const SizedBox(height: 16),
-
-                    // 1. Cédula
                     TextFormField(
                       controller: _cedulaController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       decoration: InputDecoration(
                         labelText: 'Número de Cédula',
                         prefixIcon: const Icon(Icons.badge_outlined),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                         ),
+
+                        // --- ADD THESE 8 LINES TO UNIFY THE RED COLOR ---
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.redAccent,
+                            width: 2,
+                          ),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Colors.redAccent,
+                            width: 2,
+                          ),
+                        ),
+
+                        // ------------------------------------------------
                       ),
-                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value != null && value.isNotEmpty) {
+                          if (value.length != 10)
+                            return 'Debe tener exactamente 10 dígitos';
+                          if (!_validarCedulaEcuatoriana(value))
+                            return 'Cédula Ecuatoriana inválida';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 16),
-
-                    // 2. Estado Civil
                     DropdownButtonFormField<String>(
                       value: _estadoCivil,
                       decoration: InputDecoration(
                         labelText: 'Estado Civil',
                         prefixIcon: const Icon(Icons.favorite_border),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       items: _estadosCiviles.map((estado) {
@@ -319,15 +502,13 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                       onChanged: (val) => setState(() => _estadoCivil = val),
                     ),
                     const SizedBox(height: 16),
-
-                    // 3. Tipo de Feligrés
                     DropdownButtonFormField<String>(
                       value: _tipoFeligres,
                       decoration: InputDecoration(
                         labelText: 'Tipo de Membresía',
                         prefixIcon: const Icon(Icons.card_membership),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       items: _tiposFeligres.map((tipo) {
@@ -335,14 +516,12 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                           value: tipo,
                           child: Text(
                             tipo[0].toUpperCase() + tipo.substring(1),
-                          ), // Capitalize
+                          ),
                         );
                       }).toList(),
                       onChanged: (val) => setState(() => _tipoFeligres = val!),
                     ),
                     const SizedBox(height: 16),
-
-                    // 4. Toggles (Switches)
                     SwitchListTile(
                       title: const Text('Posee alguna discapacidad'),
                       secondary: const Icon(Icons.accessible),
@@ -405,8 +584,10 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                         : Text(
                             'GUARDAR FELIGRÉS',
                             style: GoogleFonts.montserrat(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? const Color(0xFF1A1A2C)
+                                  : Colors.white,
+                              fontWeight: FontWeight.w800,
                               letterSpacing: 1.5,
                             ),
                           ),
