@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
@@ -139,6 +140,9 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
               tipo: _selectedTipo,
               fecha: _selectedDate,
               syncStatus: 0,
+              fechaModificacion: drift.Value(
+                DateTime.now(),
+              ), // <-- Instant local update trigger
             ),
           );
 

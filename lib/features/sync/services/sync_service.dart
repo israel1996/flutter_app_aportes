@@ -12,7 +12,6 @@ class SyncService {
 
   SyncService(this.database);
 
-  /// Main entry point for the Delta Sync architecture
   Future<void> syncAll() async {
     final connectivity = await Connectivity().checkConnectivity();
     final hasInternet =
@@ -22,24 +21,19 @@ class SyncService {
 
     if (!hasInternet || _supabase.auth.currentUser == null) return;
 
-    // Yield the thread to prevent UI freezing
     await Future.microtask(() async {
       try {
-        debugPrint("--- STARTING DELTA SYNC ---");
+        debugPrint("--- STARTING HIGH-PERFORMANCE DELTA SYNC ---");
 
-        // 1. PUSH: Upload local changes to the cloud first
         await _pushLocalChanges();
 
-        // 2. GET TIMESTAMP: Retrieve the exact time of the last sync
         final prefs = await SharedPreferences.getInstance();
         final lastSyncStr = prefs.getString('last_sync_time');
 
-        // 3. PULL: Download only the data modified AFTER the last sync
         await _pullIglesias(lastSyncStr);
         await _pullFeligreses(lastSyncStr);
         await _pullAportes(lastSyncStr);
 
-        // 4. UPDATE TIMESTAMP: Save the new sync time
         final now = DateTime.now().toUtc().toIso8601String();
         await prefs.setString('last_sync_time', now);
 
@@ -51,7 +45,7 @@ class SyncService {
   }
 
   // =========================================================================
-  // PUSH PHASE (Local to Cloud)
+  // PUSH PHASE - EL SERVIDOR (SUPABASE) SE ENCARGA DE LAS FECHAS DE REGISTRO
   // =========================================================================
 
   Future<void> _pushLocalChanges() async {
@@ -72,13 +66,13 @@ class SyncService {
           'nombre': local.nombre,
           'distrito': local.distrito,
           'categoria': local.categoria,
-          'fecha_llegada': local.fechaLlegada?.toIso8601String(),
-          'fecha_salida': local.fechaSalida?.toIso8601String(),
+          'fecha_llegada': local.fechaLlegada?.toUtc().toIso8601String(),
+          'fecha_salida': local.fechaSalida?.toUtc().toIso8601String(),
           'user_id': _supabase.auth.currentUser!.id,
-          'is_deleted': false, // Soft delete flag
+          'is_deleted': false,
+          // created_at y updated_at son generados por Supabase
         });
 
-        // Mark as synced locally
         await (database.update(database.iglesias)
               ..where((tbl) => tbl.id.equals(local.id)))
             .write(const IglesiasCompanion(syncStatus: drift.Value(1)));
@@ -102,7 +96,7 @@ class SyncService {
           'nombre': local.nombre,
           'genero': local.genero,
           'telefono': local.telefono,
-          'fechanacimiento': local.fechaNacimiento?.toIso8601String(),
+          'fechanacimiento': local.fechaNacimiento?.toUtc().toIso8601String(),
           'cedula': local.cedula,
           'estado_civil': local.estadoCivil,
           'posee_discapacidad': local.poseeDiscapacidad,
@@ -110,8 +104,7 @@ class SyncService {
           'bautizado_espiritu': local.bautizadoEspiritu,
           'tipo_feligres': local.tipoFeligres,
           'activo': local.activo,
-          // --- NUEVO: ENVIAR LA FECHA LOCAL A LA NUBE ---
-          'created_at': local.fechaRegistro?.toIso8601String(),
+          // created_at y updated_at son generados por Supabase
         });
 
         await (database.update(database.feligreses)
@@ -136,8 +129,9 @@ class SyncService {
           'user_id': _supabase.auth.currentUser!.id,
           'monto': local.monto,
           'tipo': local.tipo,
-          'fecha': local.fecha.toIso8601String(),
+          'fecha': local.fecha.toUtc().toIso8601String(),
           'is_deleted': false,
+          // created_at y updated_at son generados por Supabase
         });
 
         await (database.update(database.aportes)
@@ -150,16 +144,14 @@ class SyncService {
   }
 
   // =========================================================================
-  // PULL PHASE (Cloud to Local - DELTA SYNC)
+  // PULL PHASE - CONVERSIÓN A HORA LOCAL ECUADOR (.toLocal)
   // =========================================================================
 
   Future<void> _pullIglesias(String? lastSyncStr) async {
-    // FIX: Filter strictly by the logged-in user's ID
     var query = _supabase
         .from('iglesias')
         .select()
         .eq('user_id', _supabase.auth.currentUser!.id);
-
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }
@@ -169,46 +161,48 @@ class SyncService {
 
     await database.batch((batch) {
       for (final row in cloudData) {
-        if (row['is_deleted'] == true) {
-          batch.deleteWhere(
-            database.iglesias,
-            (tbl) => tbl.id.equals(row['id']),
-          );
-        } else {
-          batch.insert(
-            database.iglesias,
-            IglesiasCompanion.insert(
-              id: row['id'],
-              userId: row['user_id'],
-              nombre: row['nombre'],
-              distrito: row['distrito'],
-              categoria: drift.Value(row['categoria']),
-              fechaLlegada: drift.Value(
-                row['fecha_llegada'] != null
-                    ? DateTime.parse(row['fecha_llegada'])
-                    : null,
+        try {
+          if (row['is_deleted'] == true) {
+            batch.deleteWhere(
+              database.iglesias,
+              (tbl) => tbl.id.equals(row['id']),
+            );
+          } else {
+            batch.insert(
+              database.iglesias,
+              IglesiasCompanion.insert(
+                id: row['id'],
+                userId: row['user_id'],
+                nombre: row['nombre'],
+                distrito: row['distrito'],
+                categoria: drift.Value(row['categoria']),
+                fechaLlegada: drift.Value(
+                  row['fecha_llegada'] != null
+                      ? DateTime.parse(row['fecha_llegada']).toLocal()
+                      : null,
+                ),
+                fechaSalida: drift.Value(
+                  row['fecha_salida'] != null
+                      ? DateTime.parse(row['fecha_salida']).toLocal()
+                      : null,
+                ),
+                syncStatus: const drift.Value(1),
               ),
-              fechaSalida: drift.Value(
-                row['fecha_salida'] != null
-                    ? DateTime.parse(row['fecha_salida'])
-                    : null,
-              ),
-              syncStatus: const drift.Value(1),
-            ),
-            mode: drift.InsertMode.insertOrReplace,
-          );
+              mode: drift.InsertMode.insertOrReplace,
+            );
+          }
+        } catch (e) {
+          debugPrint("Skipping bad Iglesia row ${row['id']}: $e");
         }
       }
     });
   }
 
   Future<void> _pullFeligreses(String? lastSyncStr) async {
-    // FILTRO APLICADO AQUÍ: Solo trae feligreses de este usuario
     var query = _supabase
         .from('feligreses')
         .select()
         .eq('user_id', _supabase.auth.currentUser!.id);
-
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }
@@ -218,47 +212,57 @@ class SyncService {
 
     await database.batch((batch) {
       for (final row in cloudData) {
-        batch.insert(
-          database.feligreses,
-          FeligresesCompanion.insert(
-            id: row['id'],
-            iglesiaId: drift.Value(row['iglesia_id']),
-            nombre: row['nombre'],
-            telefono: drift.Value(row['telefono']),
-            fechaNacimiento: drift.Value(
-              row['fechanacimiento'] != null
-                  ? DateTime.parse(row['fechanacimiento'])
-                  : null,
+        try {
+          batch.insert(
+            database.feligreses,
+            FeligresesCompanion.insert(
+              id: row['id'],
+              iglesiaId: drift.Value(row['iglesia_id']),
+              nombre: row['nombre'] ?? 'Sin Nombre',
+              telefono: drift.Value(row['telefono']),
+              fechaNacimiento: drift.Value(
+                row['fechanacimiento'] != null
+                    ? DateTime.parse(row['fechanacimiento']).toLocal()
+                    : null,
+              ),
+              genero: drift.Value(row['genero']),
+              cedula: drift.Value(row['cedula']),
+              estadoCivil: drift.Value(row['estado_civil']),
+              poseeDiscapacidad: drift.Value(
+                row['posee_discapacidad'] ?? false,
+              ),
+              bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
+              bautizadoEspiritu: drift.Value(
+                row['bautizado_espiritu'] ?? false,
+              ),
+              tipoFeligres: drift.Value(row['tipo_feligres']),
+              activo: drift.Value(row['activo'] ?? 1),
+              fechaRegistro: drift.Value(
+                row['created_at'] != null
+                    ? DateTime.parse(row['created_at']).toLocal()
+                    : null,
+              ),
+              fechaModificacion: drift.Value(
+                row['updated_at'] != null
+                    ? DateTime.parse(row['updated_at']).toLocal()
+                    : null,
+              ),
+              syncStatus: const drift.Value(1),
             ),
-            genero: drift.Value(row['genero']),
-            cedula: drift.Value(row['cedula']),
-            estadoCivil: drift.Value(row['estado_civil']),
-            poseeDiscapacidad: drift.Value(row['posee_discapacidad'] ?? false),
-            bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
-            bautizadoEspiritu: drift.Value(row['bautizado_espiritu'] ?? false),
-            tipoFeligres: drift.Value(row['tipo_feligres']),
-            activo: drift.Value(row['activo']),
-            // --- NUEVO: GUARDAR LA FECHA DE LA NUBE EN LA BASE LOCAL ---
-            fechaRegistro: drift.Value(
-              row['created_at'] != null
-                  ? DateTime.parse(row['created_at']).toLocal()
-                  : null,
-            ),
-            syncStatus: const drift.Value(1),
-          ),
-          mode: drift.InsertMode.insertOrReplace,
-        );
+            mode: drift.InsertMode.insertOrReplace,
+          );
+        } catch (e) {
+          debugPrint("Skipping bad Feligres row ${row['id']}: $e");
+        }
       }
     });
   }
 
   Future<void> _pullAportes(String? lastSyncStr) async {
-    // FIX: Filter strictly by the logged-in user's ID
     var query = _supabase
         .from('aportes')
         .select()
         .eq('user_id', _supabase.auth.currentUser!.id);
-
     if (lastSyncStr != null) {
       query = query.gt('updated_at', lastSyncStr);
     }
@@ -268,24 +272,42 @@ class SyncService {
 
     await database.batch((batch) {
       for (final row in cloudData) {
-        if (row['is_deleted'] == true) {
-          batch.deleteWhere(
-            database.aportes,
-            (tbl) => tbl.id.equals(row['id']),
-          );
-        } else {
-          batch.insert(
-            database.aportes,
-            AportesCompanion.insert(
-              id: row['id'],
-              feligresId: row['feligres_id'],
-              monto: (row['monto'] as num).toDouble(),
-              tipo: row['tipo'],
-              fecha: drift.Value(DateTime.parse(row['fecha'])),
-              syncStatus: const drift.Value(1),
-            ),
-            mode: drift.InsertMode.insertOrReplace,
-          );
+        try {
+          if (row['is_deleted'] == true) {
+            batch.deleteWhere(
+              database.aportes,
+              (tbl) => tbl.id.equals(row['id']),
+            );
+          } else {
+            batch.insert(
+              database.aportes,
+              AportesCompanion.insert(
+                id: row['id'],
+                feligresId: row['feligres_id'],
+                monto: double.tryParse(row['monto']?.toString() ?? '0') ?? 0.0,
+                tipo: row['tipo'] ?? 'Desconocido',
+                fecha: drift.Value(
+                  row['fecha'] != null
+                      ? DateTime.parse(row['fecha']).toLocal()
+                      : DateTime.now(),
+                ),
+                fechaRegistro: drift.Value(
+                  row['created_at'] != null
+                      ? DateTime.parse(row['created_at']).toLocal()
+                      : null,
+                ),
+                fechaModificacion: drift.Value(
+                  row['updated_at'] != null
+                      ? DateTime.parse(row['updated_at']).toLocal()
+                      : null,
+                ),
+                syncStatus: const drift.Value(1),
+              ),
+              mode: drift.InsertMode.insertOrReplace,
+            );
+          }
+        } catch (e) {
+          debugPrint("Skipping bad Aporte row ${row['id']}: $e");
         }
       }
     });

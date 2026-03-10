@@ -39,8 +39,18 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   final List<int> _pageOptions = [10, 20, 50, 100];
 
   // NUEVAS OPCIONES DE ORDENAMIENTO
-  final List<String> _sortOptions = ['Más Recientes', 'Más Antiguos', 'Nombre (A-Z)', 'Nombre (Z-A)'];
-  final List<String> _tipoOptions = ['Todos', 'Feligres', 'Simpatizante', 'Visita'];
+  final List<String> _sortOptions = [
+    'Más Recientes',
+    'Más Antiguos',
+    'Nombre (A-Z)',
+    'Nombre (Z-A)',
+  ];
+  final List<String> _tipoOptions = [
+    'Todos',
+    'Feligres',
+    'Simpatizante',
+    'Visita',
+  ];
   final List<String> _generoOptions = ['Todos', 'Masculino', 'Femenino'];
 
   @override
@@ -76,9 +86,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 children: [
                   pw.Text(
                     'Directorio de Feligreses Filtrado',
-                    style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                    style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
                   ),
-                  pw.Text(DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())),
+                  pw.Text(
+                    DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()),
+                  ),
                 ],
               ),
             ),
@@ -90,20 +105,39 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 0: const pw.FixedColumnWidth(25), // #
                 1: const pw.FlexColumnWidth(2.5), // Nombre
                 2: const pw.FlexColumnWidth(1.2), // Teléfono
-                3: const pw.FlexColumnWidth(1),   // Género
+                3: const pw.FlexColumnWidth(1), // Género
                 4: const pw.FlexColumnWidth(1.2), // Estado Civil
                 5: const pw.FlexColumnWidth(1.2), // Membresía
                 6: const pw.FlexColumnWidth(1.5), // Bautizado
-                7: const pw.FlexColumnWidth(1),   // Discapacidad
+                7: const pw.FlexColumnWidth(1), // Discapacidad
               },
-              headers: ['#', 'Nombre Completo', 'Teléfono', 'Género', 'Estado Civil', 'Membresía', 'Bautismo\n(Agua / Esp.)', 'Discapacidad'],
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.blue800),
-              rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5))),
+              headers: [
+                '#',
+                'Nombre Completo',
+                'Teléfono',
+                'Género',
+                'Estado Civil',
+                'Membresía',
+                'Bautismo\n(Agua / Esp.)',
+                'Discapacidad',
+              ],
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+                fontSize: 9,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blue800,
+              ),
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
               cellAlignment: pw.Alignment.centerLeft,
               cellStyle: const pw.TextStyle(fontSize: 8),
               data: members.asMap().entries.map((entry) {
-                final index = entry.key + 1; 
+                final index = entry.key + 1;
                 final m = entry.value;
                 return [
                   index.toString(),
@@ -126,16 +160,23 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     final directory = await getDownloadsDirectory();
 
     if (directory != null) {
-      final fileName = 'Directorio_Feligreses_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+      final fileName =
+          'Directorio_Feligreses_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
 
       if (mounted) {
-        CustomSnackBar.showSuccess(context, 'PDF guardado en Descargas: $fileName');
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas: $fileName',
+        );
       }
     } else {
       if (mounted) {
-        CustomSnackBar.showError(context, 'No se pudo encontrar la carpeta de Descargas');
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
+        );
       }
     }
   }
@@ -160,7 +201,13 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 ),
                 shape: BoxShape.circle,
                 boxShadow: isDark
-                    ? [BoxShadow(color: const Color(0xFF00C9FF).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF00C9FF).withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
                     : null,
               ),
               child: FloatingActionButton(
@@ -168,7 +215,8 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) => const AddFeligresSheet(initiallyExpanded: true),
+                  builder: (context) =>
+                      const AddFeligresSheet(initiallyExpanded: true),
                 ),
                 backgroundColor: Colors.transparent,
                 elevation: 0,
@@ -186,32 +234,50 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
           // 1. FILTERING
           var filteredMembers = allMembers.where((m) {
-            final matchIglesia = currentIglesia == null || m.iglesiaId == currentIglesia.id;
+            final matchIglesia =
+                currentIglesia == null || m.iglesiaId == currentIglesia.id;
             final matchStatus = m.activo == (_showDeleted ? 0 : 1);
-            final matchSearch = m.nombre.toLowerCase().contains(_searchController.text.toLowerCase());
-            final matchTipo = _filterTipo == 'Todos' || m.tipoFeligres?.toLowerCase() == _filterTipo.toLowerCase();
-            final matchGenero = _filterGenero == 'Todos' || m.genero?.toLowerCase() == _filterGenero.toLowerCase();
+            final matchSearch = m.nombre.toLowerCase().contains(
+              _searchController.text.toLowerCase(),
+            );
+            final matchTipo =
+                _filterTipo == 'Todos' ||
+                m.tipoFeligres?.toLowerCase() == _filterTipo.toLowerCase();
+            final matchGenero =
+                _filterGenero == 'Todos' ||
+                m.genero?.toLowerCase() == _filterGenero.toLowerCase();
 
-            return matchIglesia && matchStatus && matchSearch && matchTipo && matchGenero;
+            return matchIglesia &&
+                matchStatus &&
+                matchSearch &&
+                matchTipo &&
+                matchGenero;
           }).toList();
 
           // 2. NUEVA LÓGICA DE ORDENAMIENTO (Por fecha y alfabético)
           filteredMembers.sort((a, b) {
             if (_sortBy == 'Nombre (A-Z)') return a.nombre.compareTo(b.nombre);
             if (_sortBy == 'Nombre (Z-A)') return b.nombre.compareTo(a.nombre);
-            
-            // Usamos Epoch 0 como fallback por si es un registro muy antiguo sin fecha
-            final dateA = a.fechaRegistro ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final dateB = b.fechaRegistro ?? DateTime.fromMillisecondsSinceEpoch(0);
-            
-            if (_sortBy == 'Más Recientes') return dateB.compareTo(dateA); // Más nuevo arriba
-            if (_sortBy == 'Más Antiguos') return dateA.compareTo(dateB); // Más viejo arriba
-            
+
+            // This grabs the Modification date. If it hasn't been modified, it grabs the Creation date.
+            final dateA =
+                a.fechaModificacion ??
+                a.fechaRegistro ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+            final dateB =
+                b.fechaModificacion ??
+                b.fechaRegistro ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+
+            if (_sortBy == 'Más Recientes') return dateB.compareTo(dateA);
+            if (_sortBy == 'Más Antiguos') return dateA.compareTo(dateB);
+
             return 0;
           });
 
           // 3. PAGINATION
-          final totalPages = (filteredMembers.length / _itemsPerPage).ceil() == 0
+          final totalPages =
+              (filteredMembers.length / _itemsPerPage).ceil() == 0
               ? 1
               : (filteredMembers.length / _itemsPerPage).ceil();
           if (_currentPage > totalPages) _currentPage = totalPages;
@@ -227,11 +293,23 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
             children: [
               // --- HEADER & FILTERS ---
               Container(
-                padding: const EdgeInsets.only(left: 24, right: 24, bottom: 24, top: 10),
+                padding: const EdgeInsets.only(
+                  left: 24,
+                  right: 24,
+                  bottom: 24,
+                  top: 10,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(30)),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(30),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [
@@ -252,17 +330,27 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                 _currentPage = 1;
                               }),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: !_showDeleted ? colorScheme.primary.withOpacity(isDark ? 0.2 : 0.1) : Colors.transparent,
+                                  color: !_showDeleted
+                                      ? colorScheme.primary.withOpacity(
+                                          isDark ? 0.2 : 0.1,
+                                        )
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Center(
                                   child: Text(
                                     'Activos',
                                     style: GoogleFonts.poppins(
-                                      color: !_showDeleted ? colorScheme.primary : Colors.grey,
-                                      fontWeight: !_showDeleted ? FontWeight.bold : FontWeight.normal,
+                                      color: !_showDeleted
+                                          ? colorScheme.primary
+                                          : Colors.grey,
+                                      fontWeight: !_showDeleted
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                   ),
                                 ),
@@ -276,17 +364,25 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                 _currentPage = 1;
                               }),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: _showDeleted ? Colors.redAccent.withOpacity(0.1) : Colors.transparent,
+                                  color: _showDeleted
+                                      ? Colors.redAccent.withOpacity(0.1)
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Center(
                                   child: Text(
                                     'Papelera',
                                     style: GoogleFonts.poppins(
-                                      color: _showDeleted ? Colors.redAccent : Colors.grey,
-                                      fontWeight: _showDeleted ? FontWeight.bold : FontWeight.normal,
+                                      color: _showDeleted
+                                          ? Colors.redAccent
+                                          : Colors.grey,
+                                      fontWeight: _showDeleted
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
                                     ),
                                   ),
                                 ),
@@ -316,21 +412,32 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       }),
                                     )
                                   : null,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               filled: true,
-                              fillColor: isDark ? Colors.black12 : Colors.grey.shade100,
+                              fillColor: isDark
+                                  ? Colors.black12
+                                  : Colors.grey.shade100,
                             ),
-                            onChanged: (val) => setState(() => _currentPage = 1),
+                            onChanged: (val) =>
+                                setState(() => _currentPage = 1),
                           ),
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton.icon(
-                          onPressed: () => _exportFeligresesToPDF(filteredMembers),
+                          onPressed: () =>
+                              _exportFeligresesToPDF(filteredMembers),
                           icon: const Icon(Icons.download),
                           label: const Text('Exportar'),
                           style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 20,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ],
@@ -349,11 +456,27 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               value: _sortBy,
                               decoration: InputDecoration(
                                 labelText: 'Ordenar',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                              items: _sortOptions.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12)))).toList(),
-                              onChanged: (val) => setState(() => _sortBy = val!),
+                              items: _sortOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setState(() => _sortBy = val!),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -364,10 +487,25 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               value: _filterTipo,
                               decoration: InputDecoration(
                                 labelText: 'Tipo',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                              items: _tipoOptions.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12)))).toList(),
+                              items: _tipoOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                               onChanged: (val) => setState(() {
                                 _filterTipo = val!;
                                 _currentPage = 1;
@@ -382,10 +520,25 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               value: _filterGenero,
                               decoration: InputDecoration(
                                 labelText: 'Género',
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                              items: _generoOptions.map((o) => DropdownMenuItem(value: o, child: Text(o, style: const TextStyle(fontSize: 12)))).toList(),
+                              items: _generoOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
                               onChanged: (val) => setState(() {
                                 _filterGenero = val!;
                                 _currentPage = 1;
@@ -407,20 +560,32 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              _showDeleted ? Icons.delete_outline : Icons.people_outline,
+                              _showDeleted
+                                  ? Icons.delete_outline
+                                  : Icons.people_outline,
                               size: 64,
                               color: colorScheme.primary.withOpacity(0.5),
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              _showDeleted ? 'La papelera está vacía.' : 'No hay feligreses con estos filtros.',
-                              style: GoogleFonts.poppins(color: Colors.grey, fontSize: 16),
+                              _showDeleted
+                                  ? 'La papelera está vacía.'
+                                  : 'No hay feligreses con estos filtros.',
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 20, top: 16, left: 24, right: 24),
+                        padding: const EdgeInsets.only(
+                          bottom: 20,
+                          top: 16,
+                          left: 24,
+                          right: 24,
+                        ),
                         itemCount: paginatedList.length,
                         itemBuilder: (context, index) {
                           final member = paginatedList[index];
@@ -431,7 +596,9 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                                  color: Colors.black.withOpacity(
+                                    isDark ? 0.3 : 0.05,
+                                  ),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),
@@ -442,18 +609,32 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                 context: context,
                                 isScrollControlled: true,
                                 backgroundColor: Colors.transparent,
-                                builder: (context) => EditFeligresSheet(feligres: member),
+                                builder: (context) =>
+                                    EditFeligresSheet(feligres: member),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 8,
+                              ),
                               leading: CircleAvatar(
-                                backgroundColor: _showDeleted ? Colors.redAccent.withOpacity(0.1) : colorScheme.primary.withOpacity(0.1),
-                                child: Icon(Icons.person, color: _showDeleted ? Colors.redAccent : colorScheme.primary),
+                                backgroundColor: _showDeleted
+                                    ? Colors.redAccent.withOpacity(0.1)
+                                    : colorScheme.primary.withOpacity(0.1),
+                                child: Icon(
+                                  Icons.person,
+                                  color: _showDeleted
+                                      ? Colors.redAccent
+                                      : colorScheme.primary,
+                                ),
                               ),
                               title: Text(
                                 member.nombre,
-                                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurface,
+                                ),
                               ),
-                              
+
                               // --- AGREGAMOS LA FECHA DE REGISTRO EN LA TARJETA ---
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
@@ -462,29 +643,48 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   children: [
                                     Text(
                                       member.telefono ?? 'Sin teléfono',
-                                      style: GoogleFonts.poppins(color: Colors.grey, fontSize: 12),
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      member.fechaRegistro != null 
+                                      member.fechaModificacion != null
+                                          ? 'Modificado: ${DateFormat('dd MMM yyyy, hh:mm a').format(member.fechaModificacion!)}'
+                                          : member.fechaRegistro != null
                                           ? 'Creado: ${DateFormat('dd MMM yyyy, hh:mm a').format(member.fechaRegistro!)}'
                                           : 'Creado: Desconocido',
-                                      style: GoogleFonts.poppins(color: colorScheme.primary.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.w500),
+                                      style: GoogleFonts.poppins(
+                                        color: colorScheme.primary.withOpacity(
+                                          0.7,
+                                        ),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                              
+
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
                                     member.tipoFeligres ?? 'Feligres',
-                                    style: TextStyle(fontSize: 10, color: colorScheme.primary, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                   const SizedBox(height: 4),
-                                  Icon(Icons.edit_outlined, size: 20, color: Colors.grey.withOpacity(0.5)),
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    size: 20,
+                                    color: Colors.grey.withOpacity(0.5),
+                                  ),
                                 ],
                               ),
                             ),
@@ -496,19 +696,48 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
               // --- PAGINATION CONTROLS ---
               if (filteredMembers.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.only(top: 16, bottom: 32, left: 24, right: 80),
+                  padding: const EdgeInsets.only(
+                    top: 16,
+                    bottom: 32,
+                    left: 24,
+                    right: 80,
+                  ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
-                      Text('Mostrar:', style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        'Mostrar:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       DropdownButton<int>(
                         value: _itemsPerPage,
                         underline: const SizedBox(),
-                        items: _pageOptions.map((i) => DropdownMenuItem(value: i, child: Text('$i', style: GoogleFonts.poppins(fontWeight: FontWeight.bold)))).toList(),
+                        items: _pageOptions
+                            .map(
+                              (i) => DropdownMenuItem(
+                                value: i,
+                                child: Text(
+                                  '$i',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                         onChanged: (val) => setState(() {
                           _itemsPerPage = val!;
                           _currentPage = 1;
@@ -517,12 +746,19 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.chevron_left),
-                        onPressed: _currentPage > 1 ? () => setState(() => _currentPage--) : null,
+                        onPressed: _currentPage > 1
+                            ? () => setState(() => _currentPage--)
+                            : null,
                       ),
-                      Text('Pág $_currentPage de $totalPages', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+                      Text(
+                        'Pág $_currentPage de $totalPages',
+                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.chevron_right),
-                        onPressed: _currentPage < totalPages ? () => setState(() => _currentPage++) : null,
+                        onPressed: _currentPage < totalPages
+                            ? () => setState(() => _currentPage++)
+                            : null,
                       ),
                     ],
                   ),

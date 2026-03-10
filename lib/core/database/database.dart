@@ -26,7 +26,9 @@ class Feligreses extends Table {
   TextColumn get iglesiaId => text().nullable().references(Iglesias, #id)();
 
   // --- NUEVO CAMPO: FECHA Y HORA DE REGISTRO ---
-  DateTimeColumn get fechaRegistro => dateTime().nullable().clientDefault(() => DateTime.now())();
+  DateTimeColumn get fechaRegistro =>
+      dateTime().nullable().clientDefault(() => DateTime.now())();
+  DateTimeColumn get fechaModificacion => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -39,7 +41,7 @@ class Iglesias extends Table {
   IntColumn get distrito => integer()(); // 1 to 16
   DateTimeColumn get fechaLlegada => dateTime().nullable()();
   DateTimeColumn get fechaSalida => dateTime().nullable()();
-  TextColumn get categoria => text().nullable()(); 
+  TextColumn get categoria => text().nullable()();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
@@ -52,8 +54,12 @@ class Aportes extends Table {
   RealColumn get monto => real()();
   TextColumn get tipo => text()();
   DateTimeColumn get fecha => dateTime().clientDefault(() => DateTime.now())();
-
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
+
+  // --- NEW FIELD: CREATION TIMESTAMP ---
+  DateTimeColumn get fechaRegistro =>
+      dateTime().nullable().clientDefault(() => DateTime.now())();
+  DateTimeColumn get fechaModificacion => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -69,9 +75,9 @@ class AporteConFeligres {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(impl.connect());
 
-  // --- MIGRACIÓN DE BASE DE DATOS A VERSIÓN 3 ---
+  // --- DATABASE MIGRATION UPGRADED TO VERSION 4 ---
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -80,9 +86,12 @@ class AppDatabase extends _$AppDatabase {
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        if (from < 3) {
-          // Agrega la nueva columna a las bases de datos existentes sin borrar datos
-          await m.addColumn(feligreses, feligreses.fechaRegistro);
+        if (from < 3) await m.addColumn(feligreses, feligreses.fechaRegistro);
+        if (from < 4) await m.addColumn(aportes, aportes.fechaRegistro);
+        if (from < 5) {
+          // --- NEW MIGRATION ---
+          await m.addColumn(feligreses, feligreses.fechaModificacion);
+          await m.addColumn(aportes, aportes.fechaModificacion);
         }
       },
     );
@@ -144,8 +153,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> hasPendingSyncs() async {
-    final pendingAportes = await (select(aportes)..where((a) => a.syncStatus.equals(0))).get();
-    final pendingFeligreses = await (select(feligreses)..where((f) => f.syncStatus.equals(0))).get();
+    final pendingAportes = await (select(
+      aportes,
+    )..where((a) => a.syncStatus.equals(0))).get();
+    final pendingFeligreses = await (select(
+      feligreses,
+    )..where((f) => f.syncStatus.equals(0))).get();
 
     return pendingAportes.isNotEmpty || pendingFeligreses.isNotEmpty;
   }

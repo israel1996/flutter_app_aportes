@@ -709,6 +709,18 @@ class $FeligresesTable extends Feligreses
         requiredDuringInsert: false,
         clientDefault: () => DateTime.now(),
       );
+  static const VerificationMeta _fechaModificacionMeta = const VerificationMeta(
+    'fechaModificacion',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaModificacion =
+      GeneratedColumn<DateTime>(
+        'fecha_modificacion',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -726,6 +738,7 @@ class $FeligresesTable extends Feligreses
     tipoFeligres,
     iglesiaId,
     fechaRegistro,
+    fechaModificacion,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -851,6 +864,15 @@ class $FeligresesTable extends Feligreses
         ),
       );
     }
+    if (data.containsKey('fecha_modificacion')) {
+      context.handle(
+        _fechaModificacionMeta,
+        fechaModificacion.isAcceptableOrUnknown(
+          data['fecha_modificacion']!,
+          _fechaModificacionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -920,6 +942,10 @@ class $FeligresesTable extends Feligreses
         DriftSqlType.dateTime,
         data['${effectivePrefix}fecha_registro'],
       ),
+      fechaModificacion: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_modificacion'],
+      ),
     );
   }
 
@@ -945,6 +971,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
   final String tipoFeligres;
   final String? iglesiaId;
   final DateTime? fechaRegistro;
+  final DateTime? fechaModificacion;
   const Feligrese({
     required this.id,
     required this.nombre,
@@ -961,6 +988,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     required this.tipoFeligres,
     this.iglesiaId,
     this.fechaRegistro,
+    this.fechaModificacion,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -993,6 +1021,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     }
     if (!nullToAbsent || fechaRegistro != null) {
       map['fecha_registro'] = Variable<DateTime>(fechaRegistro);
+    }
+    if (!nullToAbsent || fechaModificacion != null) {
+      map['fecha_modificacion'] = Variable<DateTime>(fechaModificacion);
     }
     return map;
   }
@@ -1028,6 +1059,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       fechaRegistro: fechaRegistro == null && nullToAbsent
           ? const Value.absent()
           : Value(fechaRegistro),
+      fechaModificacion: fechaModificacion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaModificacion),
     );
   }
 
@@ -1052,6 +1086,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       tipoFeligres: serializer.fromJson<String>(json['tipoFeligres']),
       iglesiaId: serializer.fromJson<String?>(json['iglesiaId']),
       fechaRegistro: serializer.fromJson<DateTime?>(json['fechaRegistro']),
+      fechaModificacion: serializer.fromJson<DateTime?>(
+        json['fechaModificacion'],
+      ),
     );
   }
   @override
@@ -1073,6 +1110,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       'tipoFeligres': serializer.toJson<String>(tipoFeligres),
       'iglesiaId': serializer.toJson<String?>(iglesiaId),
       'fechaRegistro': serializer.toJson<DateTime?>(fechaRegistro),
+      'fechaModificacion': serializer.toJson<DateTime?>(fechaModificacion),
     };
   }
 
@@ -1092,6 +1130,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     String? tipoFeligres,
     Value<String?> iglesiaId = const Value.absent(),
     Value<DateTime?> fechaRegistro = const Value.absent(),
+    Value<DateTime?> fechaModificacion = const Value.absent(),
   }) => Feligrese(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
@@ -1112,6 +1151,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     fechaRegistro: fechaRegistro.present
         ? fechaRegistro.value
         : this.fechaRegistro,
+    fechaModificacion: fechaModificacion.present
+        ? fechaModificacion.value
+        : this.fechaModificacion,
   );
   Feligrese copyWithCompanion(FeligresesCompanion data) {
     return Feligrese(
@@ -1146,6 +1188,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       fechaRegistro: data.fechaRegistro.present
           ? data.fechaRegistro.value
           : this.fechaRegistro,
+      fechaModificacion: data.fechaModificacion.present
+          ? data.fechaModificacion.value
+          : this.fechaModificacion,
     );
   }
 
@@ -1166,7 +1211,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
           ..write('tipoFeligres: $tipoFeligres, ')
           ..write('iglesiaId: $iglesiaId, ')
-          ..write('fechaRegistro: $fechaRegistro')
+          ..write('fechaRegistro: $fechaRegistro, ')
+          ..write('fechaModificacion: $fechaModificacion')
           ..write(')'))
         .toString();
   }
@@ -1188,6 +1234,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     tipoFeligres,
     iglesiaId,
     fechaRegistro,
+    fechaModificacion,
   );
   @override
   bool operator ==(Object other) =>
@@ -1207,7 +1254,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           other.bautizadoEspiritu == this.bautizadoEspiritu &&
           other.tipoFeligres == this.tipoFeligres &&
           other.iglesiaId == this.iglesiaId &&
-          other.fechaRegistro == this.fechaRegistro);
+          other.fechaRegistro == this.fechaRegistro &&
+          other.fechaModificacion == this.fechaModificacion);
 }
 
 class FeligresesCompanion extends UpdateCompanion<Feligrese> {
@@ -1226,6 +1274,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   final Value<String> tipoFeligres;
   final Value<String?> iglesiaId;
   final Value<DateTime?> fechaRegistro;
+  final Value<DateTime?> fechaModificacion;
   final Value<int> rowid;
   const FeligresesCompanion({
     this.id = const Value.absent(),
@@ -1243,6 +1292,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.tipoFeligres = const Value.absent(),
     this.iglesiaId = const Value.absent(),
     this.fechaRegistro = const Value.absent(),
+    this.fechaModificacion = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FeligresesCompanion.insert({
@@ -1261,6 +1311,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.tipoFeligres = const Value.absent(),
     this.iglesiaId = const Value.absent(),
     this.fechaRegistro = const Value.absent(),
+    this.fechaModificacion = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre);
@@ -1280,6 +1331,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Expression<String>? tipoFeligres,
     Expression<String>? iglesiaId,
     Expression<DateTime>? fechaRegistro,
+    Expression<DateTime>? fechaModificacion,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1298,6 +1350,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       if (tipoFeligres != null) 'tipo_feligres': tipoFeligres,
       if (iglesiaId != null) 'iglesia_id': iglesiaId,
       if (fechaRegistro != null) 'fecha_registro': fechaRegistro,
+      if (fechaModificacion != null) 'fecha_modificacion': fechaModificacion,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1318,6 +1371,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Value<String>? tipoFeligres,
     Value<String?>? iglesiaId,
     Value<DateTime?>? fechaRegistro,
+    Value<DateTime?>? fechaModificacion,
     Value<int>? rowid,
   }) {
     return FeligresesCompanion(
@@ -1336,6 +1390,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       tipoFeligres: tipoFeligres ?? this.tipoFeligres,
       iglesiaId: iglesiaId ?? this.iglesiaId,
       fechaRegistro: fechaRegistro ?? this.fechaRegistro,
+      fechaModificacion: fechaModificacion ?? this.fechaModificacion,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1388,6 +1443,9 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     if (fechaRegistro.present) {
       map['fecha_registro'] = Variable<DateTime>(fechaRegistro.value);
     }
+    if (fechaModificacion.present) {
+      map['fecha_modificacion'] = Variable<DateTime>(fechaModificacion.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1412,6 +1470,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
           ..write('tipoFeligres: $tipoFeligres, ')
           ..write('iglesiaId: $iglesiaId, ')
           ..write('fechaRegistro: $fechaRegistro, ')
+          ..write('fechaModificacion: $fechaModificacion, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1486,6 +1545,31 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _fechaRegistroMeta = const VerificationMeta(
+    'fechaRegistro',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaRegistro =
+      GeneratedColumn<DateTime>(
+        'fecha_registro',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now(),
+      );
+  static const VerificationMeta _fechaModificacionMeta = const VerificationMeta(
+    'fechaModificacion',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaModificacion =
+      GeneratedColumn<DateTime>(
+        'fecha_modificacion',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1494,6 +1578,8 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
     tipo,
     fecha,
     syncStatus,
+    fechaRegistro,
+    fechaModificacion,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1548,6 +1634,24 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
         syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
       );
     }
+    if (data.containsKey('fecha_registro')) {
+      context.handle(
+        _fechaRegistroMeta,
+        fechaRegistro.isAcceptableOrUnknown(
+          data['fecha_registro']!,
+          _fechaRegistroMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fecha_modificacion')) {
+      context.handle(
+        _fechaModificacionMeta,
+        fechaModificacion.isAcceptableOrUnknown(
+          data['fecha_modificacion']!,
+          _fechaModificacionMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1581,6 +1685,14 @@ class $AportesTable extends Aportes with TableInfo<$AportesTable, Aporte> {
         DriftSqlType.int,
         data['${effectivePrefix}sync_status'],
       )!,
+      fechaRegistro: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_registro'],
+      ),
+      fechaModificacion: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_modificacion'],
+      ),
     );
   }
 
@@ -1597,6 +1709,8 @@ class Aporte extends DataClass implements Insertable<Aporte> {
   final String tipo;
   final DateTime fecha;
   final int syncStatus;
+  final DateTime? fechaRegistro;
+  final DateTime? fechaModificacion;
   const Aporte({
     required this.id,
     required this.feligresId,
@@ -1604,6 +1718,8 @@ class Aporte extends DataClass implements Insertable<Aporte> {
     required this.tipo,
     required this.fecha,
     required this.syncStatus,
+    this.fechaRegistro,
+    this.fechaModificacion,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1614,6 +1730,12 @@ class Aporte extends DataClass implements Insertable<Aporte> {
     map['tipo'] = Variable<String>(tipo);
     map['fecha'] = Variable<DateTime>(fecha);
     map['sync_status'] = Variable<int>(syncStatus);
+    if (!nullToAbsent || fechaRegistro != null) {
+      map['fecha_registro'] = Variable<DateTime>(fechaRegistro);
+    }
+    if (!nullToAbsent || fechaModificacion != null) {
+      map['fecha_modificacion'] = Variable<DateTime>(fechaModificacion);
+    }
     return map;
   }
 
@@ -1625,6 +1747,12 @@ class Aporte extends DataClass implements Insertable<Aporte> {
       tipo: Value(tipo),
       fecha: Value(fecha),
       syncStatus: Value(syncStatus),
+      fechaRegistro: fechaRegistro == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaRegistro),
+      fechaModificacion: fechaModificacion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaModificacion),
     );
   }
 
@@ -1640,6 +1768,10 @@ class Aporte extends DataClass implements Insertable<Aporte> {
       tipo: serializer.fromJson<String>(json['tipo']),
       fecha: serializer.fromJson<DateTime>(json['fecha']),
       syncStatus: serializer.fromJson<int>(json['syncStatus']),
+      fechaRegistro: serializer.fromJson<DateTime?>(json['fechaRegistro']),
+      fechaModificacion: serializer.fromJson<DateTime?>(
+        json['fechaModificacion'],
+      ),
     );
   }
   @override
@@ -1652,6 +1784,8 @@ class Aporte extends DataClass implements Insertable<Aporte> {
       'tipo': serializer.toJson<String>(tipo),
       'fecha': serializer.toJson<DateTime>(fecha),
       'syncStatus': serializer.toJson<int>(syncStatus),
+      'fechaRegistro': serializer.toJson<DateTime?>(fechaRegistro),
+      'fechaModificacion': serializer.toJson<DateTime?>(fechaModificacion),
     };
   }
 
@@ -1662,6 +1796,8 @@ class Aporte extends DataClass implements Insertable<Aporte> {
     String? tipo,
     DateTime? fecha,
     int? syncStatus,
+    Value<DateTime?> fechaRegistro = const Value.absent(),
+    Value<DateTime?> fechaModificacion = const Value.absent(),
   }) => Aporte(
     id: id ?? this.id,
     feligresId: feligresId ?? this.feligresId,
@@ -1669,6 +1805,12 @@ class Aporte extends DataClass implements Insertable<Aporte> {
     tipo: tipo ?? this.tipo,
     fecha: fecha ?? this.fecha,
     syncStatus: syncStatus ?? this.syncStatus,
+    fechaRegistro: fechaRegistro.present
+        ? fechaRegistro.value
+        : this.fechaRegistro,
+    fechaModificacion: fechaModificacion.present
+        ? fechaModificacion.value
+        : this.fechaModificacion,
   );
   Aporte copyWithCompanion(AportesCompanion data) {
     return Aporte(
@@ -1682,6 +1824,12 @@ class Aporte extends DataClass implements Insertable<Aporte> {
       syncStatus: data.syncStatus.present
           ? data.syncStatus.value
           : this.syncStatus,
+      fechaRegistro: data.fechaRegistro.present
+          ? data.fechaRegistro.value
+          : this.fechaRegistro,
+      fechaModificacion: data.fechaModificacion.present
+          ? data.fechaModificacion.value
+          : this.fechaModificacion,
     );
   }
 
@@ -1693,14 +1841,24 @@ class Aporte extends DataClass implements Insertable<Aporte> {
           ..write('monto: $monto, ')
           ..write('tipo: $tipo, ')
           ..write('fecha: $fecha, ')
-          ..write('syncStatus: $syncStatus')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('fechaRegistro: $fechaRegistro, ')
+          ..write('fechaModificacion: $fechaModificacion')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, feligresId, monto, tipo, fecha, syncStatus);
+  int get hashCode => Object.hash(
+    id,
+    feligresId,
+    monto,
+    tipo,
+    fecha,
+    syncStatus,
+    fechaRegistro,
+    fechaModificacion,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1710,7 +1868,9 @@ class Aporte extends DataClass implements Insertable<Aporte> {
           other.monto == this.monto &&
           other.tipo == this.tipo &&
           other.fecha == this.fecha &&
-          other.syncStatus == this.syncStatus);
+          other.syncStatus == this.syncStatus &&
+          other.fechaRegistro == this.fechaRegistro &&
+          other.fechaModificacion == this.fechaModificacion);
 }
 
 class AportesCompanion extends UpdateCompanion<Aporte> {
@@ -1720,6 +1880,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
   final Value<String> tipo;
   final Value<DateTime> fecha;
   final Value<int> syncStatus;
+  final Value<DateTime?> fechaRegistro;
+  final Value<DateTime?> fechaModificacion;
   final Value<int> rowid;
   const AportesCompanion({
     this.id = const Value.absent(),
@@ -1728,6 +1890,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     this.tipo = const Value.absent(),
     this.fecha = const Value.absent(),
     this.syncStatus = const Value.absent(),
+    this.fechaRegistro = const Value.absent(),
+    this.fechaModificacion = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   AportesCompanion.insert({
@@ -1737,6 +1901,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     required String tipo,
     this.fecha = const Value.absent(),
     this.syncStatus = const Value.absent(),
+    this.fechaRegistro = const Value.absent(),
+    this.fechaModificacion = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        feligresId = Value(feligresId),
@@ -1749,6 +1915,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     Expression<String>? tipo,
     Expression<DateTime>? fecha,
     Expression<int>? syncStatus,
+    Expression<DateTime>? fechaRegistro,
+    Expression<DateTime>? fechaModificacion,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1758,6 +1926,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
       if (tipo != null) 'tipo': tipo,
       if (fecha != null) 'fecha': fecha,
       if (syncStatus != null) 'sync_status': syncStatus,
+      if (fechaRegistro != null) 'fecha_registro': fechaRegistro,
+      if (fechaModificacion != null) 'fecha_modificacion': fechaModificacion,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1769,6 +1939,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     Value<String>? tipo,
     Value<DateTime>? fecha,
     Value<int>? syncStatus,
+    Value<DateTime?>? fechaRegistro,
+    Value<DateTime?>? fechaModificacion,
     Value<int>? rowid,
   }) {
     return AportesCompanion(
@@ -1778,6 +1950,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
       tipo: tipo ?? this.tipo,
       fecha: fecha ?? this.fecha,
       syncStatus: syncStatus ?? this.syncStatus,
+      fechaRegistro: fechaRegistro ?? this.fechaRegistro,
+      fechaModificacion: fechaModificacion ?? this.fechaModificacion,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1803,6 +1977,12 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
     }
+    if (fechaRegistro.present) {
+      map['fecha_registro'] = Variable<DateTime>(fechaRegistro.value);
+    }
+    if (fechaModificacion.present) {
+      map['fecha_modificacion'] = Variable<DateTime>(fechaModificacion.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1818,6 +1998,8 @@ class AportesCompanion extends UpdateCompanion<Aporte> {
           ..write('tipo: $tipo, ')
           ..write('fecha: $fecha, ')
           ..write('syncStatus: $syncStatus, ')
+          ..write('fechaRegistro: $fechaRegistro, ')
+          ..write('fechaModificacion: $fechaModificacion, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2221,6 +2403,7 @@ typedef $$FeligresesTableCreateCompanionBuilder =
       Value<String> tipoFeligres,
       Value<String?> iglesiaId,
       Value<DateTime?> fechaRegistro,
+      Value<DateTime?> fechaModificacion,
       Value<int> rowid,
     });
 typedef $$FeligresesTableUpdateCompanionBuilder =
@@ -2240,6 +2423,7 @@ typedef $$FeligresesTableUpdateCompanionBuilder =
       Value<String> tipoFeligres,
       Value<String?> iglesiaId,
       Value<DateTime?> fechaRegistro,
+      Value<DateTime?> fechaModificacion,
       Value<int> rowid,
     });
 
@@ -2362,6 +2546,11 @@ class $$FeligresesTableFilterComposer
 
   ColumnFilters<DateTime> get fechaRegistro => $composableBuilder(
     column: $table.fechaRegistro,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2493,6 +2682,11 @@ class $$FeligresesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$IglesiasTableOrderingComposer get iglesiaId {
     final $$IglesiasTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2581,6 +2775,11 @@ class $$FeligresesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get fechaRegistro => $composableBuilder(
     column: $table.fechaRegistro,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
     builder: (column) => column,
   );
 
@@ -2676,6 +2875,7 @@ class $$FeligresesTableTableManager
                 Value<String> tipoFeligres = const Value.absent(),
                 Value<String?> iglesiaId = const Value.absent(),
                 Value<DateTime?> fechaRegistro = const Value.absent(),
+                Value<DateTime?> fechaModificacion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion(
                 id: id,
@@ -2693,6 +2893,7 @@ class $$FeligresesTableTableManager
                 tipoFeligres: tipoFeligres,
                 iglesiaId: iglesiaId,
                 fechaRegistro: fechaRegistro,
+                fechaModificacion: fechaModificacion,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2712,6 +2913,7 @@ class $$FeligresesTableTableManager
                 Value<String> tipoFeligres = const Value.absent(),
                 Value<String?> iglesiaId = const Value.absent(),
                 Value<DateTime?> fechaRegistro = const Value.absent(),
+                Value<DateTime?> fechaModificacion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion.insert(
                 id: id,
@@ -2729,6 +2931,7 @@ class $$FeligresesTableTableManager
                 tipoFeligres: tipoFeligres,
                 iglesiaId: iglesiaId,
                 fechaRegistro: fechaRegistro,
+                fechaModificacion: fechaModificacion,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -2826,6 +3029,8 @@ typedef $$AportesTableCreateCompanionBuilder =
       required String tipo,
       Value<DateTime> fecha,
       Value<int> syncStatus,
+      Value<DateTime?> fechaRegistro,
+      Value<DateTime?> fechaModificacion,
       Value<int> rowid,
     });
 typedef $$AportesTableUpdateCompanionBuilder =
@@ -2836,6 +3041,8 @@ typedef $$AportesTableUpdateCompanionBuilder =
       Value<String> tipo,
       Value<DateTime> fecha,
       Value<int> syncStatus,
+      Value<DateTime?> fechaRegistro,
+      Value<DateTime?> fechaModificacion,
       Value<int> rowid,
     });
 
@@ -2897,6 +3104,16 @@ class $$AportesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$FeligresesTableFilterComposer get feligresId {
     final $$FeligresesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -2955,6 +3172,16 @@ class $$AportesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$FeligresesTableOrderingComposer get feligresId {
     final $$FeligresesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3002,6 +3229,16 @@ class $$AportesTableAnnotationComposer
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fechaModificacion => $composableBuilder(
+    column: $table.fechaModificacion,
     builder: (column) => column,
   );
 
@@ -3063,6 +3300,8 @@ class $$AportesTableTableManager
                 Value<String> tipo = const Value.absent(),
                 Value<DateTime> fecha = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
+                Value<DateTime?> fechaRegistro = const Value.absent(),
+                Value<DateTime?> fechaModificacion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AportesCompanion(
                 id: id,
@@ -3071,6 +3310,8 @@ class $$AportesTableTableManager
                 tipo: tipo,
                 fecha: fecha,
                 syncStatus: syncStatus,
+                fechaRegistro: fechaRegistro,
+                fechaModificacion: fechaModificacion,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3081,6 +3322,8 @@ class $$AportesTableTableManager
                 required String tipo,
                 Value<DateTime> fecha = const Value.absent(),
                 Value<int> syncStatus = const Value.absent(),
+                Value<DateTime?> fechaRegistro = const Value.absent(),
+                Value<DateTime?> fechaModificacion = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AportesCompanion.insert(
                 id: id,
@@ -3089,6 +3332,8 @@ class $$AportesTableTableManager
                 tipo: tipo,
                 fecha: fecha,
                 syncStatus: syncStatus,
+                fechaRegistro: fechaRegistro,
+                fechaModificacion: fechaModificacion,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

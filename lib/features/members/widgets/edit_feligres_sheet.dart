@@ -250,7 +250,13 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     try {
       await database
           .update(database.feligreses)
-          .replace(widget.feligres.copyWith(activo: 0, syncStatus: 0));
+          .replace(
+            widget.feligres.copyWith(
+              activo: 0,
+              fechaModificacion: drift.Value(DateTime.now()),
+              syncStatus: 0,
+            ),
+          );
 
       if (mounted) {
         Navigator.pop(context);

@@ -154,14 +154,25 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
           }).toList();
 
           filtered.sort((a, b) {
+            // Prioritize the exact moment it was touched in the system (Modified -> Created -> Transaction Date)
+            final timeA =
+                a.aporte.fechaModificacion ??
+                a.aporte.fechaRegistro ??
+                a.aporte.fecha;
+            final timeB =
+                b.aporte.fechaModificacion ??
+                b.aporte.fechaRegistro ??
+                b.aporte.fecha;
+
             if (_sortBy == 'Más recientes primero')
-              return b.aporte.fecha.compareTo(a.aporte.fecha);
+              return timeB.compareTo(timeA);
             if (_sortBy == 'Más antiguos primero')
-              return a.aporte.fecha.compareTo(b.aporte.fecha);
+              return timeA.compareTo(timeB);
             if (_sortBy == 'Aportes más altos')
               return b.aporte.monto.compareTo(a.aporte.monto);
             if (_sortBy == 'Aportes más bajos')
               return a.aporte.monto.compareTo(b.aporte.monto);
+
             return 0;
           });
 
@@ -189,7 +200,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Search Bar at the top (Natural flow)
+                    // 1. Search Bar at the top
                     TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
@@ -207,7 +218,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // 2. Sort Dropdown and Date Button side-by-side
+                    // 2. Sort Dropdown and Date Button
                     Row(
                       children: [
                         Expanded(
@@ -254,9 +265,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                             ),
                             label: const Text('Fechas'),
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 18,
-                              ), // Match height with dropdown
+                              padding: const EdgeInsets.symmetric(vertical: 18),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -271,7 +280,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       ],
                     ),
 
-                    // 3. Active Date Filter Chip (Only shows when dates are selected)
+                    // 3. Active Date Filter Chip
                     if (_dateRange != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -375,13 +384,39 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              subtitle: Text(
-                                '${DateFormat('dd MMM yyyy').format(item.aporte.fecha)} • ${item.aporte.tipo}',
-                                style: GoogleFonts.poppins(
-                                  color: Colors.grey,
-                                  fontSize: 12,
+
+                              // --- AGREGAMOS LA FECHA DE REGISTRO AL SUBTÍTULO ---
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Aporte del: ${DateFormat('dd MMM yyyy').format(item.aporte.fecha)} • ${item.aporte.tipo}',
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.grey,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.aporte.fechaModificacion != null
+                                          ? 'Modificado: ${DateFormat('dd MMM yyyy, hh:mm a').format(item.aporte.fechaModificacion!)}'
+                                          : item.aporte.fechaRegistro != null
+                                          ? 'Registrado: ${DateFormat('dd MMM yyyy, hh:mm a').format(item.aporte.fechaRegistro!)}'
+                                          : 'Registrado: Desconocido',
+                                      style: GoogleFonts.poppins(
+                                        color: colorScheme.primary.withOpacity(
+                                          0.7,
+                                        ),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+
                               trailing: Text(
                                 _currencyFormat.format(item.aporte.monto),
                                 style: GoogleFonts.montserrat(
