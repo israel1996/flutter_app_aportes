@@ -23,14 +23,15 @@ class Feligreses extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get tipoFeligres =>
       text().withDefault(const Constant('feligres'))();
-
   TextColumn get iglesiaId => text().nullable().references(Iglesias, #id)();
+
+  // --- NUEVO CAMPO: FECHA Y HORA DE REGISTRO ---
+  DateTimeColumn get fechaRegistro => dateTime().nullable().clientDefault(() => DateTime.now())();
 
   @override
   Set<Column> get primaryKey => {id};
 }
 
-// Add this new table
 class Iglesias extends Table {
   TextColumn get id => text()(); // UUID
   TextColumn get userId => text()();
@@ -38,8 +39,7 @@ class Iglesias extends Table {
   IntColumn get distrito => integer()(); // 1 to 16
   DateTimeColumn get fechaLlegada => dateTime().nullable()();
   DateTimeColumn get fechaSalida => dateTime().nullable()();
-  TextColumn get categoria =>
-      text().nullable()(); // misionera, en formación, etc.
+  TextColumn get categoria => text().nullable()(); 
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
@@ -65,12 +65,28 @@ class AporteConFeligres {
   AporteConFeligres(this.aporte, this.feligres);
 }
 
-@DriftDatabase(tables: [Feligreses, Aportes])
+@DriftDatabase(tables: [Feligreses, Aportes, Iglesias])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(impl.connect());
 
+  // --- MIGRACIÓN DE BASE DE DATOS A VERSIÓN 3 ---
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from < 3) {
+          // Agrega la nueva columna a las bases de datos existentes sin borrar datos
+          await m.addColumn(feligreses, feligreses.fechaRegistro);
+        }
+      },
+    );
+  }
 
   Stream<List<Feligrese>> watchAllFeligreses() {
     return select(feligreses).watch();
@@ -128,17 +144,12 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<bool> hasPendingSyncs() async {
-    final pendingAportes = await (select(
-      aportes,
-    )..where((a) => a.syncStatus.equals(0))).get();
-    final pendingFeligreses = await (select(
-      feligreses,
-    )..where((f) => f.syncStatus.equals(0))).get();
+    final pendingAportes = await (select(aportes)..where((a) => a.syncStatus.equals(0))).get();
+    final pendingFeligreses = await (select(feligreses)..where((f) => f.syncStatus.equals(0))).get();
 
     return pendingAportes.isNotEmpty || pendingFeligreses.isNotEmpty;
   }
 
-  // Queries for Iglesias
   Stream<List<Iglesia>> watchAllIglesias() => select(iglesias).watch();
   Future<int> insertIglesia(IglesiasCompanion iglesia) =>
       into(iglesias).insert(iglesia);

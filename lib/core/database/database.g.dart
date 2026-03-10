@@ -696,6 +696,19 @@ class $FeligresesTable extends Feligreses
       'REFERENCES iglesias (id)',
     ),
   );
+  static const VerificationMeta _fechaRegistroMeta = const VerificationMeta(
+    'fechaRegistro',
+  );
+  @override
+  late final GeneratedColumn<DateTime> fechaRegistro =
+      GeneratedColumn<DateTime>(
+        'fecha_registro',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now(),
+      );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -712,6 +725,7 @@ class $FeligresesTable extends Feligreses
     bautizadoEspiritu,
     tipoFeligres,
     iglesiaId,
+    fechaRegistro,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -828,6 +842,15 @@ class $FeligresesTable extends Feligreses
         iglesiaId.isAcceptableOrUnknown(data['iglesia_id']!, _iglesiaIdMeta),
       );
     }
+    if (data.containsKey('fecha_registro')) {
+      context.handle(
+        _fechaRegistroMeta,
+        fechaRegistro.isAcceptableOrUnknown(
+          data['fecha_registro']!,
+          _fechaRegistroMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -893,6 +916,10 @@ class $FeligresesTable extends Feligreses
         DriftSqlType.string,
         data['${effectivePrefix}iglesia_id'],
       ),
+      fechaRegistro: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha_registro'],
+      ),
     );
   }
 
@@ -917,6 +944,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
   final bool bautizadoEspiritu;
   final String tipoFeligres;
   final String? iglesiaId;
+  final DateTime? fechaRegistro;
   const Feligrese({
     required this.id,
     required this.nombre,
@@ -932,6 +960,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     required this.bautizadoEspiritu,
     required this.tipoFeligres,
     this.iglesiaId,
+    this.fechaRegistro,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -961,6 +990,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     map['tipo_feligres'] = Variable<String>(tipoFeligres);
     if (!nullToAbsent || iglesiaId != null) {
       map['iglesia_id'] = Variable<String>(iglesiaId);
+    }
+    if (!nullToAbsent || fechaRegistro != null) {
+      map['fecha_registro'] = Variable<DateTime>(fechaRegistro);
     }
     return map;
   }
@@ -993,6 +1025,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       iglesiaId: iglesiaId == null && nullToAbsent
           ? const Value.absent()
           : Value(iglesiaId),
+      fechaRegistro: fechaRegistro == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaRegistro),
     );
   }
 
@@ -1016,6 +1051,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       bautizadoEspiritu: serializer.fromJson<bool>(json['bautizadoEspiritu']),
       tipoFeligres: serializer.fromJson<String>(json['tipoFeligres']),
       iglesiaId: serializer.fromJson<String?>(json['iglesiaId']),
+      fechaRegistro: serializer.fromJson<DateTime?>(json['fechaRegistro']),
     );
   }
   @override
@@ -1036,6 +1072,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
       'bautizadoEspiritu': serializer.toJson<bool>(bautizadoEspiritu),
       'tipoFeligres': serializer.toJson<String>(tipoFeligres),
       'iglesiaId': serializer.toJson<String?>(iglesiaId),
+      'fechaRegistro': serializer.toJson<DateTime?>(fechaRegistro),
     };
   }
 
@@ -1054,6 +1091,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bool? bautizadoEspiritu,
     String? tipoFeligres,
     Value<String?> iglesiaId = const Value.absent(),
+    Value<DateTime?> fechaRegistro = const Value.absent(),
   }) => Feligrese(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
@@ -1071,6 +1109,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
     tipoFeligres: tipoFeligres ?? this.tipoFeligres,
     iglesiaId: iglesiaId.present ? iglesiaId.value : this.iglesiaId,
+    fechaRegistro: fechaRegistro.present
+        ? fechaRegistro.value
+        : this.fechaRegistro,
   );
   Feligrese copyWithCompanion(FeligresesCompanion data) {
     return Feligrese(
@@ -1102,6 +1143,9 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           ? data.tipoFeligres.value
           : this.tipoFeligres,
       iglesiaId: data.iglesiaId.present ? data.iglesiaId.value : this.iglesiaId,
+      fechaRegistro: data.fechaRegistro.present
+          ? data.fechaRegistro.value
+          : this.fechaRegistro,
     );
   }
 
@@ -1121,7 +1165,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           ..write('bautizadoAgua: $bautizadoAgua, ')
           ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
           ..write('tipoFeligres: $tipoFeligres, ')
-          ..write('iglesiaId: $iglesiaId')
+          ..write('iglesiaId: $iglesiaId, ')
+          ..write('fechaRegistro: $fechaRegistro')
           ..write(')'))
         .toString();
   }
@@ -1142,6 +1187,7 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
     bautizadoEspiritu,
     tipoFeligres,
     iglesiaId,
+    fechaRegistro,
   );
   @override
   bool operator ==(Object other) =>
@@ -1160,7 +1206,8 @@ class Feligrese extends DataClass implements Insertable<Feligrese> {
           other.bautizadoAgua == this.bautizadoAgua &&
           other.bautizadoEspiritu == this.bautizadoEspiritu &&
           other.tipoFeligres == this.tipoFeligres &&
-          other.iglesiaId == this.iglesiaId);
+          other.iglesiaId == this.iglesiaId &&
+          other.fechaRegistro == this.fechaRegistro);
 }
 
 class FeligresesCompanion extends UpdateCompanion<Feligrese> {
@@ -1178,6 +1225,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
   final Value<bool> bautizadoEspiritu;
   final Value<String> tipoFeligres;
   final Value<String?> iglesiaId;
+  final Value<DateTime?> fechaRegistro;
   final Value<int> rowid;
   const FeligresesCompanion({
     this.id = const Value.absent(),
@@ -1194,6 +1242,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.bautizadoEspiritu = const Value.absent(),
     this.tipoFeligres = const Value.absent(),
     this.iglesiaId = const Value.absent(),
+    this.fechaRegistro = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   FeligresesCompanion.insert({
@@ -1211,6 +1260,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     this.bautizadoEspiritu = const Value.absent(),
     this.tipoFeligres = const Value.absent(),
     this.iglesiaId = const Value.absent(),
+    this.fechaRegistro = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre);
@@ -1229,6 +1279,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Expression<bool>? bautizadoEspiritu,
     Expression<String>? tipoFeligres,
     Expression<String>? iglesiaId,
+    Expression<DateTime>? fechaRegistro,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1246,6 +1297,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       if (bautizadoEspiritu != null) 'bautizado_espiritu': bautizadoEspiritu,
       if (tipoFeligres != null) 'tipo_feligres': tipoFeligres,
       if (iglesiaId != null) 'iglesia_id': iglesiaId,
+      if (fechaRegistro != null) 'fecha_registro': fechaRegistro,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1265,6 +1317,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     Value<bool>? bautizadoEspiritu,
     Value<String>? tipoFeligres,
     Value<String?>? iglesiaId,
+    Value<DateTime?>? fechaRegistro,
     Value<int>? rowid,
   }) {
     return FeligresesCompanion(
@@ -1282,6 +1335,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
       bautizadoEspiritu: bautizadoEspiritu ?? this.bautizadoEspiritu,
       tipoFeligres: tipoFeligres ?? this.tipoFeligres,
       iglesiaId: iglesiaId ?? this.iglesiaId,
+      fechaRegistro: fechaRegistro ?? this.fechaRegistro,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1331,6 +1385,9 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
     if (iglesiaId.present) {
       map['iglesia_id'] = Variable<String>(iglesiaId.value);
     }
+    if (fechaRegistro.present) {
+      map['fecha_registro'] = Variable<DateTime>(fechaRegistro.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1354,6 +1411,7 @@ class FeligresesCompanion extends UpdateCompanion<Feligrese> {
           ..write('bautizadoEspiritu: $bautizadoEspiritu, ')
           ..write('tipoFeligres: $tipoFeligres, ')
           ..write('iglesiaId: $iglesiaId, ')
+          ..write('fechaRegistro: $fechaRegistro, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2162,6 +2220,7 @@ typedef $$FeligresesTableCreateCompanionBuilder =
       Value<bool> bautizadoEspiritu,
       Value<String> tipoFeligres,
       Value<String?> iglesiaId,
+      Value<DateTime?> fechaRegistro,
       Value<int> rowid,
     });
 typedef $$FeligresesTableUpdateCompanionBuilder =
@@ -2180,6 +2239,7 @@ typedef $$FeligresesTableUpdateCompanionBuilder =
       Value<bool> bautizadoEspiritu,
       Value<String> tipoFeligres,
       Value<String?> iglesiaId,
+      Value<DateTime?> fechaRegistro,
       Value<int> rowid,
     });
 
@@ -2297,6 +2357,11 @@ class $$FeligresesTableFilterComposer
 
   ColumnFilters<String> get tipoFeligres => $composableBuilder(
     column: $table.tipoFeligres,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2423,6 +2488,11 @@ class $$FeligresesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$IglesiasTableOrderingComposer get iglesiaId {
     final $$IglesiasTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -2506,6 +2576,11 @@ class $$FeligresesTableAnnotationComposer
 
   GeneratedColumn<String> get tipoFeligres => $composableBuilder(
     column: $table.tipoFeligres,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get fechaRegistro => $composableBuilder(
+    column: $table.fechaRegistro,
     builder: (column) => column,
   );
 
@@ -2600,6 +2675,7 @@ class $$FeligresesTableTableManager
                 Value<bool> bautizadoEspiritu = const Value.absent(),
                 Value<String> tipoFeligres = const Value.absent(),
                 Value<String?> iglesiaId = const Value.absent(),
+                Value<DateTime?> fechaRegistro = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion(
                 id: id,
@@ -2616,6 +2692,7 @@ class $$FeligresesTableTableManager
                 bautizadoEspiritu: bautizadoEspiritu,
                 tipoFeligres: tipoFeligres,
                 iglesiaId: iglesiaId,
+                fechaRegistro: fechaRegistro,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2634,6 +2711,7 @@ class $$FeligresesTableTableManager
                 Value<bool> bautizadoEspiritu = const Value.absent(),
                 Value<String> tipoFeligres = const Value.absent(),
                 Value<String?> iglesiaId = const Value.absent(),
+                Value<DateTime?> fechaRegistro = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => FeligresesCompanion.insert(
                 id: id,
@@ -2650,6 +2728,7 @@ class $$FeligresesTableTableManager
                 bautizadoEspiritu: bautizadoEspiritu,
                 tipoFeligres: tipoFeligres,
                 iglesiaId: iglesiaId,
+                fechaRegistro: fechaRegistro,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

@@ -110,6 +110,8 @@ class SyncService {
           'bautizado_espiritu': local.bautizadoEspiritu,
           'tipo_feligres': local.tipoFeligres,
           'activo': local.activo,
+          // --- NUEVO: ENVIAR LA FECHA LOCAL A LA NUBE ---
+          'created_at': local.fechaRegistro?.toIso8601String(),
         });
 
         await (database.update(database.feligreses)
@@ -201,7 +203,7 @@ class SyncService {
   }
 
   Future<void> _pullFeligreses(String? lastSyncStr) async {
-    // FIX: Filter strictly by the logged-in user's ID
+    // FILTRO APLICADO AQUÍ: Solo trae feligreses de este usuario
     var query = _supabase
         .from('feligreses')
         .select()
@@ -235,9 +237,13 @@ class SyncService {
             bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
             bautizadoEspiritu: drift.Value(row['bautizado_espiritu'] ?? false),
             tipoFeligres: drift.Value(row['tipo_feligres']),
-            activo: drift.Value(
-              row['activo'],
-            ), // Handles Soft Deletes automatically
+            activo: drift.Value(row['activo']),
+            // --- NUEVO: GUARDAR LA FECHA DE LA NUBE EN LA BASE LOCAL ---
+            fechaRegistro: drift.Value(
+              row['created_at'] != null
+                  ? DateTime.parse(row['created_at']).toLocal()
+                  : null,
+            ),
             syncStatus: const drift.Value(1),
           ),
           mode: drift.InsertMode.insertOrReplace,
