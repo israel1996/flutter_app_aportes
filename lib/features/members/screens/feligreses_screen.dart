@@ -27,18 +27,18 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
-  bool _showDeleted = false;
+  bool _showDeleted = false; // Ahora representa la vista de "Inactivos"
 
-  // NUEVOS FILTROS POR DEFECTO
   String _sortBy = 'Más Recientes';
   String _filterTipo = 'Todos';
   String _filterGenero = 'Todos';
+  String _filterEstadoCivil = 'Todos';
+  String _filterEstadoEspiritual = 'Todos';
 
   int _currentPage = 1;
   int _itemsPerPage = 10;
   final List<int> _pageOptions = [10, 20, 50, 100];
 
-  // NUEVAS OPCIONES DE ORDENAMIENTO
   final List<String> _sortOptions = [
     'Más Recientes',
     'Más Antiguos',
@@ -52,6 +52,21 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     'Visita',
   ];
   final List<String> _generoOptions = ['Todos', 'Masculino', 'Femenino'];
+  final List<String> _estadoCivilOptions = [
+    'Todos',
+    'Soltero(a)',
+    'Casado(a)',
+    'Divorciado(a)',
+    'Viudo(a)',
+    'Unión Libre',
+  ];
+  final List<String> _estadoEspiritualOptions = [
+    'Todos',
+    'Agua y Espíritu',
+    'Solo Agua',
+    'Solo Espíritu',
+    'No Bautizado',
+  ];
 
   @override
   void initState() {
@@ -246,20 +261,37 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
             final matchGenero =
                 _filterGenero == 'Todos' ||
                 m.genero?.toLowerCase() == _filterGenero.toLowerCase();
+            final matchEstadoCivil =
+                _filterEstadoCivil == 'Todos' ||
+                m.estadoCivil == _filterEstadoCivil;
+
+            bool matchEspiritual = true;
+            if (_filterEstadoEspiritual != 'Todos') {
+              if (_filterEstadoEspiritual == 'Agua y Espíritu') {
+                matchEspiritual = m.bautizadoAgua && m.bautizadoEspiritu;
+              } else if (_filterEstadoEspiritual == 'Solo Agua') {
+                matchEspiritual = m.bautizadoAgua && !m.bautizadoEspiritu;
+              } else if (_filterEstadoEspiritual == 'Solo Espíritu') {
+                matchEspiritual = !m.bautizadoAgua && m.bautizadoEspiritu;
+              } else if (_filterEstadoEspiritual == 'No Bautizado') {
+                matchEspiritual = !m.bautizadoAgua && !m.bautizadoEspiritu;
+              }
+            }
 
             return matchIglesia &&
                 matchStatus &&
                 matchSearch &&
                 matchTipo &&
-                matchGenero;
+                matchGenero &&
+                matchEstadoCivil &&
+                matchEspiritual;
           }).toList();
 
-          // 2. NUEVA LÓGICA DE ORDENAMIENTO (Por fecha y alfabético)
+          // 2. ORDENAMIENTO
           filteredMembers.sort((a, b) {
             if (_sortBy == 'Nombre (A-Z)') return a.nombre.compareTo(b.nombre);
             if (_sortBy == 'Nombre (Z-A)') return b.nombre.compareTo(a.nombre);
 
-            // This grabs the Modification date. If it hasn't been modified, it grabs the Creation date.
             final dateA =
                 a.fechaModificacion ??
                 a.fechaRegistro ??
@@ -313,7 +345,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 ),
                 child: Column(
                   children: [
-                    // ACTIVE / TRASH TOGGLE
+                    // ACTIVE / INACTIVES TOGGLE
                     Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(4),
@@ -369,16 +401,16 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: _showDeleted
-                                      ? Colors.redAccent.withOpacity(0.1)
+                                      ? Colors.orangeAccent.withOpacity(0.1)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'Papelera',
+                                    'Inactivos',
                                     style: GoogleFonts.poppins(
                                       color: _showDeleted
-                                          ? Colors.redAccent
+                                          ? Colors.orange
                                           : Colors.grey,
                                       fontWeight: _showDeleted
                                           ? FontWeight.bold
@@ -449,10 +481,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          // Sort
+                          // Sort (isExpanded added to prevent internal RenderFlex overflow)
                           SizedBox(
-                            width: 160,
+                            width: 150,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               value: _sortBy,
                               decoration: InputDecoration(
                                 labelText: 'Ordenar',
@@ -471,6 +504,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       child: Text(
                                         o,
                                         style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   )
@@ -484,6 +518,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                           SizedBox(
                             width: 140,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               value: _filterTipo,
                               decoration: InputDecoration(
                                 labelText: 'Tipo',
@@ -502,6 +537,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       child: Text(
                                         o,
                                         style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   )
@@ -515,8 +551,9 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                           const SizedBox(width: 12),
                           // Gender
                           SizedBox(
-                            width: 140,
+                            width: 130,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               value: _filterGenero,
                               decoration: InputDecoration(
                                 labelText: 'Género',
@@ -535,12 +572,83 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       child: Text(
                                         o,
                                         style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   )
                                   .toList(),
                               onChanged: (val) => setState(() {
                                 _filterGenero = val!;
+                                _currentPage = 1;
+                              }),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Estado Civil
+                          SizedBox(
+                            width: 140,
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: _filterEstadoCivil,
+                              decoration: InputDecoration(
+                                labelText: 'Estado Civil',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              items: _estadoCivilOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) => setState(() {
+                                _filterEstadoCivil = val!;
+                                _currentPage = 1;
+                              }),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Estado Espiritual
+                          SizedBox(
+                            width: 160,
+                            child: DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: _filterEstadoEspiritual,
+                              decoration: InputDecoration(
+                                labelText: 'E. Espiritual',
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              items: _estadoEspiritualOptions
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) => setState(() {
+                                _filterEstadoEspiritual = val!;
                                 _currentPage = 1;
                               }),
                             ),
@@ -561,7 +669,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                           children: [
                             Icon(
                               _showDeleted
-                                  ? Icons.delete_outline
+                                  ? Icons.person_off
                                   : Icons.people_outline,
                               size: 64,
                               color: colorScheme.primary.withOpacity(0.5),
@@ -569,7 +677,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             const SizedBox(height: 16),
                             Text(
                               _showDeleted
-                                  ? 'La papelera está vacía.'
+                                  ? 'No hay usuarios inactivos.'
                                   : 'No hay feligreses con estos filtros.',
                               style: GoogleFonts.poppins(
                                 color: Colors.grey,
@@ -618,12 +726,12 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               ),
                               leading: CircleAvatar(
                                 backgroundColor: _showDeleted
-                                    ? Colors.redAccent.withOpacity(0.1)
+                                    ? Colors.orangeAccent.withOpacity(0.1)
                                     : colorScheme.primary.withOpacity(0.1),
                                 child: Icon(
                                   Icons.person,
                                   color: _showDeleted
-                                      ? Colors.redAccent
+                                      ? Colors.orange
                                       : colorScheme.primary,
                                 ),
                               ),
@@ -634,8 +742,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   color: colorScheme.onSurface,
                                 ),
                               ),
-
-                              // --- AGREGAMOS LA FECHA DE REGISTRO EN LA TARJETA ---
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Column(
@@ -666,7 +772,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ],
                                 ),
                               ),
-
                               trailing: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -699,8 +804,9 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                   padding: const EdgeInsets.only(
                     top: 16,
                     bottom: 32,
-                    left: 24,
-                    right: 80,
+                    left: 20, // Reducido para evitar overflow
+                    right:
+                        24, // Cambiado de 80 a 24 para evitar overflow en pantallas angostas
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
@@ -746,16 +852,27 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.chevron_left),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                         onPressed: _currentPage > 1
                             ? () => setState(() => _currentPage--)
                             : null,
                       ),
-                      Text(
-                        'Pág $_currentPage de $totalPages',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Pág $_currentPage de $totalPages',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.chevron_right),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                         onPressed: _currentPage < totalPages
                             ? () => setState(() => _currentPage++)
                             : null,
