@@ -35,6 +35,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
 
   flutter_lints: ^6.0.0
   build_runner: ^2.10.5
@@ -42,3 +43,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_logo.png" # Path to your image
+  windows:
+    generate: true
+    image_path: "assets/icon/app_logo.png"
+    icon_size: 256
