@@ -621,7 +621,6 @@ class _ReportesSecretariaScreenState
       if (displayList.isEmpty) return const Center(child: Text('Sin datos'));
 
       // 1. PIE & DONUT CHARTS (Civil Status & Gender)
-      // MEJORA: Diseño Vertical para pantallas móviles (evita colapso horizontal)
       if (_groupingMode == 1 || _groupingMode == 2) {
         return Column(
           children: [
@@ -642,9 +641,7 @@ class _ReportesSecretariaScreenState
                       color: categoryColor,
                       title:
                           '${item['count']}\n(${percentage.toStringAsFixed(1)}%)',
-                      radius: _groupingMode == 1
-                          ? 60
-                          : 90, // Un poco más grandes
+                      radius: _groupingMode == 1 ? 60 : 90,
                       titleStyle: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -957,17 +954,25 @@ class _ReportesSecretariaScreenState
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(
+            left: 20,
+            right: 20,
+            bottom: 16,
+            top: 10,
+          ),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(30),
+              bottom: Radius.circular(24),
             ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CORRECCIÓN DE OVERFLOW EN CABECERA
+              // CABECERA RESPONSIVA
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -980,7 +985,7 @@ class _ReportesSecretariaScreenState
                         fontWeight: FontWeight.bold,
                         color: Colors.grey,
                       ),
-                      maxLines: 2,
+                      maxLines: 1, // Cambiado a 1 para mejor consistencia
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -991,15 +996,15 @@ class _ReportesSecretariaScreenState
                       getReportTitle(),
                       currentIglesia,
                     ),
-                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    icon: const Icon(Icons.picture_as_pdf, size: 16),
                     label: const Text(
                       'Exportar',
-                      style: TextStyle(fontSize: 13),
+                      style: TextStyle(fontSize: 12),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         vertical: 12,
-                        horizontal: 16,
+                        horizontal: 12,
                       ),
                       elevation: 0,
                     ),
@@ -1049,7 +1054,7 @@ class _ReportesSecretariaScreenState
 
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1057,12 +1062,10 @@ class _ReportesSecretariaScreenState
                   RepaintBoundary(
                     key: _chartExportKey,
                     child: Container(
-                      height:
-                          320, // Altura ajustada para el diseño vertical responsivo
-                      padding: const EdgeInsets.all(20),
+                      height: 320,
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color:
-                            chartBgColor, // TEMA BLANCO FORZADO PARA EXPORTAR
+                        color: chartBgColor,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: Colors.grey.withOpacity(0.2)),
                       ),
@@ -1087,14 +1090,14 @@ class _ReportesSecretariaScreenState
                   );
                   return Card(
                     elevation: 1,
-                    margin: const EdgeInsets.only(bottom: 12),
+                    margin: const EdgeInsets.only(bottom: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: ListTile(
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 8,
+                        horizontal: 16,
+                        vertical: 4,
                       ),
                       leading: CircleAvatar(
                         backgroundColor: categoryColor.withOpacity(0.2),
@@ -1108,10 +1111,10 @@ class _ReportesSecretariaScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '${item['count']} personas',
+                            '${item['count']} pers.',
                             style: GoogleFonts.montserrat(
                               fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                              fontSize: 14,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1176,16 +1179,24 @@ class _ReportesSecretariaScreenState
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(
+            left: 20,
+            right: 20,
+            bottom: 16,
+            top: 10,
+          ),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(30),
+              bottom: Radius.circular(24),
             ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
           ),
           child: Column(
             children: [
-              // CORRECCIÓN DE OVERFLOW EN CABECERA DE DETALLES
+              // CABECERA DE DETALLES RESPONSIVA
               Row(
                 children: [
                   IconButton(
@@ -1200,7 +1211,7 @@ class _ReportesSecretariaScreenState
                     child: Text(
                       '$_selectedDetailCategory',
                       style: GoogleFonts.poppins(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
@@ -1214,10 +1225,10 @@ class _ReportesSecretariaScreenState
                       _selectedDetailCategory!,
                       currentIglesia,
                     ),
-                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    icon: const Icon(Icons.picture_as_pdf, size: 16),
                     label: const Text(
                       'Exportar',
-                      style: TextStyle(fontSize: 13),
+                      style: TextStyle(fontSize: 12),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
@@ -1234,7 +1245,9 @@ class _ReportesSecretariaScreenState
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: 'Buscar en este grupo...',
-                  prefixIcon: const Icon(Icons.search),
+                  hintStyle: const TextStyle(fontSize: 14),
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -1242,7 +1255,7 @@ class _ReportesSecretariaScreenState
                   fillColor: isDark ? Colors.black12 : Colors.grey.shade100,
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
+                          icon: const Icon(Icons.clear, size: 18),
                           onPressed: () => setState(() {
                             _searchController.clear();
                             _detailCurrentPage = 1;
@@ -1262,16 +1275,23 @@ class _ReportesSecretariaScreenState
                   child: Text('No hay registros con esos criterios.'),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   itemCount: paginatedDetailList.length,
                   itemBuilder: (context, index) {
                     final member = paginatedDetailList[index];
                     return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
                         leading: CircleAvatar(
                           backgroundColor: colorScheme.primary.withOpacity(0.1),
                           child: Icon(Icons.person, color: colorScheme.primary),
@@ -1280,11 +1300,15 @@ class _ReportesSecretariaScreenState
                           member.nombre,
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w600,
+                            fontSize: 14,
                           ),
                         ),
                         subtitle: Text(
                           member.telefono ?? 'Sin teléfono',
-                          style: const TextStyle(color: Colors.grey),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -1317,20 +1341,36 @@ class _ReportesSecretariaScreenState
                 ),
         ),
 
+        // PAGINACIÓN DETALLES (Diseño compacto)
         if (targetData.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-            color: colorScheme.surface,
+            padding: const EdgeInsets.only(
+              top: 12,
+              bottom: 24,
+              left: 20,
+              right: 20,
+            ),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Text(
-                  'Mostrar:',
+                  'Ver:',
                   style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(width: 8),
                 DropdownButton<int>(
                   value: _itemsPerPage,
                   underline: const SizedBox(),
+                  iconSize: 20,
                   items: _pageOptions
                       .map(
                         (i) => DropdownMenuItem(
@@ -1339,6 +1379,7 @@ class _ReportesSecretariaScreenState
                             '$i',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
                         ),
@@ -1351,19 +1392,29 @@ class _ReportesSecretariaScreenState
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.chevron_left),
+                  icon: const Icon(Icons.chevron_left, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: _detailCurrentPage > 1
                       ? () => setState(() => _detailCurrentPage--)
                       : null,
                 ),
+                const SizedBox(width: 12),
                 Flexible(
                   child: Text(
-                    'Pág $_detailCurrentPage de $totalDetailPages',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    '$_detailCurrentPage / $totalDetailPages',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 12),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right),
+                  icon: const Icon(Icons.chevron_right, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                   onPressed: _detailCurrentPage < totalDetailPages
                       ? () => setState(() => _detailCurrentPage++)
                       : null,
