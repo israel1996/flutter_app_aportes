@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 // PDF Packages
@@ -389,9 +390,13 @@ class _ReportesSecretariaScreenState
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
       if (mounted)
-        CustomSnackBar.showSuccess(
+        CustomSnackBar.showSuccess(context, 'PDF generado exitosamente');
+      await OpenFilex.open(file.path);
+    } else {
+      if (mounted)
+        CustomSnackBar.showError(
           context,
-          'PDF guardado en Descargas:\n$fileName',
+          'No se pudo encontrar la carpeta de Descargas',
         );
     }
   }

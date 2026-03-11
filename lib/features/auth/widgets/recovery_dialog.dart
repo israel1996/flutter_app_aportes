@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/utils/custom_snackbar.dart';
 
@@ -12,15 +13,13 @@ class RecoveryDialog extends StatefulWidget {
 }
 
 class _RecoveryDialogState extends State<RecoveryDialog> {
-  static int _failedAttempts = 0;
-  static DateTime? _lockoutTime;
-
   final _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   bool _isLoading = false;
   int _remainingSeconds = 0;
   Timer? _timer;
+  DateTime? _lockoutTime;
 
   @override
   void initState() {
@@ -28,21 +27,24 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
     _checkLockout();
   }
 
-  void _checkLockout() {
-    if (_lockoutTime != null) {
-      final now = DateTime.now();
-      if (now.isBefore(_lockoutTime!)) {
+  Future<void> _checkLockout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lockedTimestamp = prefs.getInt('recovery_lockout');
+
+    if (lockedTimestamp != null) {
+      final lockTime = DateTime.fromMillisecondsSinceEpoch(lockedTimestamp);
+      if (DateTime.now().isBefore(lockTime)) {
+        setState(() => _lockoutTime = lockTime);
         _startTimer();
       } else {
-        _failedAttempts = 0;
-        _lockoutTime = null;
+        await prefs.remove('recovery_lockout');
       }
     }
   }
 
   void _startTimer() {
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       final now = DateTime.now();
       if (_lockoutTime != null && now.isBefore(_lockoutTime!)) {
         if (mounted) {
@@ -51,9 +53,10 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
           });
         }
       } else {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('recovery_lockout');
         if (mounted) {
           setState(() {
-            _failedAttempts = 0;
             _lockoutTime = null;
             _remainingSeconds = 0;
           });
@@ -63,116 +66,38 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
     });
   }
 
+  // --- NUEVA LÓGICA DIRECTA Y SEGURA ---
   Future<void> _verifyEmail() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
       final email = _emailController.text.trim();
-      final supabase = Supabase.instance.client;
 
-      final response = await supabase
-          .from('usuarios_app')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
+      // Enviamos el correo de recuperación directamente
+      // (Estándar de seguridad de Supabase, no da error si no existe para evitar enumeración)
+      await Supabase.instance.client.auth.resetPasswordForEmail(email);
 
-      if (response != null) {
-        await supabase
-            .from('usuarios_app')
-            .update({'estado': 'solicita_reseteo'})
-            .eq('id', response['id']);
+      // Bloqueamos la interfaz por 2 minutos para evitar Spam de correos
+      final prefs = await SharedPreferences.getInstance();
+      final lockTime = DateTime.now().add(const Duration(minutes: 2));
+      await prefs.setInt('recovery_lockout', lockTime.millisecondsSinceEpoch);
 
-        if (mounted) {
-          Navigator.pop(context);
-
-          showDialog(
-            context: context,
-            builder: (context) {
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-
-              return AlertDialog(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                title: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle,
-                      color: Colors.greenAccent,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 8),
-                    // Uso de Flexible + FittedBox para protección horizontal extrema
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Solicitud Enviada',
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                content: SingleChildScrollView(
-                  // Protección contra desbordamiento vertical
-                  child: Text(
-                    'Su cuenta ha sido verificada y se ha notificado al Administrador.\n\nPor favor, contacte al Superadmin para recibir su clave temporal.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: isDark
-                          ? Colors.grey.shade300
-                          : Colors.grey.shade700,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Entendido',
-                      style: TextStyle(
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        }
-      } else {
-        _failedAttempts++;
-
-        if (_failedAttempts >= 3) {
-          _lockoutTime = DateTime.now().add(const Duration(minutes: 5));
-          _startTimer();
-          if (mounted) {
-            CustomSnackBar.showError(
-              context,
-              'Demasiados intentos. Bloqueado por 5 minutos.',
-            );
-          }
-        } else {
-          if (mounted) {
-            CustomSnackBar.showWarning(
-              context,
-              'Correo no encontrado. Intentos restantes: ${3 - _failedAttempts}',
-            );
-          }
-        }
+      if (mounted) {
+        Navigator.pop(context); // Cerramos el modal PRIMERO
+        CustomSnackBar.showSuccess(
+          context,
+          'Si el correo está registrado, recibirá un enlace de recuperación. Por favor, revise su bandeja de entrada.',
+        );
       }
     } catch (e) {
-      if (mounted) CustomSnackBar.showError(context, 'Error de conexión: $e');
+      if (mounted) {
+        Navigator.pop(context);
+        CustomSnackBar.showError(
+          context,
+          'Error al intentar enviar el enlace.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -210,13 +135,12 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
             size: 28,
           ),
           const SizedBox(width: 8),
-          // Uso de Flexible + FittedBox
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
-                'Verificar Cuenta',
+                'Recuperar Cuenta',
                 style: GoogleFonts.montserrat(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
@@ -226,16 +150,14 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
           ),
         ],
       ),
-      // CRÍTICO: Envuelve todo el contenido en un SingleChildScrollView
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min, // Hace que la columna ocupe solo lo necesario
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Ingrese su correo registrado para verificar su identidad antes de solicitar el cambio de clave.',
+                'Ingrese su correo registrado. Le enviaremos un enlace mágico para restablecer su contraseña.',
                 style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 20),
@@ -243,22 +165,22 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
+                    color: Colors.orangeAccent.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
                     children: [
                       const Icon(
                         Icons.lock_clock,
-                        color: Colors.redAccent,
+                        color: Colors.orange,
                         size: 32,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Intentos agotados.\nIntente de nuevo en:',
+                        'Solicitud enviada.\nIntente de nuevo en:',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.poppins(
-                          color: Colors.redAccent,
+                          color: Colors.orange,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -267,7 +189,7 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
                         style: GoogleFonts.montserrat(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Colors.redAccent,
+                          color: Colors.orange,
                         ),
                       ),
                     ],
@@ -320,7 +242,7 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
                     ),
                   )
                 : const Text(
-                    'Verificar',
+                    'Enviar Enlace',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

@@ -5,6 +5,8 @@ import 'package:flutter_app_aportes/features/auth/screens/register_screen.dart';
 import 'package:flutter_app_aportes/features/auth/widgets/recovery_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -24,66 +26,129 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // 1. Verificar si la app está bloqueada por intentos fallidos
+    final prefs = await SharedPreferences.getInstance();
+    final lockedUntil = prefs.getInt('lockout_time') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (now < lockedUntil) {
+      final minutes = DateTime.fromMillisecondsSinceEpoch(
+        lockedUntil,
+      ).difference(DateTime.now()).inMinutes;
+      // Mostrar alerta por encima
+      CustomSnackBar.showError(
+        context,
+        'Demasiados intentos fallidos. Intente de nuevo en ${minutes > 0 ? minutes : 1} minuto(s).',
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      final authService = ref.read(authServiceProvider);
-      await authService.signIn(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
+      // 2. Intento de inicio de sesión
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
-    } catch (e) {
-      if (mounted) {
-        final errorMessage = e.toString();
 
-        // Check if the error is related to a pending account
-        if (errorMessage.contains('pendiente')) {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    color: Colors.orange,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Cuenta Inactiva',
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+      // Si el login es exitoso, reseteamos el contador de fallos
+      await prefs.setInt('failed_attempts', 0);
+
+      // 3. Verificamos el estado del usuario en la base de datos (usuarios_app)
+      final userData = await Supabase.instance.client
+          .from('usuarios_app')
+          .select('estado')
+          .eq('id', response.user!.id)
+          .maybeSingle();
+
+      if (userData != null) {
+        final estado = userData['estado'];
+        if (estado == 'pendiente' || estado == 'inactivo') {
+          await Supabase.instance.client.auth
+              .signOut(); // Expulsarlo inmediatamente
+
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline,
+                      color: Colors.orange,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Cuenta $estado',
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
+                    ),
+                  ],
+                ),
+                content: Text(
+                  'Pronto su cuenta estará activada.\nPara solicitar activación o soporte, contactarse al correo:\nmx.u7000@gmail.com',
+                  style: GoogleFonts.poppins(fontSize: 14),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Entendido',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
-              content: Text(
-                'Debe contactarse con el administrador para activar la cuenta antes de poder iniciar sesión.',
-                style: GoogleFonts.poppins(fontSize: 14),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Entendido',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else {
-          // For any other error, clean the text and show the SnackBar
-          final cleanError = errorMessage.replaceAll('Exception: ', '');
-          CustomSnackBar.showError(context, cleanError);
+            );
+          }
+          return;
         }
       }
+    } on AuthException catch (e) {
+      if (mounted) {
+        String errorMsg = 'Ocurrió un error al ingresar.';
+
+        // 4. Traducción de errores y control de intentos
+        if (e.message.contains('Invalid login credentials')) {
+          errorMsg = 'El correo o la contraseña son incorrectos.';
+
+          int attempts = (prefs.getInt('failed_attempts') ?? 0) + 1;
+          if (attempts >= 5) {
+            // Bloquear por 15 minutos (ejemplo) al 5to intento fallido
+            await prefs.setInt(
+              'lockout_time',
+              DateTime.now()
+                  .add(const Duration(minutes: 15))
+                  .millisecondsSinceEpoch,
+            );
+            await prefs.setInt('failed_attempts', 0);
+            errorMsg = 'Demasiados intentos. Cuenta bloqueada temporalmente.';
+          } else {
+            await prefs.setInt('failed_attempts', attempts);
+            errorMsg += ' (Intento $attempts de 5)';
+          }
+        } else if (e.message.contains('Email not confirmed')) {
+          errorMsg =
+              'Por favor, verifique su correo electrónico mediante el enlace que se le envió.';
+        }
+
+        CustomSnackBar.showError(context, errorMsg);
+      }
+    } catch (e) {
+      if (mounted)
+        CustomSnackBar.showError(
+          context,
+          'Error de conexión. Intente nuevamente.',
+        );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -172,7 +237,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-
                       Text(
                         'Bienvenido',
                         style: GoogleFonts.montserrat(
@@ -191,7 +255,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
-
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -214,7 +277,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
@@ -234,18 +296,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   : Icons.visibility,
                               color: Colors.grey,
                             ),
-                            onPressed: () {
-                              setState(
-                                () => _obscurePassword = !_obscurePassword,
-                              );
-                            },
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                         validator: (value) => value!.isEmpty
                             ? 'La contraseña es obligatoria'
                             : null,
                       ),
-
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
@@ -269,7 +328,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -328,9 +386,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
                       TextButton(
                         onPressed: () {
                           Navigator.push(

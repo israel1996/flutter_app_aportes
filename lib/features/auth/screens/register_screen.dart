@@ -36,11 +36,50 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
 
       if (mounted) {
-        CustomSnackBar.showSuccess(
-          context,
-          'Registro exitoso. Por favor, inicia sesión.',
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_outline,
+                  color: Colors.green,
+                  size: 28,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Registro Exitoso',
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Pronto su cuenta será activada.\nPara solicitar activación o soporte, contactarse al correo:\nmx.u7000@gmail.com',
+              style: GoogleFonts.poppins(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Cierra el modal
+                  Navigator.pop(context); // Regresa al Login
+                },
+                child: const Text(
+                  'Entendido',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -109,7 +148,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // --- GLOWING ICON ---
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -137,8 +175,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-
-                      // --- TITLE ---
                       Text(
                         'Crear Cuenta',
                         style: GoogleFonts.montserrat(
@@ -157,8 +193,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
-
-                      // --- NAME INPUT ---
                       TextFormField(
                         controller: _nameController,
                         decoration: InputDecoration(
@@ -175,8 +209,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             value!.isEmpty ? 'El nombre es obligatorio' : null,
                       ),
                       const SizedBox(height: 16),
-
-                      // --- EMAIL INPUT ---
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -199,8 +231,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-
-                      // --- PASSWORD INPUT ---
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
@@ -233,8 +263,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-
-                      // --- CONFIRM PASSWORD INPUT ---
                       TextFormField(
                         controller: _confirmPasswordController,
                         obscureText: _obscureConfirmPassword,
@@ -267,8 +295,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 32),
-
-                      // --- GLOWING REGISTER BUTTON ---
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -327,9 +353,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: Text(

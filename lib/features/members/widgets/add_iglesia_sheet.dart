@@ -255,10 +255,12 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
         ref.read(currentIglesiaProvider.notifier).state = null;
       }
 
-      if (mounted) {
-        Navigator.pop(context);
-        CustomSnackBar.showWarning(context, 'Sede eliminada permanentemente');
-      }
+      if (mounted) Navigator.pop(context);
+
+      ref.read(currentIglesiaProvider.notifier).state = null;
+
+      if (mounted)
+        CustomSnackBar.showWarning(context, 'Sede eliminada con éxito');
 
       // 5. Trigger background sync
       Future.microtask(() {
@@ -270,7 +272,10 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
         }
       });
     } catch (e) {
-      if (mounted) CustomSnackBar.showError(context, 'Error al eliminar: $e');
+      if (mounted) {
+        Navigator.pop(context);
+        CustomSnackBar.showError(context, 'Error al eliminar: $e');
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

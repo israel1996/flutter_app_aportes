@@ -38,6 +38,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     _checkIfUserNeedsChurch();
+    _checkUserStatus(); // <-- VERIFICACIÓN DE ESTADO EN TIEMPO REAL AÑADIDA
+
     _syncAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -48,24 +50,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
   }
 
+  // --- NUEVA FUNCIÓN: VERIFICA SI EL ADMIN LO BLOQUEÓ MIENTRAS USABA LA APP ---
+  Future<void> _checkUserStatus() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final userData = await Supabase.instance.client
+          .from('usuarios_app')
+          .select('estado')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (userData != null) {
+        final estado = userData['estado'];
+        if (estado == 'inactivo' ||
+            estado == 'bloqueado' ||
+            estado == 'pendiente') {
+          await Supabase.instance.client.auth.signOut();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error verificando estado en vivo: $e");
+    }
+  }
+
   @override
   void dispose() {
     _syncAnimationController.dispose();
     super.dispose();
   }
 
-  // LÓGICA ROBUSTA CENTRALIZADA PARA CARGAR LA PREFERENCIA
   Future<void> _cargarIglesiaPreferida({required bool offline}) async {
     try {
       final database = ref.read(databaseProvider);
       String? targetId;
 
       if (offline) {
-        // 1. Lectura rápida de la caché local
         final prefs = await SharedPreferences.getInstance();
         targetId = prefs.getString('ultima_iglesia_id_local');
       } else {
-        // 2. Lectura precisa desde la nube (Supabase)
         final user = Supabase.instance.client.auth.currentUser;
         if (user != null) {
           final userData = await Supabase.instance.client
@@ -75,17 +98,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               .maybeSingle();
 
           if (userData != null && userData['ultima_iglesia_id'] != null) {
-            // Explicitly convert the dynamic database value to a safe Dart String
             targetId = userData['ultima_iglesia_id'].toString();
-
             final prefs = await SharedPreferences.getInstance();
-            // The '!' is no longer needed here
             await prefs.setString('ultima_iglesia_id_local', targetId);
           }
         }
       }
 
-      // Aplicar la iglesia encontrada
       if (targetId != null) {
         final savedChurch = await (database.select(
           database.iglesias,
@@ -93,11 +112,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
         if (savedChurch != null && mounted) {
           ref.read(currentIglesiaProvider.notifier).state = savedChurch;
-          return; // Éxito, terminamos aquí
+          return;
         }
       }
 
-      // FALLBACK: Si no hay preferencia guardada o no se encontró, seleccionar la primera local
       if (ref.read(currentIglesiaProvider) == null && mounted) {
         final user = Supabase.instance.client.auth.currentUser;
         final firstChurch =
@@ -161,7 +179,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _syncAnimationController.repeat();
 
     try {
-      // Intentar asignar la iglesia localmente AL INSTANTE de arrancar la app
       await _cargarIglesiaPreferida(offline: true);
 
       final connectivity = await Connectivity().checkConnectivity();
@@ -186,8 +203,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final syncService = SyncService(database);
 
       await syncService.syncAll();
-
-      // Verificar y actualizar con la preferencia oficial de la nube tras sincronizar
       await _cargarIglesiaPreferida(offline: false);
 
       if (mounted) {
@@ -769,7 +784,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             Iglesia? validDropdownValue;
             if (iglesias.isEmpty) return const SizedBox.shrink();
 
-            // LA INTERFAZ YA NO TOMA DECISIONES, SOLO SE ADAPTA A LA PREFERENCIA CARGADA
             if (currentIglesia != null &&
                 iglesias.any((i) => i.id == currentIglesia.id)) {
               validDropdownValue = iglesias.firstWhere(
@@ -1024,7 +1038,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
-            // LA INTERFAZ YA NO TOMA DECISIONES, SOLO SE ADAPTA A LA PREFERENCIA CARGADA
             if (iglesias.isNotEmpty &&
                 currentIglesia != null &&
                 iglesias.any((i) => i.id == currentIglesia.id)) {
