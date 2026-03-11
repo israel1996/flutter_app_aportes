@@ -46,7 +46,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final email = _emailController.text.trim();
 
-      // --- PRE-VALIDACIÓN CON MODAL LLAMATIVO ---
+      // --- PRE-VALIDACIÓN CON MODAL ESTILIZADO Y RESTRINGIDO EN TAMAÑO ---
       final estado = await Supabase.instance.client.rpc(
         'obtener_estado_usuario',
         params: {'correo': email},
@@ -57,64 +57,168 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           estado == 'solicita_reseteo') {
         if (mounted) {
           setState(() => _isLoading = false);
+
           showDialog(
             context: context,
-            barrierDismissible: false, // Obliga a tocar el botón
-            builder: (context) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: Column(
-                children: [
-                  const Icon(Icons.block, color: Colors.redAccent, size: 56),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Acceso Restringido',
-                    style: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-              content: Text(
-                'El estado actual de su cuenta es:\n${estado.toUpperCase()}\n\nPara solicitar activación o recuperar su acceso, contáctese al correo:\n\nmx.u7000@gmail.com',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(fontSize: 14, height: 1.5),
-              ),
-              actionsAlignment: MainAxisAlignment.center,
-              actions: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 45,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'ENTENDIDO',
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.2,
-                      ),
+            barrierDismissible: false,
+            builder: (context) {
+              final colorScheme = Theme.of(context).colorScheme;
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                backgroundColor: colorScheme.surface,
+                elevation: 8,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 420,
+                  ), // <-- ESTO EVITA QUE OCUPE TODA LA PANTALLA EN DESKTOP
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.orange.withOpacity(0.1)
+                                : Colors.orange.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.support_agent_rounded,
+                            color: Colors.orange,
+                            size: 48,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        Text(
+                          'Atención Requerida',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            color: colorScheme.onSurface,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+
+                        Text(
+                          'Actualmente tu cuenta se encuentra en estado:',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey,
+                            fontSize: 13,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            estado.toUpperCase(),
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              letterSpacing: 1.5,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        Text(
+                          'Para proteger tu información y habilitar tu acceso, por favor comunícate con nuestro equipo de soporte técnico:',
+                          style: GoogleFonts.poppins(fontSize: 13, height: 1.5),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: colorScheme.primary.withOpacity(0.3),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.email_outlined,
+                                color: colorScheme.primary,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  'mx.u7000@gmail.com',
+                                  style: GoogleFonts.montserrat(
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.primary,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(
+                              'ENTENDIDO',
+                              style: GoogleFonts.montserrat(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           );
         }
-        return; // SE CANCELA EL LOGIN AQUÍ MISMO.
+        return;
       }
       // -----------------------------------------------------------
 
-      // Si es activo, iniciamos sesión normalmente
       final authService = ref.read(authServiceProvider);
       await authService.signIn(email, _passwordController.text.trim());
 
