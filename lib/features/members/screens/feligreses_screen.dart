@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart'; // PAQUETE PARA ABRIR PDF
 
-// PDF Packages
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -24,11 +24,9 @@ class FeligresesScreen extends ConsumerStatefulWidget {
 
 class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   late Stream<List<Feligrese>> _membersStream;
-
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
   bool _showDeleted = false;
-
   bool _showFilters = false;
 
   String _sortBy = 'Más Recientes';
@@ -36,7 +34,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   String _filterGenero = 'Todos';
   String _filterEstadoCivil = 'Todos';
   String _filterEstadoEspiritual = 'Todos';
-  String _filterDiscapacidad = 'Todos'; // NUEVO FILTRO
+  String _filterDiscapacidad = 'Todos';
 
   int _currentPage = 1;
   int _itemsPerPage = 10;
@@ -70,11 +68,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     'Solo Espíritu',
     'No Bautizado',
   ];
-  final List<String> _discapacidadOptions = [
-    'Todos',
-    'Sí',
-    'No',
-  ]; // NUEVO FILTRO OPCIONES
+  final List<String> _discapacidadOptions = ['Todos', 'Sí', 'No'];
 
   @override
   void initState() {
@@ -93,7 +87,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
   Future<void> _exportFeligresesToPDF(List<Feligrese> members) async {
     CustomSnackBar.showInfo(context, 'Generando PDF del Directorio...');
-
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -121,7 +114,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
               ),
             ),
             pw.SizedBox(height: 20),
-
             pw.TableHelper.fromTextArray(
               context: context,
               columnWidths: {
@@ -181,26 +173,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
     final bytes = await pdf.save();
     final directory = await getDownloadsDirectory();
-
     if (directory != null) {
       final fileName =
           'Directorio_Feligreses_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
-
-      if (mounted) {
-        CustomSnackBar.showSuccess(
-          context,
-          'PDF guardado en Descargas: $fileName',
-        );
-      }
-    } else {
-      if (mounted) {
-        CustomSnackBar.showError(
-          context,
-          'No se pudo encontrar la carpeta de Descargas',
-        );
-      }
+      if (mounted)
+        CustomSnackBar.showSuccess(context, 'PDF generado exitosamente');
+      await OpenFilex.open(file.path); // ESTA LÍNEA ABRE EL PDF AUTOMÁTICAMENTE
     }
   }
 
@@ -218,13 +198,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIglesia = ref.watch(currentIglesiaProvider);
-
     final isDesktop = MediaQuery.of(context).size.width >= 800;
     final displayFilters = isDesktop || _showFilters;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-
       floatingActionButton: _showDeleted
           ? null
           : Container(
@@ -258,16 +236,13 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 child: const Icon(Icons.person_add, color: Colors.white),
               ),
             ),
-
       body: StreamBuilder<List<Feligrese>>(
         stream: _membersStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-
           final allMembers = snapshot.data ?? [];
 
-          // 1. FILTERING
           var filteredMembers = allMembers.where((m) {
             final matchIglesia =
                 currentIglesia == null || m.iglesiaId == currentIglesia.id;
@@ -287,15 +262,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
             bool matchEspiritual = true;
             if (_filterEstadoEspiritual != 'Todos') {
-              if (_filterEstadoEspiritual == 'Agua y Espíritu') {
+              if (_filterEstadoEspiritual == 'Agua y Espíritu')
                 matchEspiritual = m.bautizadoAgua && m.bautizadoEspiritu;
-              } else if (_filterEstadoEspiritual == 'Solo Agua') {
+              else if (_filterEstadoEspiritual == 'Solo Agua')
                 matchEspiritual = m.bautizadoAgua && !m.bautizadoEspiritu;
-              } else if (_filterEstadoEspiritual == 'Solo Espíritu') {
+              else if (_filterEstadoEspiritual == 'Solo Espíritu')
                 matchEspiritual = !m.bautizadoAgua && m.bautizadoEspiritu;
-              } else if (_filterEstadoEspiritual == 'No Bautizado') {
+              else if (_filterEstadoEspiritual == 'No Bautizado')
                 matchEspiritual = !m.bautizadoAgua && !m.bautizadoEspiritu;
-              }
             }
 
             final matchDiscapacidad =
@@ -314,11 +288,9 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 matchDiscapacidad;
           }).toList();
 
-          // 2. ORDENAMIENTO
           filteredMembers.sort((a, b) {
             if (_sortBy == 'Nombre (A-Z)') return a.nombre.compareTo(b.nombre);
             if (_sortBy == 'Nombre (Z-A)') return b.nombre.compareTo(a.nombre);
-
             final dateA =
                 a.fechaModificacion ??
                 a.fechaRegistro ??
@@ -327,14 +299,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 b.fechaModificacion ??
                 b.fechaRegistro ??
                 DateTime.fromMillisecondsSinceEpoch(0);
-
             if (_sortBy == 'Más Recientes') return dateB.compareTo(dateA);
             if (_sortBy == 'Más Antiguos') return dateA.compareTo(dateB);
-
             return 0;
           });
 
-          // 3. PAGINATION
           final totalPages =
               (filteredMembers.length / _itemsPerPage).ceil() == 0
               ? 1
@@ -451,7 +420,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                         ],
                       ),
                     ),
-
                     Row(
                       children: [
                         Expanded(
@@ -519,7 +487,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                         ],
                       ],
                     ),
-
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 300),
                       crossFadeState: displayFilters
@@ -570,7 +537,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
-                                // Sort
                                 SizedBox(
                                   width: 140,
                                   height: 45,
@@ -608,7 +574,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Type
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -648,7 +613,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Gender
                                 SizedBox(
                                   width: 120,
                                   height: 45,
@@ -688,7 +652,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Estado Civil
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -728,7 +691,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Estado Espiritual
                                 SizedBox(
                                   width: 150,
                                   height: 45,
@@ -768,7 +730,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Discapacidad
                                 SizedBox(
                                   width: 140,
                                   height: 45,
@@ -835,8 +796,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                   ],
                 ),
               ),
-
-              // --- DYNAMIC LIST ---
               Expanded(
                 child: filteredMembers.isEmpty
                     ? Center(
@@ -973,8 +932,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                         },
                       ),
               ),
-
-              // --- PAGINATION CONTROLS ---
               if (filteredMembers.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.only(

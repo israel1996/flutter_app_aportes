@@ -6,8 +6,9 @@ import 'package:path/path.dart' as p;
 
 LazyDatabase connect() {
   return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'db_iglesia.sqlite'));
-    return NativeDatabase.createInBackground(file);
+    final appDir = await getApplicationSupportDirectory();
+    final dbPath = p.join(appDir.path, 'aportes_database.sqlite');
+
+    return NativeDatabase.createInBackground(File(dbPath));
   });
 }

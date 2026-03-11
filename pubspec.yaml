@@ -2,7 +2,7 @@ name: flutter_app_aportes
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.10.7
@@ -33,6 +33,7 @@ dependencies:
   printing: ^5.14.2
   flutter_localizations:
     sdk: flutter
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:
