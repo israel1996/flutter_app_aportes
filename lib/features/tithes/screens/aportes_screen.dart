@@ -19,6 +19,10 @@ class AportesScreen extends ConsumerStatefulWidget {
 class _AportesScreenState extends ConsumerState<AportesScreen> {
   late Stream<List<AporteConFeligres>> _historyStream;
   late TextEditingController _searchController;
+  late FocusNode _searchFocusNode;
+
+  // NUEVO: Estado para mostrar/ocultar filtros avanzados
+  bool _showFilters = false;
 
   DateTimeRange? _dateRange;
   String _sortBy = 'Más recientes primero';
@@ -44,12 +48,14 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
   void initState() {
     super.initState();
     _searchController = TextEditingController();
+    _searchFocusNode = FocusNode();
     _historyStream = ref.read(databaseProvider).watchHistory();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -68,6 +74,11 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
         _currentPage = 1;
       });
     }
+  }
+
+  // --- WIDGET PARA INDICADOR DE FILTROS ACTIVOS ---
+  bool _hasActiveFilters() {
+    return _sortBy != 'Más recientes primero' || _dateRange != null;
   }
 
   @override
@@ -180,6 +191,8 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
               ? 1
               : (filtered.length / _itemsPerPage).ceil();
           if (_currentPage > totalPages) _currentPage = totalPages;
+          if (_currentPage < 1) _currentPage = 1;
+
           final startIndex = (_currentPage - 1) * _itemsPerPage;
           final endIndex = (startIndex + _itemsPerPage > filtered.length)
               ? filtered.length
@@ -188,146 +201,270 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
           return Column(
             children: [
-              // --- REDESIGNED INTUITIVE HEADER ---
+              // --- HEADER COMPACTO CON FILTROS OCULTABLES ---
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  bottom: 16,
+                  top: 10,
+                ),
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
                   borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(30),
+                    bottom: Radius.circular(24),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                    ),
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Search Bar at the top
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Buscar feligrés o monto...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? Colors.black12
-                            : Colors.grey.shade100,
-                      ),
-                      onChanged: (val) => setState(() => _currentPage = 1),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // 2. Sort Dropdown and Date Button
+                    // SEARCH BAR & FILTER TOGGLE BUTTON
                     Row(
                       children: [
                         Expanded(
-                          flex: 5,
-                          child: DropdownButtonFormField<String>(
-                            value: _sortBy,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: 'Ordenar lista por',
-                              prefixIcon: const Icon(Icons.sort),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
+                          child: SizedBox(
+                            height: 48,
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Buscar feligrés o monto...',
+                                hintStyle: const TextStyle(fontSize: 14),
+                                prefixIcon: const Icon(Icons.search, size: 20),
+                                suffixIcon: _searchController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        onPressed: () => setState(() {
+                                          _searchController.clear();
+                                          _currentPage = 1;
+                                        }),
+                                      )
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor: isDark
+                                    ? Colors.black12
+                                    : Colors.grey.shade100,
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              onChanged: (val) =>
+                                  setState(() => _currentPage = 1),
                             ),
-                            items: _sortOptions
-                                .map(
-                                  (o) => DropdownMenuItem(
-                                    value: o,
-                                    child: Text(
-                                      o,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) => setState(() => _sortBy = val!),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 3,
-                          child: ElevatedButton.icon(
-                            onPressed: _pickDateRange,
-                            icon: const Icon(
-                              Icons.calendar_month_outlined,
-                              size: 18,
+                        const SizedBox(width: 8),
+                        // BOTÓN DE FILTROS AVANZADOS
+                        Container(
+                          height: 48,
+                          width: 48,
+                          decoration: BoxDecoration(
+                            color: _hasActiveFilters()
+                                ? colorScheme.primary
+                                : (isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.tune,
+                              color: _hasActiveFilters()
+                                  ? Colors.white
+                                  : (isDark ? Colors.white : Colors.black87),
                             ),
-                            label: const Text('Fechas'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 18),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                              backgroundColor: colorScheme.primary.withOpacity(
-                                0.1,
-                              ),
-                              foregroundColor: colorScheme.primary,
-                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showFilters = !_showFilters;
+                              });
+                            },
                           ),
                         ),
                       ],
                     ),
 
-                    // 3. Active Date Filter Chip
-                    if (_dateRange != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.green.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.filter_alt,
-                              size: 16,
-                              color: Colors.green,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${DateFormat('dd MMM yy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
+                    // SECCIÓN DE FILTROS OCULTABLES (Se expande suavemente)
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 300),
+                      crossFadeState: _showFilters
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      firstChild: const SizedBox(
+                        width: double.infinity,
+                      ), // Oculto
+                      secondChild: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text(
+                                'Filtros Avanzados',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.grey,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: () => setState(() {
-                                _dateRange = null;
-                                _currentPage = 1;
-                              }),
-                              child: const Icon(
-                                Icons.close,
-                                size: 18,
-                                color: Colors.redAccent,
+                              const Spacer(),
+                              if (_hasActiveFilters())
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _sortBy = 'Más recientes primero';
+                                      _dateRange = null;
+                                      _currentPage = 1;
+                                    });
+                                  },
+                                  child: Text(
+                                    'Limpiar Todo',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 5,
+                                child: SizedBox(
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _sortBy,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      labelText: 'Ordenar lista por',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _sortOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _sortBy = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 4,
+                                child: SizedBox(
+                                  height: 45,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _pickDateRange,
+                                    icon: const Icon(
+                                      Icons.calendar_month_outlined,
+                                      size: 16,
+                                    ),
+                                    label: const Text(
+                                      'Fechas',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 0,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      elevation: 0,
+                                      backgroundColor: colorScheme.primary
+                                          .withOpacity(0.1),
+                                      foregroundColor: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Active Date Filter Chip
+                          if (_dateRange != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.green.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.filter_alt,
+                                    size: 14,
+                                    color: Colors.green,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${DateFormat('dd MMM yy').format(_dateRange!.start)} - ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  InkWell(
+                                    onTap: () => setState(() {
+                                      _dateRange = null;
+                                      _currentPage = 1;
+                                    }),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 16,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -337,20 +474,23 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 child: filtered.isEmpty
                     ? Center(
                         child: Text(
-                          'No hay aportes.',
+                          'No hay aportes con estos filtros.',
                           style: GoogleFonts.poppins(color: Colors.grey),
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
+                        padding: const EdgeInsets.only(
+                          bottom:
+                              80, // Espacio extra para que no estorbe el Botón Flotante (FAB)
+                          top: 16,
+                          left: 16,
+                          right: 16,
                         ),
                         itemCount: paginatedList.length,
                         itemBuilder: (context, index) {
                           final item = paginatedList[index];
                           return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            margin: const EdgeInsets.symmetric(vertical: 6),
                             decoration: BoxDecoration(
                               color: colorScheme.surface,
                               borderRadius: BorderRadius.circular(16),
@@ -370,6 +510,10 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                 builder: (context) =>
                                     EditAporteSheet(aporteItem: item),
                               ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
                               leading: CircleAvatar(
                                 backgroundColor: colorScheme.secondary
                                     .withOpacity(0.1),
@@ -385,7 +529,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                 ),
                               ),
 
-                              // --- AGREGAMOS LA FECHA DE REGISTRO AL SUBTÍTULO ---
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Column(
@@ -395,16 +538,16 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                       'Aporte del: ${DateFormat('dd MMM yyyy').format(item.aporte.fecha)} • ${item.aporte.tipo}',
                                       style: GoogleFonts.poppins(
                                         color: Colors.grey,
-                                        fontSize: 12,
+                                        fontSize: 11,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
                                       item.aporte.fechaModificacion != null
-                                          ? 'Modificado: ${DateFormat('dd MMM yyyy, hh:mm a').format(item.aporte.fechaModificacion!)}'
+                                          ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaModificacion!)}'
                                           : item.aporte.fechaRegistro != null
-                                          ? 'Registrado: ${DateFormat('dd MMM yyyy, hh:mm a').format(item.aporte.fechaRegistro!)}'
-                                          : 'Registrado: Desconocido',
+                                          ? 'Registrado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaRegistro!)}'
+                                          : 'Registrado: Desc.',
                                       style: GoogleFonts.poppins(
                                         color: colorScheme.primary.withOpacity(
                                           0.7,
@@ -431,84 +574,92 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       ),
               ),
 
-              // --- PAGINATION ---
-              Container(
-                padding: const EdgeInsets.only(
-                  top: 16,
-                  bottom: 32,
-                  left: 20,
-                  right: 80,
-                ),
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      'Mostrar:',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey,
+              // --- PAGINATION COMPACTA ---
+              if (filtered.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.only(
+                    top: 12,
+                    bottom: 24, // Ajustado para vista móvil
+                    left: 20,
+                    right: 20,
+                  ),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -4),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    DropdownButton<int>(
-                      value: _itemsPerPage,
-                      underline: const SizedBox(),
-                      items: _pageOptions
-                          .map(
-                            (i) => DropdownMenuItem(
-                              value: i,
-                              child: Text(
-                                '$i',
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.bold,
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Ver:',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      DropdownButton<int>(
+                        value: _itemsPerPage,
+                        underline: const SizedBox(),
+                        iconSize: 20,
+                        items: _pageOptions
+                            .map(
+                              (i) => DropdownMenuItem(
+                                value: i,
+                                child: Text(
+                                  '$i',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (val) => setState(() {
-                        _itemsPerPage = val!;
-                        _currentPage = 1;
-                      }),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _currentPage > 1
-                          ? () => setState(() => _currentPage--)
-                          : null,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Pág $_currentPage de $totalPages',
-                        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
+                            )
+                            .toList(),
+                        onChanged: (val) => setState(() {
+                          _itemsPerPage = val!;
+                          _currentPage = 1;
+                        }),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: _currentPage < totalPages
-                          ? () => setState(() => _currentPage++)
-                          : null,
-                    ),
-                  ],
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_left, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _currentPage > 1
+                            ? () => setState(() => _currentPage--)
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          '$_currentPage / $totalPages',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      IconButton(
+                        icon: const Icon(Icons.chevron_right, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: _currentPage < totalPages
+                            ? () => setState(() => _currentPage++)
+                            : null,
+                      ),
+                      // ESPACIO EN BLANCO PARA EVITAR QUE EL BOTÓN FLOTANTE TAPE LA FLECHA DERECHA
+                      const SizedBox(width: 60),
+                    ],
+                  ),
                 ),
-              ),
             ],
           );
         },

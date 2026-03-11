@@ -30,6 +30,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
 
+  // ESTADO PARA MOSTRAR/OCULTAR FILTROS
+  bool _showFilters = false;
+
   DateTimeRange? _dateRange;
   int _groupingMode =
       1; // 0 = Sin agrupación, 1 = Mensual, 2 = Feligrés, 3 = Tipo
@@ -73,8 +76,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   int _itemsPerPage = 10;
   final List<int> _pageOptions = [10, 20, 50, 100];
 
-  final Map<String, bool> _activeChartTypes =
-      {}; // Ahora se llena dinámicamente
+  final Map<String, bool> _activeChartTypes = {};
 
   final _currencyFormat = NumberFormat.currency(
     locale: 'en_US',
@@ -117,6 +119,11 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         }
       });
     }
+  }
+
+  bool _hasActiveFilters() {
+    return _masterSortBy != _getDefaultSortForMode(_groupingMode) ||
+        _dateRange != null;
   }
 
   pw.Widget _buildHeader(
@@ -380,29 +387,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     await _saveAndNotifyPDF(pdf, 'Reporte_General');
   }
 
-  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
-    final bytes = await pdf.save();
-    final directory = await getDownloadsDirectory();
-
-    if (directory != null) {
-      final fileName =
-          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      if (mounted)
-        CustomSnackBar.showSuccess(
-          context,
-          'PDF guardado en Descargas:\n$fileName',
-        );
-    } else {
-      if (mounted)
-        CustomSnackBar.showError(
-          context,
-          'No se pudo encontrar la carpeta de Descargas',
-        );
-    }
-  }
-
   Future<void> _exportDetailToPDF(
     List<AporteConFeligres> targetData,
     String title,
@@ -562,6 +546,29 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     );
 
     await _saveAndNotifyPDF(pdf, 'Detalle_${title.replaceAll(' ', '_')}');
+  }
+
+  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
+    final bytes = await pdf.save();
+    final directory = await getDownloadsDirectory();
+
+    if (directory != null) {
+      final fileName =
+          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      if (mounted)
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas:\n$fileName',
+        );
+    } else {
+      if (mounted)
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
+        );
+    }
   }
 
   @override
@@ -744,6 +751,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ? (isDark ? Colors.white : colorScheme.primary)
                 : (isDark ? Colors.white70 : Colors.black87),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 12,
           ),
         ),
         selected: isSelected,
@@ -768,13 +776,22 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     return Column(
       children: [
+        // --- HEADER COMPACTO CON FILTROS OCULTOS ---
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(
+            left: 20,
+            right: 20,
+            bottom: 16,
+            top: 10,
+          ),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(30),
+              bottom: Radius.circular(24),
             ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -782,146 +799,247 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      focusNode: _searchFocusNode,
-                      decoration: InputDecoration(
-                        hintText: 'Buscar por nombre, tipo o cantidad...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 48,
+                      child: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocusNode,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar registros...',
+                          hintStyle: const TextStyle(fontSize: 14),
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: isDark
+                              ? Colors.black12
+                              : Colors.grey.shade100,
                         ),
-                        filled: true,
-                        fillColor: isDark
-                            ? Colors.black12
-                            : Colors.grey.shade100,
+                        onChanged: (val) =>
+                            setState(() => _masterCurrentPage = 1),
                       ),
-                      onChanged: (val) =>
-                          setState(() => _masterCurrentPage = 1),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: () =>
-                        _exportMasterToPDF(displayList, currentIglesia),
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Exportar PDF'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 20,
+                  const SizedBox(width: 8),
+                  // BOTÓN PARA MOSTRAR/OCULTAR FILTROS Y PDF
+                  Container(
+                    height: 48,
+                    width: 48,
+                    decoration: BoxDecoration(
+                      color: _hasActiveFilters()
+                          ? colorScheme.primary
+                          : (isDark
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade200),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.tune,
+                        color: _hasActiveFilters()
+                            ? Colors.white
+                            : (isDark ? Colors.white : Colors.black87),
                       ),
+                      onPressed: () {
+                        setState(() {
+                          _showFilters = !_showFilters;
+                        });
+                      },
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    flex: 6,
-                    child: DropdownButtonFormField<String>(
-                      value: _masterSortBy,
-                      isExpanded: true,
-                      decoration: InputDecoration(
-                        labelText: 'Ordenar lista por',
-                        prefixIcon: const Icon(Icons.sort),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 12,
+              // SECCIÓN DESPLEGABLE
+              AnimatedCrossFade(
+                duration: const Duration(milliseconds: 300),
+                crossFadeState: _showFilters
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox(width: double.infinity),
+                secondChild: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Text(
+                          'Filtros Avanzados',
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.grey,
+                          ),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      items: _getSortOptionsForMode(_groupingMode)
-                          .map(
-                            (o) => DropdownMenuItem(
-                              value: o,
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  o,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
+                        const Spacer(),
+                        if (_hasActiveFilters())
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _masterSortBy = _getDefaultSortForMode(
+                                  _groupingMode,
+                                );
+                                _dateRange = null;
+                                _masterCurrentPage = 1;
+                              });
+                            },
+                            child: Text(
+                              'Limpiar Todo',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          )
-                          .toList(),
-                      onChanged: (val) => setState(() => _masterSortBy = val!),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 3,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _pickDateRange(false),
-                      icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                      label: const Text('Fechas'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: SizedBox(
+                            height: 45,
+                            child: DropdownButtonFormField<String>(
+                              value: _masterSortBy,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                labelText: 'Ordenar lista por',
+                                labelStyle: const TextStyle(fontSize: 12),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 0,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              items: _getSortOptionsForMode(_groupingMode)
+                                  .map(
+                                    (o) => DropdownMenuItem(
+                                      value: o,
+                                      child: Text(
+                                        o,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (val) =>
+                                  setState(() => _masterSortBy = val!),
+                            ),
+                          ),
                         ),
-                        elevation: 0,
-                        backgroundColor: colorScheme.primary.withOpacity(0.1),
-                        foregroundColor: colorScheme.primary,
-                      ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: SizedBox(
+                            height: 45,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _pickDateRange(false),
+                              icon: const Icon(
+                                Icons.calendar_month_outlined,
+                                size: 16,
+                              ),
+                              label: const Text(
+                                'Fechas',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                elevation: 0,
+                                backgroundColor: colorScheme.primary
+                                    .withOpacity(0.1),
+                                foregroundColor: colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-
-              if (_dateRange != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.filter_alt,
-                        size: 16,
-                        color: Colors.green,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${DateFormat('dd MMM yy').format(_dateRange!.start)}  -  ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                    if (_dateRange != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => setState(() {
-                          _dateRange = null;
-                          _masterCurrentPage = 1;
-                        }),
-                        child: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: Colors.redAccent,
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.filter_alt,
+                              size: 14,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${DateFormat('dd MMM yy').format(_dateRange!.start)} - ${DateFormat('dd MMM yy').format(_dateRange!.end)}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            InkWell(
+                              onTap: () => setState(() {
+                                _dateRange = null;
+                                _masterCurrentPage = 1;
+                              }),
+                              child: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _exportMasterToPDF(displayList, currentIglesia),
+                        icon: const Icon(Icons.picture_as_pdf, size: 18),
+                        label: const Text('Exportar Reporte General PDF'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colorScheme.primary,
+                          side: BorderSide(
+                            color: colorScheme.primary.withOpacity(0.5),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
 
               const SizedBox(height: 16),
               SingleChildScrollView(
@@ -951,18 +1069,22 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   ),
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   itemCount: paginatedMasterList.length,
                   itemBuilder: (context, index) {
                     final item = paginatedMasterList[index];
                     return Card(
                       elevation: 2,
+                      margin: const EdgeInsets.symmetric(vertical: 6),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
+                          horizontal: 16,
                           vertical: 8,
                         ),
                         leading: CircleAvatar(
@@ -982,12 +1104,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           item['name'],
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                         subtitle: Text(
                           _groupingMode == 0
                               ? item['subtitle']
                               : '${item['count']} aportes',
+                          style: const TextStyle(fontSize: 12),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -996,15 +1120,16 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                               _currencyFormat.format(item['total']),
                               style: GoogleFonts.montserrat(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                                fontSize: 16,
                                 color: colorScheme.primary,
                               ),
                             ),
                             if (_groupingMode != 0) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Icon(
                                 Icons.chevron_right,
                                 color: Colors.grey.shade400,
+                                size: 20,
                               ),
                             ],
                           ],
@@ -1028,10 +1153,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         if (displayList.isNotEmpty)
           Container(
             padding: const EdgeInsets.only(
-              top: 16,
-              bottom: 32,
+              top: 12,
+              bottom: 24,
               left: 20,
-              right: 80,
+              right: 20,
             ),
             decoration: BoxDecoration(
               color: colorScheme.surface,
@@ -1046,13 +1171,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             child: Row(
               children: [
                 Text(
-                  'Mostrar:',
+                  'Ver:',
                   style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(width: 8),
                 DropdownButton<int>(
                   value: _itemsPerPage,
                   underline: const SizedBox(),
+                  iconSize: 20,
                   items: _pageOptions
                       .map(
                         (i) => DropdownMenuItem(
@@ -1061,6 +1187,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                             '$i',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
                         ),
@@ -1074,24 +1201,27 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.chevron_left),
+                  icon: const Icon(Icons.chevron_left, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: _masterCurrentPage > 1
                       ? () => setState(() => _masterCurrentPage--)
                       : null,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Flexible(
                   child: Text(
-                    'Pág $_masterCurrentPage de $totalPages',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                    '$_masterCurrentPage / $totalPages',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right),
+                  icon: const Icon(Icons.chevron_right, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                   onPressed: _masterCurrentPage < totalPages
@@ -1119,7 +1249,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       'Especial': const Color(0xFFFF007F),
     };
 
-    // 1. Filtrar la data base por la agrupación seleccionada
     var baseData = allData.where((item) {
       if (_groupingMode == 1)
         return DateFormat('yyyy-MM').format(item.aporte.fecha) ==
@@ -1128,7 +1257,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
 
-    // 2. Extraer años y aplicar Filtro de Año OBLIGATORIO (Para Feligrés y Tipo)
     List<int> availableYears = [];
     int currentYear = DateTime.now().year;
 
@@ -1140,24 +1268,19 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         if (!availableYears.contains(currentYear))
           currentYear = availableYears.first;
       }
-
-      // Aplicamos el año a TODA la base de datos (Gráfico y Tabla quedan sincronizados)
       baseData = baseData
           .where((item) => item.aporte.fecha.year == currentYear)
           .toList();
     }
 
-    // 3. Extraer solo los tipos de aporte que EXISTEN en la data filtrada actual
     Set<String> existingTypes = {};
     if (_groupingMode == 1 || _groupingMode == 2) {
       existingTypes = baseData.map((e) => e.aporte.tipo).toSet();
-      // Inicializar en true si es la primera vez que vemos este tipo
       for (var type in existingTypes) {
         _activeChartTypes.putIfAbsent(type, () => true);
       }
     }
 
-    // 4. Filtrar data objetivo mediante los Chips visuales
     var targetData = baseData;
     if (_groupingMode == 1 || _groupingMode == 2) {
       targetData = targetData
@@ -1165,7 +1288,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           .toList();
     }
 
-    // 5. Ordenamiento de la Tabla inferior
     targetData.sort((a, b) {
       final timeA = a.aporte.fecha;
       final timeB = b.aporte.fecha;
@@ -1197,14 +1319,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       endDetailIndex,
     );
 
-    // ==============================================================
-    // LÓGICA DE GRÁFICOS: SEMANAS DEL MES VS MESES DEL AÑO
-    // ==============================================================
     List<String> xAxisLabels = [];
     Map<String, Map<String, double>> groupedChartData = {};
 
     if (_groupingMode == 1) {
-      // MODO MENSUAL: 4 Semanas
       xAxisLabels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
       for (var type in existingTypes) {
         if (_activeChartTypes[type] == true) {
@@ -1214,13 +1332,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       for (var item in targetData) {
         int day = item.aporte.fecha.day;
         int weekIndex = (day - 1) ~/ 7;
-        if (weekIndex > 3) weekIndex = 3; // Días 29, 30, 31 van a la semana 4
+        if (weekIndex > 3) weekIndex = 3;
         String weekKey = xAxisLabels[weekIndex];
         groupedChartData[item.aporte.tipo]![weekKey] =
             groupedChartData[item.aporte.tipo]![weekKey]! + item.aporte.monto;
       }
     } else {
-      // MODO FELIGRÉS/TIPO: 12 meses del Año Seleccionado
       xAxisLabels = [
         'Ene',
         'Feb',
@@ -1235,7 +1352,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         'Nov',
         'Dic',
       ];
-
       if (_groupingMode == 2) {
         for (var type in existingTypes) {
           if (_activeChartTypes[type] == true) {
@@ -1247,7 +1363,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
           for (var m in xAxisLabels) m: 0.0,
         };
       }
-
       for (var item in targetData) {
         String monthKey = xAxisLabels[item.aporte.fecha.month - 1];
         String typeKey = _groupingMode == 2
@@ -1267,11 +1382,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
     List<LineChartBarData> lineBars = [];
     List<BarChartGroupData> barGroups = [];
-    List<String> activeTypesList = groupedChartData.keys
-        .toList(); // Útil para tooltips
+    List<String> activeTypesList = groupedChartData.keys.toList();
 
     if (_groupingMode == 1) {
-      // BARCHART AGRUPADO PARA MODO MENSUAL (Semanas)
       for (int xIndex = 0; xIndex < xAxisLabels.length; xIndex++) {
         List<BarChartRodData> rods = [];
         String xLabel = xAxisLabels[xIndex];
@@ -1293,7 +1406,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         );
       }
     } else if (_groupingMode == 3) {
-      // BARCHART SIMPLE PARA MODO TIPO (12 Meses)
       String type = _selectedDetailId!;
       Map<String, double> dataPoints = groupedChartData[type] ?? {};
       for (int xIndex = 0; xIndex < xAxisLabels.length; xIndex++) {
@@ -1314,7 +1426,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
         );
       }
     } else if (_groupingMode == 2) {
-      // LINECHART PARA MODO FELIGRÉS (12 Meses)
       groupedChartData.forEach((type, dataPoints) {
         List<FlSpot> spots = [];
         int xIndex = 0;
@@ -1345,7 +1456,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       });
     }
 
-    // Tema dinámico/forzado para PDF
     final effectiveIsDark = _isExportingChart ? false : isDark;
     final chartBgColor = effectiveIsDark
         ? const Color(0xFF1E1E2C)
@@ -1356,39 +1466,161 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(
+            left: 20,
+            right: 20,
+            bottom: 16,
+            top: 10,
+          ),
           decoration: BoxDecoration(
             color: colorScheme.surface,
             borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(30),
+              bottom: Radius.circular(24),
             ),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() {
-                  _selectedDetailId = null;
-                  _selectedYear = null;
-                }),
-              ),
-              Expanded(
-                child: Text(
-                  _selectedDetailName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => setState(() {
+                      _selectedDetailId = null;
+                      _selectedYear = null;
+                    }),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _selectedDetailName,
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _exportDetailToPDF(
+                      targetData,
+                      _selectedDetailName,
+                      currentIglesia,
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf, size: 16),
+                    label: const Text(
+                      'Exportar',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      elevation: 0,
+                    ),
+                  ),
+                ],
               ),
-              ElevatedButton.icon(
-                onPressed: () => _exportDetailToPDF(
-                  targetData,
-                  _selectedDetailName,
-                  currentIglesia,
-                ),
-                icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('Exportar PDF'),
+              const SizedBox(height: 12),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: _groupingMode == 1 || _groupingMode == 2
+                        ? SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Wrap(
+                              spacing: 6,
+                              children: existingTypes.map((type) {
+                                final isSelected =
+                                    _activeChartTypes[type] ?? true;
+                                final badgeColor =
+                                    typeColors[type] ?? colorScheme.primary;
+                                return FilterChip(
+                                  label: Text(
+                                    type,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isSelected
+                                          ? Colors.white
+                                          : (isDark
+                                                ? Colors.white70
+                                                : Colors.black87),
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                  selected: isSelected,
+                                  selectedColor: badgeColor.withOpacity(0.9),
+                                  checkmarkColor: Colors.white,
+                                  padding: const EdgeInsets.all(0),
+                                  backgroundColor: isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade200,
+                                  onSelected: (val) => setState(() {
+                                    _activeChartTypes[type] = val;
+                                    _detailCurrentPage = 1;
+                                  }),
+                                );
+                              }).toList(),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+
+                  if ((_groupingMode == 2 || _groupingMode == 3) &&
+                      availableYears.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: colorScheme.primary.withOpacity(0.3),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: currentYear,
+                          icon: Icon(
+                            Icons.calendar_month,
+                            color: colorScheme.primary,
+                            size: 14,
+                          ),
+                          style: GoogleFonts.poppins(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                          items: availableYears
+                              .map(
+                                (y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 6.0),
+                                    child: Text('$y'),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            setState(() => _selectedYear = val);
+                          },
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -1400,113 +1632,16 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Filtros Superiores Dinámicos
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: _groupingMode == 1 || _groupingMode == 2
-                                ? Wrap(
-                                    spacing: 8,
-                                    children: existingTypes.map((type) {
-                                      final isSelected =
-                                          _activeChartTypes[type] ?? true;
-                                      final badgeColor =
-                                          typeColors[type] ??
-                                          colorScheme.primary;
-                                      return FilterChip(
-                                        label: Text(
-                                          type,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? Colors.white
-                                                : (isDark
-                                                      ? Colors.white70
-                                                      : Colors.black87),
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.normal,
-                                          ),
-                                        ),
-                                        selected: isSelected,
-                                        selectedColor: badgeColor.withOpacity(
-                                          0.9,
-                                        ),
-                                        checkmarkColor: Colors.white,
-                                        backgroundColor: isDark
-                                            ? Colors.grey.shade800
-                                            : Colors.grey.shade200,
-                                        onSelected: (val) => setState(() {
-                                          _activeChartTypes[type] = val;
-                                          _detailCurrentPage = 1;
-                                        }),
-                                      );
-                                    }).toList(),
-                                  )
-                                : const SizedBox.shrink(),
-                          ),
-
-                          // SELECTOR DE AÑO
-                          if ((_groupingMode == 2 || _groupingMode == 3) &&
-                              availableYears.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: colorScheme.primary.withOpacity(0.3),
-                                ),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<int>(
-                                  value: currentYear,
-                                  icon: Icon(
-                                    Icons.calendar_month,
-                                    color: colorScheme.primary,
-                                    size: 16,
-                                  ),
-                                  style: GoogleFonts.poppins(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  items: availableYears
-                                      .map(
-                                        (y) => DropdownMenuItem(
-                                          value: y,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 8.0,
-                                            ),
-                                            child: Text('$y'),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                  onChanged: (val) {
-                                    setState(() => _selectedYear = val);
-                                  },
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 20),
-
                       // Gráfico
                       RepaintBoundary(
                         key: _chartExportKey,
                         child: Container(
-                          height: 300,
-                          padding: const EdgeInsets.all(16),
+                          height: 250, // Altura optimizada para móvil
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: chartBgColor,
                             border: Border.all(
@@ -1531,6 +1666,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                   const TextStyle(
                                                     color: Colors.white,
                                                     fontWeight: FontWeight.bold,
+                                                    fontSize: 11,
                                                   ),
                                                 ),
                                               )
@@ -1563,7 +1699,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                       leftTitles: AxisTitles(
                                         sideTitles: SideTitles(
                                           showTitles: true,
-                                          reservedSize: 50,
+                                          reservedSize: 35,
                                           getTitlesWidget: (value, meta) {
                                             if (value == 0 ||
                                                 value == maxY * 1.2)
@@ -1573,7 +1709,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 symbol: '\$',
                                               ).format(value),
                                               style: TextStyle(
-                                                fontSize: 11,
+                                                fontSize: 10,
                                                 color: textColor,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -1596,9 +1732,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 child: Text(
                                                   xAxisLabels[value.toInt()],
                                                   style: TextStyle(
-                                                    fontSize: 10,
+                                                    fontSize: 9,
                                                     color: textColor,
-                                                    fontWeight: FontWeight.w500,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               );
@@ -1636,6 +1772,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 const TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
+                                                  fontSize: 11,
                                                 ),
                                               );
                                             },
@@ -1657,7 +1794,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                       leftTitles: AxisTitles(
                                         sideTitles: SideTitles(
                                           showTitles: true,
-                                          reservedSize: 50,
+                                          reservedSize: 35,
                                           getTitlesWidget: (value, meta) {
                                             if (value == 0 ||
                                                 value == maxY * 1.2)
@@ -1667,7 +1804,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 symbol: '\$',
                                               ).format(value),
                                               style: TextStyle(
-                                                fontSize: 11,
+                                                fontSize: 10,
                                                 color: textColor,
                                                 fontWeight: FontWeight.w500,
                                               ),
@@ -1690,9 +1827,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                                 child: Text(
                                                   xAxisLabels[value.toInt()],
                                                   style: TextStyle(
-                                                    fontSize: 10,
+                                                    fontSize: 9,
                                                     color: textColor,
-                                                    fontWeight: FontWeight.w500,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               );
@@ -1719,27 +1856,30 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Historial de Transacciones',
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              'Historial',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           SizedBox(
-                            width: 180,
+                            width: 160,
+                            height: 35,
                             child: DropdownButtonFormField<String>(
                               value: _detailSortBy,
                               isExpanded: true,
                               decoration: InputDecoration(
-                                prefixIcon: const Icon(Icons.sort, size: 18),
+                                prefixIcon: const Icon(Icons.sort, size: 16),
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 8,
-                                  vertical: 8,
+                                  vertical: 0,
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
@@ -1751,7 +1891,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                       value: o,
                                       child: Text(
                                         o,
-                                        style: const TextStyle(fontSize: 11),
+                                        style: const TextStyle(fontSize: 10),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   )
@@ -1762,38 +1903,49 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
 
                       if (targetData.isEmpty)
                         const Center(
-                          child: Text(
-                            'No hay registros con los filtros actuales.',
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text(
+                              'No hay registros con los filtros actuales.',
+                            ),
                           ),
                         )
                       else
                         ...paginatedDetailList.map((item) {
                           return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
                             child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
                               leading: Icon(
                                 Icons.monetization_on,
                                 color:
                                     typeColors[item.aporte.tipo] ??
                                     Colors.green,
+                                size: 28,
                               ),
                               title: Text(
                                 item.feligres.nombre,
                                 style: GoogleFonts.poppins(
                                   fontWeight: FontWeight.w600,
+                                  fontSize: 13,
                                 ),
                               ),
                               subtitle: Text(
-                                '${item.aporte.tipo} • ${DateFormat('dd MMM yyyy, hh:mm a', 'es').format(item.aporte.fecha)}',
+                                '${item.aporte.tipo} • ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fecha)}',
+                                style: const TextStyle(fontSize: 11),
                               ),
                               trailing: Text(
                                 _currencyFormat.format(item.aporte.monto),
                                 style: GoogleFonts.montserrat(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 16,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
@@ -1806,10 +1958,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 if (targetData.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.only(
-                      top: 16,
-                      bottom: 32,
-                      left: 20,
-                      right: 80,
+                      top: 12,
+                      bottom: 24,
+                      left: 16,
+                      right: 16,
                     ),
                     decoration: BoxDecoration(
                       color: colorScheme.surface,
@@ -1824,7 +1976,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                     child: Row(
                       children: [
                         Text(
-                          'Mostrar:',
+                          'Ver:',
                           style: GoogleFonts.poppins(
                             fontSize: 12,
                             color: Colors.grey,
@@ -1834,6 +1986,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         DropdownButton<int>(
                           value: _itemsPerPage,
                           underline: const SizedBox(),
+                          iconSize: 20,
                           items: _pageOptions
                               .map(
                                 (i) => DropdownMenuItem(
@@ -1842,6 +1995,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                     '$i',
                                     style: GoogleFonts.poppins(
                                       fontWeight: FontWeight.bold,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
@@ -1855,26 +2009,27 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                         ),
                         const Spacer(),
                         IconButton(
-                          icon: const Icon(Icons.chevron_left),
+                          icon: const Icon(Icons.chevron_left, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: _detailCurrentPage > 1
                               ? () => setState(() => _detailCurrentPage--)
                               : null,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Flexible(
                           child: Text(
-                            'Pág $_detailCurrentPage de $totalDetailPages',
+                            '$_detailCurrentPage / $totalDetailPages',
                             style: GoogleFonts.poppins(
                               fontWeight: FontWeight.w600,
+                              fontSize: 13,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right),
+                          icon: const Icon(Icons.chevron_right, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: _detailCurrentPage < totalDetailPages
