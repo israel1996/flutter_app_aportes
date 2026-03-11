@@ -34,16 +34,26 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   int _groupingMode =
       1; // 0 = Sin agrupación, 1 = Mensual, 2 = Feligrés, 3 = Tipo
 
-  // NUEVA VARIABLE PARA CONTROLAR EL TEMA DEL GRÁFICO AL EXPORTAR
   bool _isExportingChart = false;
 
-  String _masterSortBy = 'Aportes más altos';
-  final List<String> _masterSortOptions = [
-    'Aportes más altos',
-    'Aportes más bajos',
-    'Nombre (A-Z)',
-    'Nombre (Z-A)',
-  ];
+  late String _masterSortBy;
+  List<String> _getSortOptionsForMode(int mode) {
+    if (mode == 0)
+      return [
+        'Más reciente primero',
+        'Más antiguo primero',
+        'Más alto primero',
+        'Más bajo primero',
+      ];
+    if (mode == 1) return ['De enero a diciembre', 'De diciembre a enero'];
+    if (mode == 2) return ['Nombre (A-Z)', 'Nombre (Z-A)'];
+    if (mode == 3) return ['Menores aportes primero', 'Mayor aportes primero'];
+    return [];
+  }
+
+  String _getDefaultSortForMode(int mode) {
+    return _getSortOptionsForMode(mode).first;
+  }
 
   String _detailSortBy = 'Más recientes primero';
   final List<String> _detailSortOptions = [
@@ -56,18 +66,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   String? _selectedDetailId;
   String _selectedDetailName = '';
 
+  int? _selectedYear;
+
   int _masterCurrentPage = 1;
   int _detailCurrentPage = 1;
   int _itemsPerPage = 10;
   final List<int> _pageOptions = [10, 20, 50, 100];
 
-  final Map<String, bool> _activeChartTypes = {
-    'Diezmo': true,
-    'Ofrenda': true,
-    'Primicia': true,
-    'Pro-Templo': true,
-    'Especial': true,
-  };
+  final Map<String, bool> _activeChartTypes =
+      {}; // Ahora se llena dinámicamente
 
   final _currencyFormat = NumberFormat.currency(
     locale: 'en_US',
@@ -81,6 +88,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     _searchController = TextEditingController();
     _searchFocusNode = FocusNode();
     _historyStream = ref.read(databaseProvider).watchHistory();
+    _masterSortBy = _getDefaultSortForMode(_groupingMode);
   }
 
   @override
@@ -208,10 +216,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
               ),
               pw.SizedBox(height: 8),
-              pw.Text(
-                'Preparado por (Finanzas)',
-                style: const pw.TextStyle(fontSize: 12),
-              ),
+              pw.Text('Diácono(a)', style: const pw.TextStyle(fontSize: 12)),
             ],
           ),
           pw.Column(
@@ -223,10 +228,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
               ),
               pw.SizedBox(height: 8),
-              pw.Text(
-                'Revisado / Aprobado por',
-                style: const pw.TextStyle(fontSize: 12),
-              ),
+              pw.Text('Pastor', style: const pw.TextStyle(fontSize: 12)),
             ],
           ),
         ],
@@ -238,7 +240,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     List<Map<String, dynamic>> displayList,
     Iglesia? currentIglesia,
   ) async {
-    CustomSnackBar.showInfo(context, 'Generando Reporte PDF Profesional...');
+    CustomSnackBar.showInfo(context, 'Generando Reporte PDF...');
     final pdf = pw.Document();
 
     double grandTotal = 0;
@@ -323,13 +325,18 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: _groupingMode == 0
-                  ? ['Feligrés / Tipo', 'Fecha', 'Monto']
-                  : [
-                      'Categoría / Nombre',
-                      'Cantidad de Aportes',
-                      'Monto Total',
-                    ],
+              columnWidths: {
+                0: const pw.FixedColumnWidth(40),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(2),
+                3: const pw.FlexColumnWidth(2),
+              },
+              headers: [
+                '#',
+                _groupingMode == 0 ? 'Feligrés / Tipo' : 'Categoría / Nombre',
+                _groupingMode == 0 ? 'Fecha' : 'Cantidad de Aportes',
+                'Monto Total',
+              ],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
@@ -350,17 +357,18 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
               oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
-              data: displayList
-                  .map(
-                    (item) => [
-                      item['name'].toString(),
-                      _groupingMode == 0
-                          ? item['subtitle'].toString()
-                          : item['count'].toString(),
-                      _currencyFormat.format(item['total'] as double),
-                    ],
-                  )
-                  .toList(),
+              data: displayList.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final item = entry.value;
+                return [
+                  index.toString(),
+                  item['name'].toString(),
+                  _groupingMode == 0
+                      ? item['subtitle'].toString()
+                      : item['count'].toString(),
+                  _currencyFormat.format(item['total'] as double),
+                ];
+              }).toList(),
             ),
 
             _buildSignatureLines(),
@@ -372,6 +380,29 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     await _saveAndNotifyPDF(pdf, 'Reporte_General');
   }
 
+  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
+    final bytes = await pdf.save();
+    final directory = await getDownloadsDirectory();
+
+    if (directory != null) {
+      final fileName =
+          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      if (mounted)
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas:\n$fileName',
+        );
+    } else {
+      if (mounted)
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
+        );
+    }
+  }
+
   Future<void> _exportDetailToPDF(
     List<AporteConFeligres> targetData,
     String title,
@@ -379,12 +410,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   ) async {
     CustomSnackBar.showInfo(context, 'Preparando gráfico para exportación...');
 
-    // 1. FORZAMOS EL MODO CLARO TEMPORALMENTE
-    setState(() {
-      _isExportingChart = true;
-    });
-
-    // 2. ESPERAMOS A QUE FLUTTER REPINTE LA PANTALLA EN BLANCO (150 milisegundos)
+    setState(() => _isExportingChart = true);
     await Future.delayed(const Duration(milliseconds: 150));
 
     Uint8List? chartBytes;
@@ -403,10 +429,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       debugPrint('No se pudo capturar el gráfico: $e');
     }
 
-    // 3. RESTAURAMOS EL TEMA ORIGINAL DEL USUARIO INMEDIATAMENTE
-    setState(() {
-      _isExportingChart = false;
-    });
+    setState(() => _isExportingChart = false);
 
     CustomSnackBar.showInfo(context, 'Generando documento PDF...');
     final pdf = pw.Document();
@@ -488,7 +511,14 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
 
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: ['Fecha', 'Tipo', 'Feligrés', 'Monto'],
+              columnWidths: {
+                0: const pw.FixedColumnWidth(40),
+                1: const pw.FlexColumnWidth(2),
+                2: const pw.FlexColumnWidth(1.5),
+                3: const pw.FlexColumnWidth(3),
+                4: const pw.FlexColumnWidth(1.5),
+              },
+              headers: ['#', 'Fecha', 'Tipo', 'Feligrés', 'Monto'],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
@@ -509,19 +539,20 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
               oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
-              data: targetData
-                  .map(
-                    (item) => [
-                      DateFormat(
-                        'dd MMM yyyy, hh:mm a',
-                        'es',
-                      ).format(item.aporte.fecha),
-                      item.aporte.tipo,
-                      item.feligres.nombre,
-                      _currencyFormat.format(item.aporte.monto),
-                    ],
-                  )
-                  .toList(),
+              data: targetData.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final item = entry.value;
+                return [
+                  index.toString(),
+                  DateFormat(
+                    'dd MMM yyyy, hh:mm a',
+                    'es',
+                  ).format(item.aporte.fecha),
+                  item.aporte.tipo,
+                  item.feligres.nombre,
+                  _currencyFormat.format(item.aporte.monto),
+                ];
+              }).toList(),
             ),
 
             _buildSignatureLines(),
@@ -531,29 +562,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     );
 
     await _saveAndNotifyPDF(pdf, 'Detalle_${title.replaceAll(' ', '_')}');
-  }
-
-  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
-    final bytes = await pdf.save();
-    final directory = await getDownloadsDirectory();
-
-    if (directory != null) {
-      final fileName =
-          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      if (mounted)
-        CustomSnackBar.showSuccess(
-          context,
-          'PDF guardado en Descargas:\n$fileName',
-        );
-    } else {
-      if (mounted)
-        CustomSnackBar.showError(
-          context,
-          'No se pudo encontrar la carpeta de Descargas',
-        );
-    }
   }
 
   @override
@@ -571,7 +579,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             return const Center(child: CircularProgressIndicator());
 
           var allData = snapshot.data ?? [];
-
           allData = allData
               .where(
                 (item) =>
@@ -649,6 +656,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             'dd MMM yyyy, hh:mm a',
             'es',
           ).format(item.aporte.fecha),
+          'rawDate': item.aporte.fecha,
           'total': item.aporte.monto,
           'count': 1,
         };
@@ -684,14 +692,33 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     final displayList = groupedMap.values.toList();
 
     displayList.sort((a, b) {
-      if (_masterSortBy == 'Aportes más altos')
-        return (b['total'] as double).compareTo(a['total'] as double);
-      if (_masterSortBy == 'Aportes más bajos')
-        return (a['total'] as double).compareTo(b['total'] as double);
-      if (_masterSortBy == 'Nombre (A-Z)')
-        return a['name'].toString().compareTo(b['name'].toString());
-      if (_masterSortBy == 'Nombre (Z-A)')
-        return b['name'].toString().compareTo(a['name'].toString());
+      if (_groupingMode == 0) {
+        DateTime dateA = a['rawDate'];
+        DateTime dateB = b['rawDate'];
+        if (_masterSortBy == 'Más reciente primero')
+          return dateB.compareTo(dateA);
+        if (_masterSortBy == 'Más antiguo primero')
+          return dateA.compareTo(dateB);
+        if (_masterSortBy == 'Más alto primero')
+          return (b['total'] as double).compareTo(a['total'] as double);
+        if (_masterSortBy == 'Más bajo primero')
+          return (a['total'] as double).compareTo(b['total'] as double);
+      } else if (_groupingMode == 1) {
+        if (_masterSortBy == 'De enero a diciembre')
+          return a['id'].toString().compareTo(b['id'].toString());
+        if (_masterSortBy == 'De diciembre a enero')
+          return b['id'].toString().compareTo(a['id'].toString());
+      } else if (_groupingMode == 2) {
+        if (_masterSortBy == 'Nombre (A-Z)')
+          return a['name'].toString().compareTo(b['name'].toString());
+        if (_masterSortBy == 'Nombre (Z-A)')
+          return b['name'].toString().compareTo(a['name'].toString());
+      } else if (_groupingMode == 3) {
+        if (_masterSortBy == 'Mayor aportes primero')
+          return (b['total'] as double).compareTo(a['total'] as double);
+        if (_masterSortBy == 'Menores aportes primero')
+          return (a['total'] as double).compareTo(b['total'] as double);
+      }
       return 0;
     });
 
@@ -727,10 +754,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ? colorScheme.primary.withOpacity(0.5)
               : Colors.transparent,
         ),
-        onSelected: (v) => setState(() {
-          _groupingMode = modeValue;
-          _masterCurrentPage = 1;
-        }),
+        onSelected: (v) {
+          if (v) {
+            setState(() {
+              _groupingMode = modeValue;
+              _masterSortBy = _getDefaultSortForMode(modeValue);
+              _masterCurrentPage = 1;
+            });
+          }
+        },
       );
     }
 
@@ -803,7 +835,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      items: _masterSortOptions
+                      items: _getSortOptionsForMode(_groupingMode)
                           .map(
                             (o) => DropdownMenuItem(
                               value: o,
@@ -984,6 +1016,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                   _selectedDetailId = item['id'];
                                   _selectedDetailName = item['name'];
                                   _detailCurrentPage = 1;
+                                  _selectedYear = null;
                                 });
                               },
                       ),
@@ -1086,7 +1119,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       'Especial': const Color(0xFFFF007F),
     };
 
-    var targetData = allData.where((item) {
+    // 1. Filtrar la data base por la agrupación seleccionada
+    var baseData = allData.where((item) {
       if (_groupingMode == 1)
         return DateFormat('yyyy-MM').format(item.aporte.fecha) ==
             _selectedDetailId;
@@ -1094,17 +1128,51 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       return item.aporte.tipo == _selectedDetailId;
     }).toList();
 
+    // 2. Extraer años y aplicar Filtro de Año OBLIGATORIO (Para Feligrés y Tipo)
+    List<int> availableYears = [];
+    int currentYear = DateTime.now().year;
+
+    if (_groupingMode == 2 || _groupingMode == 3) {
+      availableYears = baseData.map((e) => e.aporte.fecha.year).toSet().toList()
+        ..sort((a, b) => b.compareTo(a));
+      if (availableYears.isNotEmpty) {
+        currentYear = _selectedYear ?? availableYears.first;
+        if (!availableYears.contains(currentYear))
+          currentYear = availableYears.first;
+      }
+
+      // Aplicamos el año a TODA la base de datos (Gráfico y Tabla quedan sincronizados)
+      baseData = baseData
+          .where((item) => item.aporte.fecha.year == currentYear)
+          .toList();
+    }
+
+    // 3. Extraer solo los tipos de aporte que EXISTEN en la data filtrada actual
+    Set<String> existingTypes = {};
+    if (_groupingMode == 1 || _groupingMode == 2) {
+      existingTypes = baseData.map((e) => e.aporte.tipo).toSet();
+      // Inicializar en true si es la primera vez que vemos este tipo
+      for (var type in existingTypes) {
+        _activeChartTypes.putIfAbsent(type, () => true);
+      }
+    }
+
+    // 4. Filtrar data objetivo mediante los Chips visuales
+    var targetData = baseData;
     if (_groupingMode == 1 || _groupingMode == 2) {
       targetData = targetData
           .where((item) => _activeChartTypes[item.aporte.tipo] == true)
           .toList();
     }
 
+    // 5. Ordenamiento de la Tabla inferior
     targetData.sort((a, b) {
+      final timeA = a.aporte.fecha;
+      final timeB = b.aporte.fecha;
       if (_detailSortBy == 'Más recientes primero')
-        return b.aporte.fecha.compareTo(a.aporte.fecha);
+        return timeB.compareTo(timeA);
       if (_detailSortBy == 'Más antiguos primero')
-        return a.aporte.fecha.compareTo(b.aporte.fecha);
+        return timeA.compareTo(timeB);
       if (_detailSortBy == 'Aportes más altos')
         return b.aporte.monto.compareTo(a.aporte.monto);
       if (_detailSortBy == 'Aportes más bajos')
@@ -1129,69 +1197,134 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
       endDetailIndex,
     );
 
-    final now = DateTime.now();
-    List<DateTime> last12Months = List.generate(
-      12,
-      (i) => DateTime(now.year, now.month - i, 1),
-    ).reversed.toList();
+    // ==============================================================
+    // LÓGICA DE GRÁFICOS: SEMANAS DEL MES VS MESES DEL AÑO
+    // ==============================================================
+    List<String> xAxisLabels = [];
+    Map<String, Map<String, double>> groupedChartData = {};
 
-    Map<String, Map<String, double>> groupedMonthlyData = {};
-    if (_groupingMode == 1 || _groupingMode == 2) {
-      for (var type in _activeChartTypes.keys.where(
-        (k) => _activeChartTypes[k] == true,
-      )) {
-        groupedMonthlyData[type] = {
-          for (var m in last12Months) DateFormat('MMM yy', 'es').format(m): 0.0,
-        };
+    if (_groupingMode == 1) {
+      // MODO MENSUAL: 4 Semanas
+      xAxisLabels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
+      for (var type in existingTypes) {
+        if (_activeChartTypes[type] == true) {
+          groupedChartData[type] = {for (var w in xAxisLabels) w: 0.0};
+        }
+      }
+      for (var item in targetData) {
+        int day = item.aporte.fecha.day;
+        int weekIndex = (day - 1) ~/ 7;
+        if (weekIndex > 3) weekIndex = 3; // Días 29, 30, 31 van a la semana 4
+        String weekKey = xAxisLabels[weekIndex];
+        groupedChartData[item.aporte.tipo]![weekKey] =
+            groupedChartData[item.aporte.tipo]![weekKey]! + item.aporte.monto;
       }
     } else {
-      groupedMonthlyData[_selectedDetailId!] = {
-        for (var m in last12Months) DateFormat('MMM yy', 'es').format(m): 0.0,
-      };
+      // MODO FELIGRÉS/TIPO: 12 meses del Año Seleccionado
+      xAxisLabels = [
+        'Ene',
+        'Feb',
+        'Mar',
+        'Abr',
+        'May',
+        'Jun',
+        'Jul',
+        'Ago',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dic',
+      ];
+
+      if (_groupingMode == 2) {
+        for (var type in existingTypes) {
+          if (_activeChartTypes[type] == true) {
+            groupedChartData[type] = {for (var m in xAxisLabels) m: 0.0};
+          }
+        }
+      } else {
+        groupedChartData[_selectedDetailId!] = {
+          for (var m in xAxisLabels) m: 0.0,
+        };
+      }
+
+      for (var item in targetData) {
+        String monthKey = xAxisLabels[item.aporte.fecha.month - 1];
+        String typeKey = _groupingMode == 2
+            ? item.aporte.tipo
+            : _selectedDetailId!;
+        groupedChartData[typeKey]![monthKey] =
+            groupedChartData[typeKey]![monthKey]! + item.aporte.monto;
+      }
     }
 
     double maxY = 10;
-    for (var item in targetData) {
-      final key = DateFormat('MMM yy', 'es').format(item.aporte.fecha);
-      final typeKey = item.aporte.tipo;
-      if (groupedMonthlyData.containsKey(typeKey) &&
-          groupedMonthlyData[typeKey]!.containsKey(key)) {
-        groupedMonthlyData[typeKey]![key] =
-            groupedMonthlyData[typeKey]![key]! + item.aporte.monto;
-        if (groupedMonthlyData[typeKey]![key]! > maxY)
-          maxY = groupedMonthlyData[typeKey]![key]!;
+    for (var totals in groupedChartData.values) {
+      for (var val in totals.values) {
+        if (val > maxY) maxY = val;
       }
     }
 
     List<LineChartBarData> lineBars = [];
     List<BarChartGroupData> barGroups = [];
+    List<String> activeTypesList = groupedChartData.keys
+        .toList(); // Útil para tooltips
 
-    groupedMonthlyData.forEach((type, monthlyTotals) {
-      List<FlSpot> spots = [];
-      int xIndex = 0;
-      final chartColor = typeColors[type] ?? colorScheme.primary;
+    if (_groupingMode == 1) {
+      // BARCHART AGRUPADO PARA MODO MENSUAL (Semanas)
+      for (int xIndex = 0; xIndex < xAxisLabels.length; xIndex++) {
+        List<BarChartRodData> rods = [];
+        String xLabel = xAxisLabels[xIndex];
 
-      monthlyTotals.forEach((month, value) {
-        spots.add(FlSpot(xIndex.toDouble(), value));
-        if (_groupingMode == 3) {
-          barGroups.add(
-            BarChartGroupData(
-              x: xIndex,
-              barRods: [
-                BarChartRodData(
-                  toY: value,
-                  color: chartColor,
-                  width: 16,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ],
+        for (var type in activeTypesList) {
+          double val = groupedChartData[type]![xLabel] ?? 0.0;
+          final chartColor = typeColors[type] ?? colorScheme.primary;
+          rods.add(
+            BarChartRodData(
+              toY: val,
+              color: chartColor,
+              width: 12,
+              borderRadius: BorderRadius.circular(4),
             ),
           );
         }
-        xIndex++;
-      });
+        barGroups.add(
+          BarChartGroupData(x: xIndex, barRods: rods, barsSpace: 4),
+        );
+      }
+    } else if (_groupingMode == 3) {
+      // BARCHART SIMPLE PARA MODO TIPO (12 Meses)
+      String type = _selectedDetailId!;
+      Map<String, double> dataPoints = groupedChartData[type] ?? {};
+      for (int xIndex = 0; xIndex < xAxisLabels.length; xIndex++) {
+        double val = dataPoints[xAxisLabels[xIndex]] ?? 0.0;
+        final chartColor = typeColors[type] ?? colorScheme.primary;
+        barGroups.add(
+          BarChartGroupData(
+            x: xIndex,
+            barRods: [
+              BarChartRodData(
+                toY: val,
+                color: chartColor,
+                width: 16,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          ),
+        );
+      }
+    } else if (_groupingMode == 2) {
+      // LINECHART PARA MODO FELIGRÉS (12 Meses)
+      groupedChartData.forEach((type, dataPoints) {
+        List<FlSpot> spots = [];
+        int xIndex = 0;
+        final chartColor = typeColors[type] ?? colorScheme.primary;
 
-      if (_groupingMode == 1 || _groupingMode == 2) {
+        dataPoints.forEach((label, value) {
+          spots.add(FlSpot(xIndex.toDouble(), value));
+          xIndex++;
+        });
+
         lineBars.add(
           LineChartBarData(
             spots: spots,
@@ -1199,17 +1332,20 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             color: chartColor,
             barWidth: 3,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: true),
+            dotData: FlDotData(
+              show: true,
+              checkToShowDot: (spot, barData) => spot.y > 0,
+            ),
             belowBarData: BarAreaData(
               show: true,
               color: chartColor.withOpacity(0.1),
             ),
           ),
         );
-      }
-    });
+      });
+    }
 
-    // APLICACIÓN DEL TEMA FORZADO PARA EL PDF
+    // Tema dinámico/forzado para PDF
     final effectiveIsDark = _isExportingChart ? false : isDark;
     final chartBgColor = effectiveIsDark
         ? const Color(0xFF1E1E2C)
@@ -1231,7 +1367,10 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _selectedDetailId = null),
+                onPressed: () => setState(() {
+                  _selectedDetailId = null;
+                  _selectedYear = null;
+                }),
               ),
               Expanded(
                 child: Text(
@@ -1265,55 +1404,117 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (_groupingMode == 1 || _groupingMode == 2)
-                        Wrap(
-                          spacing: 8,
-                          children: _activeChartTypes.keys.map((type) {
-                            final isSelected = _activeChartTypes[type]!;
-                            final badgeColor =
-                                typeColors[type] ?? colorScheme.primary;
-                            return FilterChip(
-                              label: Text(
-                                type,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDark
-                                            ? Colors.white70
-                                            : Colors.black87),
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
+                      // Filtros Superiores Dinámicos
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: _groupingMode == 1 || _groupingMode == 2
+                                ? Wrap(
+                                    spacing: 8,
+                                    children: existingTypes.map((type) {
+                                      final isSelected =
+                                          _activeChartTypes[type] ?? true;
+                                      final badgeColor =
+                                          typeColors[type] ??
+                                          colorScheme.primary;
+                                      return FilterChip(
+                                        label: Text(
+                                          type,
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : (isDark
+                                                      ? Colors.white70
+                                                      : Colors.black87),
+                                            fontWeight: isSelected
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                        selected: isSelected,
+                                        selectedColor: badgeColor.withOpacity(
+                                          0.9,
+                                        ),
+                                        checkmarkColor: Colors.white,
+                                        backgroundColor: isDark
+                                            ? Colors.grey.shade800
+                                            : Colors.grey.shade200,
+                                        onSelected: (val) => setState(() {
+                                          _activeChartTypes[type] = val;
+                                          _detailCurrentPage = 1;
+                                        }),
+                                      );
+                                    }).toList(),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+
+                          // SELECTOR DE AÑO
+                          if ((_groupingMode == 2 || _groupingMode == 3) &&
+                              availableYears.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: colorScheme.primary.withOpacity(0.3),
                                 ),
                               ),
-                              selected: isSelected,
-                              selectedColor: badgeColor.withOpacity(0.9),
-                              checkmarkColor: Colors.white,
-                              backgroundColor: isDark
-                                  ? Colors.grey.shade800
-                                  : Colors.grey.shade200,
-                              onSelected: (val) => setState(() {
-                                _activeChartTypes[type] = val;
-                                _detailCurrentPage = 1;
-                              }),
-                            );
-                          }).toList(),
-                        ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<int>(
+                                  value: currentYear,
+                                  icon: Icon(
+                                    Icons.calendar_month,
+                                    color: colorScheme.primary,
+                                    size: 16,
+                                  ),
+                                  style: GoogleFonts.poppins(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  items: availableYears
+                                      .map(
+                                        (y) => DropdownMenuItem(
+                                          value: y,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              right: 8.0,
+                                            ),
+                                            child: Text('$y'),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (val) {
+                                    setState(() => _selectedYear = val);
+                                  },
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+
                       const SizedBox(height: 20),
 
+                      // Gráfico
                       RepaintBoundary(
                         key: _chartExportKey,
                         child: Container(
                           height: 300,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: chartBgColor, // Tema dinámico/forzado
+                            color: chartBgColor,
                             border: Border.all(
                               color: Colors.grey.withOpacity(0.3),
                             ),
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          child: _groupingMode == 1 || _groupingMode == 2
+                          child: _groupingMode == 2
                               ? LineChart(
                                   LineChartData(
                                     lineTouchData: LineTouchData(
@@ -1387,18 +1588,13 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                           getTitlesWidget: (value, meta) {
                                             if (value.toInt() >= 0 &&
                                                 value.toInt() <
-                                                    last12Months.length) {
+                                                    xAxisLabels.length) {
                                               return Padding(
                                                 padding: const EdgeInsets.only(
                                                   top: 8.0,
                                                 ),
                                                 child: Text(
-                                                  DateFormat(
-                                                    'MMM',
-                                                    'es',
-                                                  ).format(
-                                                    last12Months[value.toInt()],
-                                                  ),
+                                                  xAxisLabels[value.toInt()],
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     color: textColor,
@@ -1414,7 +1610,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                     ),
                                     borderData: FlBorderData(show: false),
                                     minX: 0,
-                                    maxX: 11,
+                                    maxX: (xAxisLabels.length - 1).toDouble(),
                                     minY: 0,
                                     maxY: maxY * 1.2,
                                     lineBarsData: lineBars,
@@ -1428,8 +1624,15 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                             Colors.blueGrey.shade800,
                                         getTooltipItem:
                                             (group, groupIndex, rod, rodIndex) {
+                                              String typeLabel = '';
+                                              if (_groupingMode == 1 &&
+                                                  rodIndex <
+                                                      activeTypesList.length) {
+                                                typeLabel =
+                                                    '${activeTypesList[rodIndex]}\n';
+                                              }
                                               return BarTooltipItem(
-                                                _currencyFormat.format(rod.toY),
+                                                '$typeLabel${_currencyFormat.format(rod.toY)}',
                                                 const TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
@@ -1479,18 +1682,13 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                                           getTitlesWidget: (value, meta) {
                                             if (value.toInt() >= 0 &&
                                                 value.toInt() <
-                                                    last12Months.length) {
+                                                    xAxisLabels.length) {
                                               return Padding(
                                                 padding: const EdgeInsets.only(
                                                   top: 8.0,
                                                 ),
                                                 child: Text(
-                                                  DateFormat(
-                                                    'MMM',
-                                                    'es',
-                                                  ).format(
-                                                    last12Months[value.toInt()],
-                                                  ),
+                                                  xAxisLabels[value.toInt()],
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     color: textColor,
@@ -1532,7 +1730,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-
                           SizedBox(
                             width: 180,
                             child: DropdownButtonFormField<String>(
