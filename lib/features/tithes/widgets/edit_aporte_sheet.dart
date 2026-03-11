@@ -23,20 +23,16 @@ class NaturalCurrencyInputFormatter extends TextInputFormatter {
       return newValue.copyWith(text: '');
     }
 
-    // Remove existing commas to get the raw string
     String text = newValue.text.replaceAll(',', '');
 
-    // Split into integer and decimal parts based on the dot
     List<String> parts = text.split('.');
     String integerPart = parts[0];
     String decimalPart = parts.length > 1 ? '.${parts[1]}' : '';
 
-    // Prevent more than 2 decimal digits
     if (parts.length > 1 && parts[1].length > 2) {
       decimalPart = '.${parts[1].substring(0, 2)}';
     }
 
-    // Format the integer part with thousands separators
     if (integerPart.isNotEmpty) {
       final number = int.tryParse(integerPart);
       if (number != null) {
@@ -83,7 +79,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   @override
   void initState() {
     super.initState();
-    // Extraemos solo el número, ej: "10.50"
     final formatter = NumberFormat('#,##0.##', 'en_US');
     _montoController = TextEditingController(
       text: formatter.format(widget.aporteItem.aporte.monto),
@@ -100,11 +95,16 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
   }
 
   Future<void> _pickDate() async {
+    // Evita bug visual del texto y oculta teclado
+    FocusScope.of(context).unfocus();
+
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      locale: const Locale('es', 'ES'),
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       builder: (context, child) =>
           Theme(data: Theme.of(context), child: child!),
     );
@@ -140,9 +140,7 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
               tipo: _selectedTipo,
               fecha: _selectedDate,
               syncStatus: 0,
-              fechaModificacion: drift.Value(
-                DateTime.now(),
-              ), // <-- Instant local update trigger
+              fechaModificacion: drift.Value(DateTime.now()),
             ),
           );
 
@@ -327,11 +325,8 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      // USE THE NEW FORMATTER HERE:
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[\d.,]'),
-                        ), // Allow digits, dots, and commas
+                        FilteringTextInputFormatter.allow(RegExp(r'[\d.,]')),
                         NaturalCurrencyInputFormatter(),
                       ],
                       decoration: const InputDecoration(
@@ -341,7 +336,6 @@ class _EditAporteSheetState extends ConsumerState<EditAporteSheet> {
                       validator: (value) {
                         if (value == null || value.isEmpty)
                           return 'Obligatorio';
-                        // Ignore commas for validation
                         if (double.tryParse(value.replaceAll(',', '')) == null)
                           return 'Inválido';
                         return null;

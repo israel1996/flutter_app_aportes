@@ -47,7 +47,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   String? _selectedGender;
   DateTime? _selectedDate;
   bool _isSaving = false;
-  List<String> _nombresSimilares = []; // LIST TO HOLD MATCHES
+  List<String> _nombresSimilares = [];
 
   String _normalizeString(String text) {
     return text
@@ -59,10 +59,8 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
         .replaceAll(RegExp(r'[úüûù]'), 'u');
   }
 
-  // --- LIVE PARTIAL MATCH SEARCH ---
   Future<void> _checkDuplicateName(String name) async {
     final query = _normalizeString(name.trim());
-    // Only start searching if they typed at least 3 characters
     if (query.length < 3) {
       if (_nombresSimilares.isNotEmpty) {
         setState(() => _nombresSimilares = []);
@@ -76,7 +74,7 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
     final matches = allFeligreses
         .where((f) => _normalizeString(f.nombre).contains(query))
         .map((f) => f.nombre)
-        .take(3) // Limit to 3 so the UI doesn't stretch too much
+        .take(3)
         .toList();
 
     setState(() => _nombresSimilares = matches);
@@ -106,11 +104,17 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
   }
 
   Future<void> _pickDate() async {
+    // Evita bug visual del texto y oculta teclado manual
+    FocusScope.of(context).unfocus();
+
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime(2000),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
+      locale: const Locale('es', 'ES'),
+      initialDatePickerMode: DatePickerMode.year, // Intuitivo para nacimiento
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       builder: (context, child) {
         return Theme(data: Theme.of(context), child: child!);
       },
@@ -259,7 +263,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  // WARNING BORDERS
                   enabledBorder: _nombresSimilares.isNotEmpty
                       ? OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -278,7 +281,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                           ),
                         )
                       : null,
-                  // ERROR BORDERS
                   errorBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(
@@ -299,7 +301,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                     : null,
               ),
 
-              // WARNING LIST UI
               if (_nombresSimilares.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8, left: 12),
@@ -454,8 +455,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-
-                        // --- ADD THESE 8 LINES TO UNIFY THE RED COLOR ---
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
@@ -470,8 +469,6 @@ class _AddFeligresSheetState extends ConsumerState<AddFeligresSheet> {
                             width: 2,
                           ),
                         ),
-
-                        // ------------------------------------------------
                       ),
                       validator: (value) {
                         if (value != null && value.isNotEmpty) {

@@ -36,6 +36,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   String _filterGenero = 'Todos';
   String _filterEstadoCivil = 'Todos';
   String _filterEstadoEspiritual = 'Todos';
+  String _filterDiscapacidad = 'Todos'; // NUEVO FILTRO
 
   int _currentPage = 1;
   int _itemsPerPage = 10;
@@ -69,6 +70,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     'Solo Espíritu',
     'No Bautizado',
   ];
+  final List<String> _discapacidadOptions = [
+    'Todos',
+    'Sí',
+    'No',
+  ]; // NUEVO FILTRO OPCIONES
 
   @override
   void initState() {
@@ -203,6 +209,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
         _filterGenero != 'Todos' ||
         _filterEstadoCivil != 'Todos' ||
         _filterEstadoEspiritual != 'Todos' ||
+        _filterDiscapacidad != 'Todos' ||
         _sortBy != 'Más Recientes';
   }
 
@@ -212,7 +219,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIglesia = ref.watch(currentIglesiaProvider);
 
-    // DETECTA SI ES ESCRITORIO / PANTALLA ANCHA
     final isDesktop = MediaQuery.of(context).size.width >= 800;
     final displayFilters = isDesktop || _showFilters;
 
@@ -292,13 +298,20 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
               }
             }
 
+            final matchDiscapacidad =
+                _filterDiscapacidad == 'Todos' ||
+                (_filterDiscapacidad == 'Sí'
+                    ? m.poseeDiscapacidad
+                    : !m.poseeDiscapacidad);
+
             return matchIglesia &&
                 matchStatus &&
                 matchSearch &&
                 matchTipo &&
                 matchGenero &&
                 matchEstadoCivil &&
-                matchEspiritual;
+                matchEspiritual &&
+                matchDiscapacidad;
           }).toList();
 
           // 2. ORDENAMIENTO
@@ -476,7 +489,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             ),
                           ),
                         ),
-                        // OCULTAR EL BOTÓN DE FILTROS EN ESCRITORIO
                         if (!isDesktop) ...[
                           const SizedBox(width: 8),
                           Container(
@@ -508,7 +520,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ],
                     ),
 
-                    // SECCIÓN DE FILTROS ANIMADA O FIJA SEGÚN RESOLUCIÓN
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 300),
                       crossFadeState: displayFilters
@@ -539,6 +550,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       _filterGenero = 'Todos';
                                       _filterEstadoCivil = 'Todos';
                                       _filterEstadoEspiritual = 'Todos';
+                                      _filterDiscapacidad = 'Todos';
                                       _currentPage = 1;
                                     });
                                   },
@@ -558,6 +570,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
+                                // Sort
                                 SizedBox(
                                   width: 140,
                                   height: 45,
@@ -595,6 +608,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                // Type
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -634,6 +648,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                // Gender
                                 SizedBox(
                                   width: 120,
                                   height: 45,
@@ -673,6 +688,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                // Estado Civil
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -712,6 +728,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
+                                // Estado Espiritual
                                 SizedBox(
                                   width: 150,
                                   height: 45,
@@ -746,6 +763,46 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                         .toList(),
                                     onChanged: (val) => setState(() {
                                       _filterEstadoEspiritual = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Discapacidad
+                                SizedBox(
+                                  width: 140,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _filterDiscapacidad,
+                                    decoration: InputDecoration(
+                                      labelText: 'Discapacidad',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _discapacidadOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _filterDiscapacidad = val!;
                                       _currentPage = 1;
                                     }),
                                   ),

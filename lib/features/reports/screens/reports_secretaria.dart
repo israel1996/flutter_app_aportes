@@ -32,7 +32,7 @@ class _ReportesSecretariaScreenState
   late Stream<List<Feligrese>> _membersStream;
   late TextEditingController _searchController;
 
-  // 1=Estado Civil, 2=Género, 3=Membresía, 4=Estado Espiritual, 5=Rango de Edades
+  // 1=Estado Civil, 2=Género, 3=Membresía, 4=Estado Espiritual, 5=Rango de Edades, 6=Discapacidad
   int _groupingMode = 1;
 
   bool _isExportingChart = false;
@@ -95,6 +95,8 @@ class _ReportesSecretariaScreenState
         if (age <= 25) return 'Jóvenes (18-25)';
         if (age <= 59) return 'Adultos (26-59)';
         return 'Adultos Mayores (60+)';
+      case 6:
+        return m.poseeDiscapacidad ? 'Con Discapacidad' : 'Sin Discapacidad';
       default:
         return 'Desconocido';
     }
@@ -130,6 +132,8 @@ class _ReportesSecretariaScreenState
       'adultos (26-59)': Colors.blueGrey,
       'adultos mayores (60+)': Colors.deepPurpleAccent,
       'edad desconocida': Colors.brown,
+      'con discapacidad': Colors.purpleAccent,
+      'sin discapacidad': Colors.grey.shade400,
       'no especificado': Colors.grey.shade400,
     };
     return colors[normalized] ?? colorScheme.primary;
@@ -596,6 +600,8 @@ class _ReportesSecretariaScreenState
           return 'Estado Espiritual';
         case 5:
           return 'Generaciones (Edades)';
+        case 6:
+          return 'Necesidades Especiales';
         default:
           return 'Reporte';
       }
@@ -620,8 +626,8 @@ class _ReportesSecretariaScreenState
     Widget buildDynamicChart() {
       if (displayList.isEmpty) return const Center(child: Text('Sin datos'));
 
-      // 1. PIE & DONUT CHARTS (Civil Status & Gender)
-      if (_groupingMode == 1 || _groupingMode == 2) {
+      // 1. PIE & DONUT CHARTS (Civil Status, Gender, Discapacidad)
+      if (_groupingMode == 1 || _groupingMode == 2 || _groupingMode == 6) {
         return Column(
           children: [
             Expanded(
@@ -895,7 +901,6 @@ class _ReportesSecretariaScreenState
                           value.toInt() >= displayList.length)
                         return const SizedBox.shrink();
 
-                      // Formatear textos largos para que entren en el eje X
                       String label = displayList[value.toInt()]['name'];
                       label = label
                           .replaceAll(' ', '\n')
@@ -972,7 +977,6 @@ class _ReportesSecretariaScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CABECERA RESPONSIVA
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -985,7 +989,7 @@ class _ReportesSecretariaScreenState
                         fontWeight: FontWeight.bold,
                         color: Colors.grey,
                       ),
-                      maxLines: 1, // Cambiado a 1 para mejor consistencia
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -1044,6 +1048,12 @@ class _ReportesSecretariaScreenState
                       label: const Text('Edades'),
                       selected: _groupingMode == 5,
                       onSelected: (v) => setState(() => _groupingMode = 5),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Discapacidad'),
+                      selected: _groupingMode == 6,
+                      onSelected: (v) => setState(() => _groupingMode = 6),
                     ),
                   ],
                 ),
@@ -1196,7 +1206,6 @@ class _ReportesSecretariaScreenState
           ),
           child: Column(
             children: [
-              // CABECERA DE DETALLES RESPONSIVA
               Row(
                 children: [
                   IconButton(
@@ -1341,7 +1350,6 @@ class _ReportesSecretariaScreenState
                 ),
         ),
 
-        // PAGINACIÓN DETALLES (Diseño compacto)
         if (targetData.isNotEmpty)
           Container(
             padding: const EdgeInsets.only(

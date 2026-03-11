@@ -88,8 +88,6 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
     ).format(_selectedDate);
   }
 
-  // --- NUEVA FUNCIÓN NORMALIZADORA ---
-  // Convierte todo a minúsculas y reemplaza las vocales con tilde/diéresis por vocales simples
   String _normalizeString(String text) {
     return text
         .toLowerCase()
@@ -101,11 +99,17 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
   }
 
   Future<void> _pickDate() async {
+    // Quitar foco para evitar bug visual
+    FocusScope.of(context).unfocus();
+
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      locale: const Locale('es', 'ES'),
+      initialEntryMode:
+          DatePickerEntryMode.calendarOnly, // Desactiva escritura manual
       builder: (context, child) =>
           Theme(data: Theme.of(context), child: child!),
     );
@@ -269,7 +273,6 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                             return const Iterable<Feligrese>.empty();
                           }
 
-                          // APLICACIÓN DE LA NORMALIZACIÓN EN LA BÚSQUEDA
                           final query = _normalizeString(textEditingValue.text);
                           final matches = members.where((Feligrese member) {
                             final nombreNormalizado = _normalizeString(
@@ -302,7 +305,6 @@ class _AddAporteSheetState extends ConsumerState<AddAporteSheet> {
                                 readOnly: _selectedFeligresId != null,
                                 onFieldSubmitted: (String value) {
                                   if (value.isNotEmpty) {
-                                    // APLICACIÓN DE LA NORMALIZACIÓN AL DAR ENTER
                                     final query = _normalizeString(value);
                                     final match = members
                                         .where(
