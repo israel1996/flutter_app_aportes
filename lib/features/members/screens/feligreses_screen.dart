@@ -27,7 +27,10 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
-  bool _showDeleted = false; // Ahora representa la vista de "Inactivos"
+  bool _showDeleted = false; // Vista de "Inactivos"
+
+  // NUEVO: Estado para mostrar/ocultar filtros avanzados
+  bool _showFilters = false;
 
   String _sortBy = 'Más Recientes';
   String _filterTipo = 'Todos';
@@ -196,6 +199,15 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     }
   }
 
+  // --- WIDGET PARA INDICADOR DE FILTROS ACTIVOS ---
+  bool _hasActiveFilters() {
+    return _filterTipo != 'Todos' ||
+        _filterGenero != 'Todos' ||
+        _filterEstadoCivil != 'Todos' ||
+        _filterEstadoEspiritual != 'Todos' ||
+        _sortBy != 'Más Recientes';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -323,18 +335,18 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
           return Column(
             children: [
-              // --- HEADER & FILTERS ---
+              // --- HEADER COMPACTO ---
               Container(
                 padding: const EdgeInsets.only(
-                  left: 24,
-                  right: 24,
-                  bottom: 24,
+                  left: 20,
+                  right: 20,
+                  bottom: 16,
                   top: 10,
                 ),
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
                   borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(30),
+                    bottom: Radius.circular(24),
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -345,13 +357,13 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 ),
                 child: Column(
                   children: [
-                    // ACTIVE / INACTIVES TOGGLE
+                    // ACTIVE / INACTIVES TOGGLE (Más compacto)
                     Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(4),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
                         color: isDark ? Colors.black12 : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
                         children: [
@@ -363,7 +375,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               }),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 10,
+                                  vertical: 8,
                                 ),
                                 decoration: BoxDecoration(
                                   color: !_showDeleted
@@ -371,7 +383,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                           isDark ? 0.2 : 0.1,
                                         )
                                       : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -383,6 +395,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       fontWeight: !_showDeleted
                                           ? FontWeight.bold
                                           : FontWeight.normal,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
@@ -397,13 +410,13 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                               }),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 10,
+                                  vertical: 8,
                                 ),
                                 decoration: BoxDecoration(
                                   color: _showDeleted
                                       ? Colors.orangeAccent.withOpacity(0.1)
                                       : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -415,6 +428,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                       fontWeight: _showDeleted
                                           ? FontWeight.bold
                                           : FontWeight.normal,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
@@ -425,232 +439,344 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ),
                     ),
 
-                    // SEARCH BAR & EXPORT BUTTON
+                    // SEARCH BAR & FILTER TOGGLE BUTTON
                     Row(
                       children: [
                         Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            focusNode: _searchFocusNode,
-                            decoration: InputDecoration(
-                              hintText: 'Buscar por nombre...',
-                              prefixIcon: const Icon(Icons.search),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.clear, size: 20),
-                                      onPressed: () => setState(() {
-                                        _searchController.clear();
-                                        _currentPage = 1;
-                                      }),
-                                    )
-                                  : null,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          child: SizedBox(
+                            height: 48,
+                            child: TextField(
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              decoration: InputDecoration(
+                                hintText: 'Buscar feligrés...',
+                                hintStyle: const TextStyle(fontSize: 14),
+                                prefixIcon: const Icon(Icons.search, size: 20),
+                                suffixIcon: _searchController.text.isNotEmpty
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear, size: 18),
+                                        onPressed: () => setState(() {
+                                          _searchController.clear();
+                                          _currentPage = 1;
+                                        }),
+                                      )
+                                    : null,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 0,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                filled: true,
+                                fillColor: isDark
+                                    ? Colors.black12
+                                    : Colors.grey.shade100,
                               ),
-                              filled: true,
-                              fillColor: isDark
-                                  ? Colors.black12
-                                  : Colors.grey.shade100,
+                              onChanged: (val) =>
+                                  setState(() => _currentPage = 1),
                             ),
-                            onChanged: (val) =>
-                                setState(() => _currentPage = 1),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () =>
-                              _exportFeligresesToPDF(filteredMembers),
-                          icon: const Icon(Icons.download),
-                          label: const Text('Exportar'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 16,
-                              horizontal: 20,
+                        const SizedBox(width: 8),
+                        // BOTÓN DE FILTROS AVANZADOS
+                        Container(
+                          height: 48,
+                          width: 48,
+                          decoration: BoxDecoration(
+                            color: _hasActiveFilters()
+                                ? colorScheme.primary
+                                : (isDark
+                                      ? Colors.grey.shade800
+                                      : Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.tune,
+                              color: _hasActiveFilters()
+                                  ? Colors.white
+                                  : (isDark ? Colors.white : Colors.black87),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showFilters = !_showFilters;
+                              });
+                            },
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
 
-                    // DROPDOWN FILTERS
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
+                    // SECCIÓN DE FILTROS OCULTABLES (Se expande suavemente)
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 300),
+                      crossFadeState: _showFilters
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      firstChild: const SizedBox(
+                        width: double.infinity,
+                      ), // Oculto
+                      secondChild: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Sort (isExpanded added to prevent internal RenderFlex overflow)
-                          SizedBox(
-                            width: 150,
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _sortBy,
-                              decoration: InputDecoration(
-                                labelText: 'Ordenar',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text(
+                                'Filtros Avanzados',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.grey,
                                 ),
                               ),
-                              items: _sortOptions
-                                  .map(
-                                    (o) => DropdownMenuItem(
-                                      value: o,
-                                      child: Text(
-                                        o,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
+                              const Spacer(),
+                              if (_hasActiveFilters())
+                                InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _sortBy = 'Más Recientes';
+                                      _filterTipo = 'Todos';
+                                      _filterGenero = 'Todos';
+                                      _filterEstadoCivil = 'Todos';
+                                      _filterEstadoEspiritual = 'Todos';
+                                      _currentPage = 1;
+                                    });
+                                  },
+                                  child: Text(
+                                    'Limpiar Todo',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                // Sort
+                                SizedBox(
+                                  width: 140,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _sortBy,
+                                    decoration: InputDecoration(
+                                      labelText: 'Ordenar',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) =>
-                                  setState(() => _sortBy = val!),
+                                    items: _sortOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) =>
+                                        setState(() => _sortBy = val!),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Type
+                                SizedBox(
+                                  width: 130,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _filterTipo,
+                                    decoration: InputDecoration(
+                                      labelText: 'Tipo',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _tipoOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _filterTipo = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Gender
+                                SizedBox(
+                                  width: 120,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _filterGenero,
+                                    decoration: InputDecoration(
+                                      labelText: 'Género',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _generoOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _filterGenero = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Estado Civil
+                                SizedBox(
+                                  width: 130,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _filterEstadoCivil,
+                                    decoration: InputDecoration(
+                                      labelText: 'Estado Civil',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _estadoCivilOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _filterEstadoCivil = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Estado Espiritual
+                                SizedBox(
+                                  width: 150,
+                                  height: 45,
+                                  child: DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    value: _filterEstadoEspiritual,
+                                    decoration: InputDecoration(
+                                      labelText: 'E. Espiritual',
+                                      labelStyle: const TextStyle(fontSize: 12),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 0,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                    items: _estadoEspiritualOptions
+                                        .map(
+                                          (o) => DropdownMenuItem(
+                                            value: o,
+                                            child: Text(
+                                              o,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (val) => setState(() {
+                                      _filterEstadoEspiritual = val!;
+                                      _currentPage = 1;
+                                    }),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          // Type
+                          const SizedBox(height: 12),
+                          // BOTÓN DE EXPORTAR MOVIDO AQUÍ PARA AHORRAR ESPACIO
                           SizedBox(
-                            width: 140,
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _filterTipo,
-                              decoration: InputDecoration(
-                                labelText: 'Tipo',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _exportFeligresesToPDF(filteredMembers),
+                              icon: const Icon(Icons.picture_as_pdf, size: 18),
+                              label: const Text('Exportar Directorio a PDF'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: colorScheme.primary,
+                                side: BorderSide(
+                                  color: colorScheme.primary.withOpacity(0.5),
                                 ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                               ),
-                              items: _tipoOptions
-                                  .map(
-                                    (o) => DropdownMenuItem(
-                                      value: o,
-                                      child: Text(
-                                        o,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) => setState(() {
-                                _filterTipo = val!;
-                                _currentPage = 1;
-                              }),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Gender
-                          SizedBox(
-                            width: 130,
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _filterGenero,
-                              decoration: InputDecoration(
-                                labelText: 'Género',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              items: _generoOptions
-                                  .map(
-                                    (o) => DropdownMenuItem(
-                                      value: o,
-                                      child: Text(
-                                        o,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) => setState(() {
-                                _filterGenero = val!;
-                                _currentPage = 1;
-                              }),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Estado Civil
-                          SizedBox(
-                            width: 140,
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _filterEstadoCivil,
-                              decoration: InputDecoration(
-                                labelText: 'Estado Civil',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              items: _estadoCivilOptions
-                                  .map(
-                                    (o) => DropdownMenuItem(
-                                      value: o,
-                                      child: Text(
-                                        o,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) => setState(() {
-                                _filterEstadoCivil = val!;
-                                _currentPage = 1;
-                              }),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Estado Espiritual
-                          SizedBox(
-                            width: 160,
-                            child: DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _filterEstadoEspiritual,
-                              decoration: InputDecoration(
-                                labelText: 'E. Espiritual',
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              items: _estadoEspiritualOptions
-                                  .map(
-                                    (o) => DropdownMenuItem(
-                                      value: o,
-                                      child: Text(
-                                        o,
-                                        style: const TextStyle(fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (val) => setState(() {
-                                _filterEstadoEspiritual = val!;
-                                _currentPage = 1;
-                              }),
                             ),
                           ),
                         ],
@@ -689,16 +815,16 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.only(
-                          bottom: 20,
+                          bottom: 80, // Espacio extra para el botón flotante
                           top: 16,
-                          left: 24,
-                          right: 24,
+                          left: 16,
+                          right: 16,
                         ),
                         itemCount: paginatedList.length,
                         itemBuilder: (context, index) {
                           final member = paginatedList[index];
                           return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            margin: const EdgeInsets.symmetric(vertical: 6),
                             decoration: BoxDecoration(
                               color: colorScheme.surface,
                               borderRadius: BorderRadius.circular(16),
@@ -721,8 +847,8 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                     EditFeligresSheet(feligres: member),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 8,
+                                horizontal: 16,
+                                vertical: 6,
                               ),
                               leading: CircleAvatar(
                                 backgroundColor: _showDeleted
@@ -757,10 +883,10 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                     const SizedBox(height: 2),
                                     Text(
                                       member.fechaModificacion != null
-                                          ? 'Modificado: ${DateFormat('dd MMM yyyy, hh:mm a').format(member.fechaModificacion!)}'
+                                          ? 'Modificado: ${DateFormat('dd MMM yy', 'es').format(member.fechaModificacion!)}'
                                           : member.fechaRegistro != null
-                                          ? 'Creado: ${DateFormat('dd MMM yyyy, hh:mm a').format(member.fechaRegistro!)}'
-                                          : 'Creado: Desconocido',
+                                          ? 'Creado: ${DateFormat('dd MMM yy', 'es').format(member.fechaRegistro!)}'
+                                          : 'Creado: Desc.',
                                       style: GoogleFonts.poppins(
                                         color: colorScheme.primary.withOpacity(
                                           0.7,
@@ -787,7 +913,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   const SizedBox(height: 4),
                                   Icon(
                                     Icons.edit_outlined,
-                                    size: 20,
+                                    size: 18,
                                     color: Colors.grey.withOpacity(0.5),
                                   ),
                                 ],
@@ -798,15 +924,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ),
               ),
 
-              // --- PAGINATION CONTROLS ---
+              // --- PAGINATION CONTROLS (Fijo abajo) ---
               if (filteredMembers.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.only(
-                    top: 16,
-                    bottom: 32,
-                    left: 20, // Reducido para evitar overflow
-                    right:
-                        24, // Cambiado de 80 a 24 para evitar overflow en pantallas angostas
+                    top: 12,
+                    bottom: 24, // Ajustado para móviles
+                    left: 20,
+                    right: 20,
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
@@ -821,7 +946,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                   child: Row(
                     children: [
                       Text(
-                        'Mostrar:',
+                        'Ver:',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: Colors.grey,
@@ -831,6 +956,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       DropdownButton<int>(
                         value: _itemsPerPage,
                         underline: const SizedBox(),
+                        iconSize: 20,
                         items: _pageOptions
                             .map(
                               (i) => DropdownMenuItem(
@@ -839,6 +965,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   '$i',
                                   style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
@@ -851,26 +978,27 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.chevron_left),
+                        icon: const Icon(Icons.chevron_left, size: 20),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: _currentPage > 1
                             ? () => setState(() => _currentPage--)
                             : null,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       Flexible(
                         child: Text(
-                          'Pág $_currentPage de $totalPages',
+                          '$_currentPage / $totalPages',
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       IconButton(
-                        icon: const Icon(Icons.chevron_right),
+                        icon: const Icon(Icons.chevron_right, size: 20),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: _currentPage < totalPages
