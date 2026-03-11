@@ -70,23 +70,18 @@ class DashboardSecretaria extends ConsumerWidget {
           // Disability
           if (m.poseeDiscapacidad) discapacitados++;
 
-          // Marital Status
-          switch (m.estadoCivil?.toLowerCase()) {
-            case 'soltero':
-              solteros++;
-              break;
-            case 'casado':
-              casados++;
-              break;
-            case 'divorciado':
-              divorciados++;
-              break;
-            case 'viudo':
-              viudos++;
-              break;
-            case 'unión libre':
-              unionLibre++;
-              break;
+          // LÓGICA CORREGIDA: Marital Status (Soporta 'Soltero(a)', 'Casado(a)', etc.)
+          final ec = m.estadoCivil?.toLowerCase() ?? '';
+          if (ec.contains('soltero')) {
+            solteros++;
+          } else if (ec.contains('casado')) {
+            casados++;
+          } else if (ec.contains('divorciado')) {
+            divorciados++;
+          } else if (ec.contains('viudo')) {
+            viudos++;
+          } else if (ec.contains('unión libre') || ec.contains('union libre')) {
+            unionLibre++;
           }
 
           // Membership Type
@@ -179,7 +174,7 @@ class DashboardSecretaria extends ConsumerWidget {
 
               const SizedBox(height: 30),
 
-              // --- 3. PIE CHARTS ROW (MARITAL STATUS & SPIRITUAL STATUS) ---
+              // --- 3. CHARTS ROW (MARITAL STATUS & NEW SPIRITUAL BAR CHART) ---
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isStacked = constraints.maxWidth < 800;
@@ -194,7 +189,7 @@ class DashboardSecretaria extends ConsumerWidget {
                     isDark,
                     isStacked,
                   );
-                  final spiritualWidget = _buildSpiritualPieChart(
+                  final spiritualWidget = _buildSpiritualBarChart(
                     ambosBautismos,
                     soloAgua,
                     soloEspiritu,
@@ -202,7 +197,6 @@ class DashboardSecretaria extends ConsumerWidget {
                     panelColor,
                     textPrimary,
                     isDark,
-                    isStacked,
                   );
 
                   if (isStacked) {
@@ -462,7 +456,8 @@ class DashboardSecretaria extends ConsumerWidget {
     );
   }
 
-  Widget _buildSpiritualPieChart(
+  // --- NUEVO GRÁFICO: BARRAS HORIZONTALES PARA ESTADO ESPIRITUAL ---
+  Widget _buildSpiritualBarChart(
     int ambos,
     int soloAgua,
     int soloEspiritu,
@@ -470,9 +465,68 @@ class DashboardSecretaria extends ConsumerWidget {
     Color panelColor,
     Color textPrimary,
     bool isDark,
-    bool isStacked,
   ) {
     final double total = (ambos + soloAgua + soloEspiritu + ninguno).toDouble();
+
+    Widget buildBar(String label, int count, Color color) {
+      double pct = total == 0 ? 0 : count / total;
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
+                  ),
+                ),
+                Text(
+                  '$count (${(pct * 100).toStringAsFixed(1)}%)',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Stack(
+              children: [
+                // Fondo de la barra
+                Container(
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white10
+                        : Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                // Barra rellenada
+                FractionallySizedBox(
+                  widthFactor: pct,
+                  child: Container(
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -509,107 +563,18 @@ class DashboardSecretaria extends ConsumerWidget {
               ),
             )
           else
-            SizedBox(
-              height: 200,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  PieChart(
-                    PieChartData(
-                      sectionsSpace: 4,
-                      centerSpaceRadius: 60,
-                      sections: [
-                        if (ambos > 0)
-                          PieChartSectionData(
-                            value: ambos.toDouble(),
-                            color: Colors.blueAccent,
-                            title:
-                                '${ambos}\n(${((ambos / total) * 100).toStringAsFixed(1)}%)',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
-                          ),
-                        if (soloAgua > 0)
-                          PieChartSectionData(
-                            value: soloAgua.toDouble(),
-                            color: Colors.cyan,
-                            title:
-                                '${soloAgua}\n(${((soloAgua / total) * 100).toStringAsFixed(1)}%)',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
-                          ),
-                        if (soloEspiritu > 0)
-                          PieChartSectionData(
-                            value: soloEspiritu.toDouble(),
-                            color: Colors.deepOrangeAccent,
-                            title:
-                                '${soloEspiritu}\n(${((soloEspiritu / total) * 100).toStringAsFixed(1)}%)',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
-                          ),
-                        if (ninguno > 0)
-                          PieChartSectionData(
-                            value: ninguno.toDouble(),
-                            color: Colors.grey,
-                            title:
-                                '${ninguno}\n(${((ninguno / total) * 100).toStringAsFixed(1)}%)',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 11,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Registros',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      Text(
-                        '${total.toInt()}',
-                        style: GoogleFonts.montserrat(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 30),
-          Center(
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 16,
-              runSpacing: 12,
+            Column(
               children: [
-                _buildLegend('Agua y Espíritu', Colors.blueAccent),
-                _buildLegend('Solo Agua', Colors.cyan),
-                _buildLegend('Solo Espíritu', Colors.deepOrangeAccent),
-                _buildLegend('No Bautizados', Colors.grey),
+                buildBar('Agua y Espíritu', ambos, Colors.blueAccent),
+                buildBar('Solo Agua', soloAgua, Colors.cyan),
+                buildBar(
+                  'Solo Espíritu',
+                  soloEspiritu,
+                  Colors.deepOrangeAccent,
+                ),
+                buildBar('No Bautizados', ninguno, Colors.grey),
               ],
             ),
-          ),
         ],
       ),
     );
