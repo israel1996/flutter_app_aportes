@@ -553,9 +553,7 @@ class _ReportesSecretariaScreenState
 
     List<Map<String, dynamic>> displayList = groupedMap.values.toList();
 
-    // Sort logic depends on the grouping mode
     if (_groupingMode == 5) {
-      // Custom sort for Ages
       final ageOrder = [
         'Niños (0-12)',
         'Adolescentes (13-17)',
@@ -569,7 +567,6 @@ class _ReportesSecretariaScreenState
             ageOrder.indexOf(a['name']).compareTo(ageOrder.indexOf(b['name'])),
       );
     } else if (_groupingMode == 4) {
-      // Custom sort for Spiritual
       final spiritOrder = [
         'Agua y Espíritu',
         'Solo Agua',
@@ -582,7 +579,6 @@ class _ReportesSecretariaScreenState
             .compareTo(spiritOrder.indexOf(b['name'])),
       );
     } else {
-      // Descending count for others
       displayList.sort(
         (a, b) => (b['count'] as int).compareTo(a['count'] as int),
       );
@@ -619,23 +615,21 @@ class _ReportesSecretariaScreenState
     }
 
     // =====================================
-    // DYNAMIC CHART RENDERER
+    // DYNAMIC CHART RENDERER (RESPONSIVE)
     // =====================================
     Widget buildDynamicChart() {
       if (displayList.isEmpty) return const Center(child: Text('Sin datos'));
 
       // 1. PIE & DONUT CHARTS (Civil Status & Gender)
+      // MEJORA: Diseño Vertical para pantallas móviles (evita colapso horizontal)
       if (_groupingMode == 1 || _groupingMode == 2) {
-        return Row(
+        return Column(
           children: [
             Expanded(
-              flex: 2,
               child: PieChart(
                 PieChartData(
                   sectionsSpace: 2,
-                  centerSpaceRadius: _groupingMode == 1
-                      ? 40
-                      : 0, // Donut for Civil, Solid for Gender
+                  centerSpaceRadius: _groupingMode == 1 ? 40 : 0,
                   sections: displayList.map((item) {
                     final double percentage =
                         (item['count'] / data.length) * 100;
@@ -648,7 +642,9 @@ class _ReportesSecretariaScreenState
                       color: categoryColor,
                       title:
                           '${item['count']}\n(${percentage.toStringAsFixed(1)}%)',
-                      radius: _groupingMode == 1 ? 50 : 80,
+                      radius: _groupingMode == 1
+                          ? 60
+                          : 90, // Un poco más grandes
                       titleStyle: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -659,43 +655,38 @@ class _ReportesSecretariaScreenState
                 ),
               ),
             ),
-            Expanded(
-              flex: 1,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: displayList.map((item) {
-                  final categoryColor = _getCategoryColor(
-                    item['name'],
-                    colorScheme,
-                  );
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: categoryColor,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            item['name'],
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: textColor,
-                            ),
-                          ),
-                        ),
-                      ],
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: displayList.map((item) {
+                final categoryColor = _getCategoryColor(
+                  item['name'],
+                  colorScheme,
+                );
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: categoryColor,
+                      ),
                     ),
-                  );
-                }).toList(),
-              ),
+                    const SizedBox(width: 6),
+                    Text(
+                      item['name'],
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: textColor,
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(),
             ),
           ],
         );
@@ -806,7 +797,7 @@ class _ReportesSecretariaScreenState
                       Text(
                         item['name'],
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: textColor,
                         ),
@@ -814,7 +805,7 @@ class _ReportesSecretariaScreenState
                       Text(
                         '${item['count']} (${(pct * 100).toStringAsFixed(1)}%)',
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: barColor,
                         ),
@@ -976,30 +967,41 @@ class _ReportesSecretariaScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // CORRECCIÓN DE OVERFLOW EN CABECERA
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    'Agrupaciones Demográficas',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
+                  Expanded(
+                    child: Text(
+                      'Agrupaciones Demográficas',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () => _exportMasterToPDF(
                       displayList,
                       getReportTitle(),
                       currentIglesia,
                     ),
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Exportar PDF'),
+                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text(
+                      'Exportar',
+                      style: TextStyle(fontSize: 13),
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 20,
+                        vertical: 12,
+                        horizontal: 16,
                       ),
+                      elevation: 0,
                     ),
                   ),
                 ],
@@ -1055,7 +1057,8 @@ class _ReportesSecretariaScreenState
                   RepaintBoundary(
                     key: _chartExportKey,
                     child: Container(
-                      height: 290,
+                      height:
+                          320, // Altura ajustada para el diseño vertical responsivo
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color:
@@ -1182,30 +1185,47 @@ class _ReportesSecretariaScreenState
           ),
           child: Column(
             children: [
+              // CORRECCIÓN DE OVERFLOW EN CABECERA DE DETALLES
               Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     onPressed: () =>
                         setState(() => _selectedDetailCategory = null),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Directorio: $_selectedDetailCategory',
+                      '$_selectedDetailCategory',
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () => _exportDetailToPDF(
                       targetData,
                       _selectedDetailCategory!,
                       currentIglesia,
                     ),
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Exportar PDF'),
+                    icon: const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text(
+                      'Exportar',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
+                      elevation: 0,
+                    ),
                   ),
                 ],
               ),
