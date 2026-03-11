@@ -35,6 +35,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   bool _hasPromptedSede = false;
   late AnimationController _syncAnimationController;
 
+  late Stream<List<Iglesia>> _iglesiasStream;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +46,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       vsync: this,
       duration: const Duration(seconds: 1),
     );
+
+    final database = ref.read(databaseProvider);
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    _iglesiasStream = (database.select(
+      database.iglesias,
+    )..where((tbl) => tbl.userId.equals(userId))).watch();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -151,10 +159,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       if (user == null) return;
 
       final database = ref.read(databaseProvider);
-
-      // Pequeña pausa para permitir que la base local cargue correctamente
-      await Future.delayed(const Duration(milliseconds: 800));
-      if (!mounted) return;
 
       final localChurches = await (database.select(
         database.iglesias,
@@ -609,9 +613,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   ],
                                 ),
                               )
-                            : (selectedIndex < pages.length
-                                  ? pages[selectedIndex]
-                                  : pages[0]),
+                            // --- OPTIMIZACIÓN 1: INDEXED STACK ---
+                            : IndexedStack(
+                                index: selectedIndex < pages.length
+                                    ? selectedIndex
+                                    : 0,
+                                children: pages,
+                              ),
                       ),
                     ),
                   ],
@@ -693,31 +701,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildActionButtons(ColorScheme colorScheme, bool isDark) {
     return Row(
       children: [
-        Container(
-          margin: const EdgeInsets.only(right: 16),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-            ],
-          ),
-          child: IconButton(
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-            icon: RotationTransition(
-              turns: _syncAnimationController,
-              child: Icon(
-                Icons.sync,
-                color: _isSyncing
-                    ? const Color(0xFF00C9FF)
-                    : colorScheme.primary,
-              ),
+        // --- OPTIMIZACIÓN 2: REPAINT BOUNDARY ---
+        RepaintBoundary(
+          child: Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                ),
+              ],
             ),
-            onPressed: () {
-              if (!_isSyncing) _checkAndSync();
-            },
+            child: IconButton(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              icon: RotationTransition(
+                turns: _syncAnimationController,
+                child: Icon(
+                  Icons.sync,
+                  color: _isSyncing
+                      ? const Color(0xFF00C9FF)
+                      : colorScheme.primary,
+                ),
+              ),
+              onPressed: () {
+                if (!_isSyncing) _checkAndSync();
+              },
+            ),
           ),
         ),
         Container(
@@ -781,25 +795,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildMobileIglesiaSelector(ColorScheme colorScheme, bool isDark) {
     return Consumer(
       builder: (context, ref, child) {
-        final database = ref.watch(databaseProvider);
         final currentIglesia = ref.watch(currentIglesiaProvider);
-        final authService = ref.watch(authServiceProvider);
-        final userId = authService.currentUser?.id ?? '';
 
         return StreamBuilder<List<Iglesia>>(
-          stream: (database.select(
-            database.iglesias,
-          )..where((tbl) => tbl.userId.equals(userId))).watch(),
+          stream: _iglesiasStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox.shrink(); // Evita errores visuales en la carga
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const SizedBox(height: 56);
             }
 
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
             if (iglesias.isEmpty) {
-              return const SizedBox.shrink(); // Aquí eliminamos la orden agresiva del modal
+              return const SizedBox.shrink();
             }
 
             if (currentIglesia != null &&
@@ -868,6 +878,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               nueva.id,
                             );
 
+                            final userId =
+                                Supabase.instance.client.auth.currentUser?.id ??
+                                '';
                             await Supabase.instance.client
                                 .from('usuarios_app')
                                 .update({'ultima_iglesia_id': nueva.id})
@@ -1050,25 +1063,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildSidebarIglesiaSelector(ColorScheme colorScheme, bool isDark) {
     return Consumer(
       builder: (context, ref, child) {
-        final database = ref.watch(databaseProvider);
         final currentIglesia = ref.watch(currentIglesiaProvider);
-        final authService = ref.watch(authServiceProvider);
-        final userId = authService.currentUser?.id ?? '';
 
         return StreamBuilder<List<Iglesia>>(
-          stream: (database.select(
-            database.iglesias,
-          )..where((tbl) => tbl.userId.equals(userId))).watch(),
+          stream: _iglesiasStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox.shrink(); // Evita errores visuales en la carga
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const SizedBox(height: 56);
             }
 
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
             if (iglesias.isEmpty) {
-              return const SizedBox.shrink(); // El botón central se encarga ahora
+              return const SizedBox.shrink();
             }
 
             if (currentIglesia != null &&
@@ -1147,6 +1156,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 nueva.id,
                               );
 
+                              final userId =
+                                  Supabase
+                                      .instance
+                                      .client
+                                      .auth
+                                      .currentUser
+                                      ?.id ??
+                                  '';
                               await Supabase.instance.client
                                   .from('usuarios_app')
                                   .update({'ultima_iglesia_id': nueva.id})

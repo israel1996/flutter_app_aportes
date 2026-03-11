@@ -7,12 +7,27 @@ import '../../../core/database/database.dart';
 import '../../../providers.dart';
 import 'dashboard_summary.dart';
 
-class DashboardSecretaria extends ConsumerWidget {
+class DashboardSecretaria extends ConsumerStatefulWidget {
   const DashboardSecretaria({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final database = ref.watch(databaseProvider);
+  ConsumerState<DashboardSecretaria> createState() =>
+      _DashboardSecretariaState();
+}
+
+class _DashboardSecretariaState extends ConsumerState<DashboardSecretaria> {
+  // 1. OPTIMIZACIÓN: Caché del Stream
+  late Stream<List<Feligrese>> _membersStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // Se inicializa la consulta una sola vez
+    _membersStream = ref.read(databaseProvider).watchAllFeligreses();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final panelColor = Theme.of(context).colorScheme.surface;
     final textPrimary = Theme.of(context).colorScheme.onSurface;
@@ -28,7 +43,7 @@ class DashboardSecretaria extends ConsumerWidget {
     }
 
     return StreamBuilder<List<Feligrese>>(
-      stream: database.watchAllFeligreses(),
+      stream: _membersStream, // Usamos el Stream en caché
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
@@ -39,52 +54,43 @@ class DashboardSecretaria extends ConsumerWidget {
             .where((m) => m.activo == 1 && m.iglesiaId == currentIglesia.id)
             .toList();
 
-        // --- 1. CALCULATE DEMOGRAPHICS ---
-        int ambosBautismos = 0;
-        int soloAgua = 0;
-        int soloEspiritu = 0;
-        int noBautizados = 0;
+        // --- CALCULATE DEMOGRAPHICS ---
+        int ambosBautismos = 0,
+            soloAgua = 0,
+            soloEspiritu = 0,
+            noBautizados = 0;
         int discapacitados = 0;
-
-        // Marital Status
         double solteros = 0,
             casados = 0,
             divorciados = 0,
             viudos = 0,
             unionLibre = 0;
-        // Membership Type
         int simpatizantes = 0, feligreses = 0, visitas = 0;
 
         for (var m in activeMembers) {
-          // Spiritual Status (Mutually Exclusive)
-          if (m.bautizadoAgua && m.bautizadoEspiritu) {
+          if (m.bautizadoAgua && m.bautizadoEspiritu)
             ambosBautismos++;
-          } else if (m.bautizadoAgua) {
+          else if (m.bautizadoAgua)
             soloAgua++;
-          } else if (m.bautizadoEspiritu) {
+          else if (m.bautizadoEspiritu)
             soloEspiritu++;
-          } else {
+          else
             noBautizados++;
-          }
 
-          // Disability
           if (m.poseeDiscapacidad) discapacitados++;
 
-          // LÓGICA CORREGIDA: Marital Status (Soporta 'Soltero(a)', 'Casado(a)', etc.)
           final ec = m.estadoCivil?.toLowerCase() ?? '';
-          if (ec.contains('soltero')) {
+          if (ec.contains('soltero'))
             solteros++;
-          } else if (ec.contains('casado')) {
+          else if (ec.contains('casado'))
             casados++;
-          } else if (ec.contains('divorciado')) {
+          else if (ec.contains('divorciado'))
             divorciados++;
-          } else if (ec.contains('viudo')) {
+          else if (ec.contains('viudo'))
             viudos++;
-          } else if (ec.contains('unión libre') || ec.contains('union libre')) {
+          else if (ec.contains('unión libre') || ec.contains('union libre'))
             unionLibre++;
-          }
 
-          // Membership Type
           switch (m.tipoFeligres?.toLowerCase()) {
             case 'simpatizante':
               simpatizantes++;
@@ -104,7 +110,7 @@ class DashboardSecretaria extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- 2. TOP GRADIENT CARDS ---
+              // --- TOP GRADIENT CARDS ---
               LayoutBuilder(
                 builder: (context, constraints) {
                   if (constraints.maxWidth < 800) {
@@ -174,29 +180,35 @@ class DashboardSecretaria extends ConsumerWidget {
 
               const SizedBox(height: 30),
 
-              // --- 3. CHARTS ROW (MARITAL STATUS & NEW SPIRITUAL BAR CHART) ---
+              // --- CHARTS ROW ---
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isStacked = constraints.maxWidth < 800;
-                  final maritalWidget = _buildMaritalStatusChart(
-                    solteros,
-                    casados,
-                    divorciados,
-                    viudos,
-                    unionLibre,
-                    panelColor,
-                    textPrimary,
-                    isDark,
-                    isStacked,
+
+                  // 2. OPTIMIZACIÓN: RepaintBoundary para aislar gráficos
+                  final maritalWidget = RepaintBoundary(
+                    child: _buildMaritalStatusChart(
+                      solteros,
+                      casados,
+                      divorciados,
+                      viudos,
+                      unionLibre,
+                      panelColor,
+                      textPrimary,
+                      isDark,
+                      isStacked,
+                    ),
                   );
-                  final spiritualWidget = _buildSpiritualBarChart(
-                    ambosBautismos,
-                    soloAgua,
-                    soloEspiritu,
-                    noBautizados,
-                    panelColor,
-                    textPrimary,
-                    isDark,
+                  final spiritualWidget = RepaintBoundary(
+                    child: _buildSpiritualBarChart(
+                      ambosBautismos,
+                      soloAgua,
+                      soloEspiritu,
+                      noBautizados,
+                      panelColor,
+                      textPrimary,
+                      isDark,
+                    ),
                   );
 
                   if (isStacked) {
@@ -221,7 +233,7 @@ class DashboardSecretaria extends ConsumerWidget {
 
               const SizedBox(height: 24),
 
-              // --- 4. LIST CARDS ROW (MEMBERSHIP & DISABILITY) ---
+              // --- LIST CARDS ROW ---
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isStacked = constraints.maxWidth < 800;
@@ -456,7 +468,6 @@ class DashboardSecretaria extends ConsumerWidget {
     );
   }
 
-  // --- NUEVO GRÁFICO: BARRAS HORIZONTALES PARA ESTADO ESPIRITUAL ---
   Widget _buildSpiritualBarChart(
     int ambos,
     int soloAgua,
@@ -499,7 +510,6 @@ class DashboardSecretaria extends ConsumerWidget {
             const SizedBox(height: 8),
             Stack(
               children: [
-                // Fondo de la barra
                 Container(
                   height: 12,
                   decoration: BoxDecoration(
@@ -509,7 +519,6 @@ class DashboardSecretaria extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                // Barra rellenada
                 FractionallySizedBox(
                   widthFactor: pct,
                   child: Container(

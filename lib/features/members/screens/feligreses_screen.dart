@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart'; // PAQUETE PARA ABRIR PDF
+import 'package:open_filex/open_filex.dart';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -180,7 +180,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
       await file.writeAsBytes(bytes);
       if (mounted)
         CustomSnackBar.showSuccess(context, 'PDF generado exitosamente');
-      await OpenFilex.open(file.path); // ESTA LÍNEA ABRE EL PDF AUTOMÁTICAMENTE
+      await OpenFilex.open(file.path);
     }
   }
 
@@ -830,6 +830,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                           right: 16,
                         ),
                         itemCount: paginatedList.length,
+                        itemExtent: 95.0, // <-- OPTIMIZACIÓN DE RENDIMIENTO
                         itemBuilder: (context, index) {
                           final member = paginatedList[index];
                           return Container(

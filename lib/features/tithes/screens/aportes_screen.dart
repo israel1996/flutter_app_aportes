@@ -481,6 +481,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                           right: 16,
                         ),
                         itemCount: paginatedList.length,
+                        itemExtent: 95.0, // <-- OPTIMIZACIÓN DE RENDIMIENTO
                         itemBuilder: (context, index) {
                           final item = paginatedList[index];
                           return Container(
