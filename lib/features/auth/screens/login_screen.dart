@@ -46,7 +46,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final email = _emailController.text.trim();
 
-      // --- PRE-VALIDACIÓN (EVITA LA REDIRECCIÓN AL HOMESCREEN) ---
+      // --- PRE-VALIDACIÓN CON MODAL LLAMATIVO ---
       final estado = await Supabase.instance.client.rpc(
         'obtener_estado_usuario',
         params: {'correo': email},
@@ -56,17 +56,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           estado == 'inactivo' ||
           estado == 'solicita_reseteo') {
         if (mounted) {
-          CustomSnackBar.showError(
-            context,
-            'Para solicitar activación contactarse al correo mx.u7000@gmail.com',
-          );
           setState(() => _isLoading = false);
+          showDialog(
+            context: context,
+            barrierDismissible: false, // Obliga a tocar el botón
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: Column(
+                children: [
+                  const Icon(Icons.block, color: Colors.redAccent, size: 56),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Acceso Restringido',
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+              content: Text(
+                'El estado actual de su cuenta es:\n${estado.toUpperCase()}\n\nPara solicitar activación o recuperar su acceso, contáctese al correo:\n\nmx.u7000@gmail.com',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 14, height: 1.5),
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'ENTENDIDO',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
         }
         return; // SE CANCELA EL LOGIN AQUÍ MISMO.
       }
       // -----------------------------------------------------------
 
-      // Si pasa la validación (es activo), entonces iniciamos sesión
+      // Si es activo, iniciamos sesión normalmente
       final authService = ref.read(authServiceProvider);
       await authService.signIn(email, _passwordController.text.trim());
 

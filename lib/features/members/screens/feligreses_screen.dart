@@ -892,9 +892,9 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                     const SizedBox(height: 2),
                                     Text(
                                       member.fechaModificacion != null
-                                          ? 'Modificado: ${DateFormat('dd MMM yy', 'es').format(member.fechaModificacion!)}'
+                                          ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaModificacion!)}'
                                           : member.fechaRegistro != null
-                                          ? 'Creado: ${DateFormat('dd MMM yy', 'es').format(member.fechaRegistro!)}'
+                                          ? 'Creado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaRegistro!)}'
                                           : 'Creado: Desc.',
                                       style: GoogleFonts.poppins(
                                         color: colorScheme.primary.withOpacity(

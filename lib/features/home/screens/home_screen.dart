@@ -32,6 +32,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   bool _isSyncing = false;
+  bool _hasPromptedSede = false;
   late AnimationController _syncAnimationController;
 
   @override
@@ -46,7 +47,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _checkIfUserNeedsChurch(); // Triggered here
+        _checkIfUserNeedsChurch();
         _checkAndSync();
       }
     });
@@ -68,7 +69,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final estado = userData['estado'];
         if (estado == 'inactivo' ||
             estado == 'bloqueado' ||
-            estado == 'pendiente') {
+            estado == 'pendiente' ||
+            estado == 'solicita_reseteo') {
           await Supabase.instance.client.auth.signOut();
         }
       }
@@ -150,35 +152,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       final database = ref.read(databaseProvider);
 
-      // 1. Verificación Local
+      // Pequeña pausa para permitir que la base local cargue correctamente
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+
       final localChurches = await (database.select(
         database.iglesias,
       )..where((tbl) => tbl.userId.equals(user.id))).get();
 
       if (localChurches.isNotEmpty) return;
 
-      // 2. Verificación en Nube (Se asegura de no traer las eliminadas)
       final response = await supabase
           .from('iglesias')
           .select('id')
           .eq('user_id', user.id)
-          .isFilter(
-            'is_deleted',
-            false,
-          ) // Usamos isFilter por si el valor es nulo en BD antiguas
+          .isFilter('is_deleted', false)
           .limit(1);
 
       if (!mounted) return;
 
       if (response.isEmpty) {
-        showModalBottomSheet(
-          context: context,
-          isDismissible: false,
-          enableDrag: false,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (_) => const AddIglesiaSheet(),
-        );
+        if (!_hasPromptedSede) {
+          _hasPromptedSede = true;
+          showModalBottomSheet(
+            context: context,
+            isDismissible: false,
+            enableDrag: false,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => const AddIglesiaSheet(),
+          ).then((_) => _hasPromptedSede = false);
+        }
       }
     } catch (e) {
       debugPrint('Error verifying cloud churches: $e');
@@ -567,7 +571,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
-                                      'Bienvenido.\nPara comenzar a usar el sistema, debe registrar una Sede.',
+                                      'Bienvenido al Sistema.\nPara comenzar a trabajar, debe registrar una Sede.',
                                       style: GoogleFonts.poppins(
                                         fontSize: 18,
                                         color: Colors.grey,
@@ -787,12 +791,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             database.iglesias,
           )..where((tbl) => tbl.userId.equals(userId))).watch(),
           builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox.shrink(); // Evita errores visuales en la carga
+            }
+
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
-            // ELIMINAMOS LA REGLA QUE ABRÍA EL MODAL A LA FUERZA AQUÍ
             if (iglesias.isEmpty) {
-              return const SizedBox.shrink();
+              return const SizedBox.shrink(); // Aquí eliminamos la orden agresiva del modal
             }
 
             if (currentIglesia != null &&
@@ -1053,12 +1060,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             database.iglesias,
           )..where((tbl) => tbl.userId.equals(userId))).watch(),
           builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox.shrink(); // Evita errores visuales en la carga
+            }
+
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
-            // ELIMINAMOS LA REGLA QUE ABRÍA EL MODAL A LA FUERZA AQUÍ TAMBIÉN
             if (iglesias.isEmpty) {
-              return const SizedBox.shrink();
+              return const SizedBox.shrink(); // El botón central se encarga ahora
             }
 
             if (currentIglesia != null &&
