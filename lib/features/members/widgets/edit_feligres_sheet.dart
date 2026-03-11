@@ -189,7 +189,7 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
   Future<void> _deleteFeligresDefinitivo() async {
     final database = ref.read(databaseProvider);
 
-    // 1. Verificamos la cantidad de aportes
+    // 1. Check the number of contributions (aportes)
     final aportesCount =
         await (database.select(database.aportes)
               ..where((tbl) => tbl.feligresId.equals(widget.feligres.id)))
@@ -198,15 +198,46 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
 
     if (aportesCount > 0) {
       if (mounted) {
-        CustomSnackBar.showWarning(
-          context,
-          'Prohibido: Para borrar a este feligrés debe eliminar primero sus $aportesCount aportes registrados.',
+        // Instead of a SnackBar, we use an AlertDialog that overlaps the modal
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  'Acción denegada',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              'Para borrar definitivamente a este feligrés, primero debe eliminar sus $aportesCount aportes registrados.',
+              style: GoogleFonts.poppins(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Entendido',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         );
       }
       return;
     }
 
-    // 2. Si tiene 0 aportes, pedimos confirmación
+    // 2. If there are 0 contributions, ask for confirmation
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -233,12 +264,12 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     setState(() => _isSaving = true);
 
     try {
-      // 3. Borramos de la Base de Datos Local
+      // 3. Delete from the Local Database
       await database.feligreses.deleteWhere(
         (tbl) => tbl.id.equals(widget.feligres.id),
       );
 
-      // 4. Intentamos borrar de Supabase para que no se vuelva a descargar
+      // 4. Attempt to delete from Supabase so it doesn't download again
       try {
         await Supabase.instance.client
             .from('feligreses')
@@ -249,11 +280,11 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
       }
 
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context); // Closes the bottom sheet
         CustomSnackBar.showWarning(
           context,
           'Feligrés eliminado permanentemente',
-        );
+        ); // This SnackBar will now be visible
       }
     } catch (e) {
       if (mounted) CustomSnackBar.showError(context, 'Error: $e');

@@ -32,32 +32,16 @@ class _ReportesSecretariaScreenState
   late Stream<List<Feligrese>> _membersStream;
   late TextEditingController _searchController;
 
-  // Grouping modes: 1 = Estado Civil, 2 = Género, 3 = Tipo Membresía, 4 = Bautismo (Agua)
+  // 1=Estado Civil, 2=Género, 3=Membresía, 4=Estado Espiritual, 5=Rango de Edades
   int _groupingMode = 1;
 
-  // Drill-down State
+  bool _isExportingChart = false;
+
   String? _selectedDetailCategory;
 
-  // Pagination States
   int _detailCurrentPage = 1;
   int _itemsPerPage = 10;
   final List<int> _pageOptions = [10, 20, 50, 100];
-
-  final Map<String, Color> _categoryColors = {
-    'Soltero': const Color(0xFF00C9FF),
-    'Casado': const Color(0xFFFF007F),
-    'Divorciado': Colors.orangeAccent,
-    'Viudo': Colors.purpleAccent,
-    'Unión libre': Colors.greenAccent,
-    'Masculino': Colors.blueAccent,
-    'Femenino': Colors.pinkAccent,
-    'Feligres': const Color(0xFF00C9FF),
-    'Simpatizante': Colors.orangeAccent,
-    'Visita': Colors.greenAccent,
-    'Bautizado': Colors.blueAccent,
-    'No bautizado': Colors.grey,
-    'No especificado': Colors.blueGrey,
-  };
 
   @override
   void initState() {
@@ -72,78 +56,269 @@ class _ReportesSecretariaScreenState
     super.dispose();
   }
 
-  // Capitalize the first letter to ensure it matches the _categoryColors perfectly
-  String _capitalize(String s) =>
-      s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
+  int _calculateAge(DateTime? birthDate) {
+    if (birthDate == null) return -1;
+    DateTime currentDate = DateTime.now();
+    int age = currentDate.year - birthDate.year;
+    if (birthDate.month > currentDate.month ||
+        (birthDate.month == currentDate.month &&
+            birthDate.day > currentDate.day)) {
+      age--;
+    }
+    return age;
+  }
 
   String _getCategoryKey(Feligrese m) {
     switch (_groupingMode) {
       case 1:
-        return m.estadoCivil != null
+        return m.estadoCivil?.isNotEmpty == true
             ? _capitalize(m.estadoCivil!)
             : 'No especificado';
       case 2:
-        return m.genero != null ? _capitalize(m.genero!) : 'No especificado';
+        return m.genero?.isNotEmpty == true
+            ? _capitalize(m.genero!)
+            : 'No especificado';
       case 3:
-        return m.tipoFeligres != null
+        return m.tipoFeligres?.isNotEmpty == true
             ? _capitalize(m.tipoFeligres!)
             : 'No especificado';
       case 4:
-        return m.bautizadoAgua ? 'Bautizado' : 'No bautizado';
+        if (m.bautizadoAgua && m.bautizadoEspiritu) return 'Agua y Espíritu';
+        if (m.bautizadoAgua) return 'Solo Agua';
+        if (m.bautizadoEspiritu) return 'Solo Espíritu';
+        return 'No Bautizados';
+      case 5:
+        int age = _calculateAge(m.fechaNacimiento);
+        if (age < 0) return 'Edad desconocida';
+        if (age <= 12) return 'Niños (0-12)';
+        if (age <= 17) return 'Adolescentes (13-17)';
+        if (age <= 25) return 'Jóvenes (18-25)';
+        if (age <= 59) return 'Adultos (26-59)';
+        return 'Adultos Mayores (60+)';
       default:
         return 'Desconocido';
     }
   }
 
-  // ==========================================
-  // DIRECT PDF EXPORT LOGIC
-  // ==========================================
+  String _capitalize(String s) =>
+      s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
 
+  Color _getCategoryColor(String categoryName, ColorScheme colorScheme) {
+    final normalized = categoryName
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .trim();
+    final Map<String, Color> colors = {
+      'soltero(a)': const Color(0xFF00C9FF),
+      'casado(a)': const Color(0xFFFF007F),
+      'divorciado(a)': Colors.orangeAccent,
+      'viudo(a)': Colors.purpleAccent,
+      'union libre': Colors.greenAccent,
+      'masculino': Colors.blueAccent,
+      'femenino': Colors.pinkAccent,
+      'feligres': const Color(0xFF00C9FF),
+      'simpatizante': Colors.orangeAccent,
+      'visita': Colors.greenAccent,
+      'agua y espiritu': Colors.blueAccent,
+      'solo agua': Colors.cyan,
+      'solo espiritu': Colors.deepOrangeAccent,
+      'no bautizados': Colors.grey,
+      'niños (0-12)': Colors.tealAccent,
+      'adolescentes (13-17)': Colors.lightBlueAccent,
+      'jovenes (18-25)': Colors.indigoAccent,
+      'adultos (26-59)': Colors.blueGrey,
+      'adultos mayores (60+)': Colors.deepPurpleAccent,
+      'edad desconocida': Colors.brown,
+      'no especificado': Colors.grey.shade400,
+    };
+    return colors[normalized] ?? colorScheme.primary;
+  }
+
+  // ==========================================
+  // PDF WIDGETS
+  // ==========================================
+  pw.Widget _buildPdfHeader(String title, Iglesia? currentIglesia) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  currentIglesia?.nombre ?? 'Iglesia / Sede Principal',
+                  style: pw.TextStyle(
+                    fontSize: 22,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.blue900,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Reporte Oficial de Secretaría',
+                  style: pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
+                ),
+              ],
+            ),
+            pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Text(
+                  'Fecha de Emisión:',
+                  style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+                ),
+                pw.Text(
+                  DateFormat(
+                    'dd MMM yyyy, hh:mm a',
+                    'es',
+                  ).format(DateTime.now()),
+                  style: pw.TextStyle(
+                    fontSize: 12,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 15),
+        pw.Divider(color: PdfColors.blue900, thickness: 2),
+        pw.SizedBox(height: 10),
+        pw.Text(
+          title,
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 20),
+      ],
+    );
+  }
+
+  pw.Widget _buildPdfFooter(pw.Context context) {
+    return pw.Container(
+      alignment: pw.Alignment.centerRight,
+      margin: const pw.EdgeInsets.only(top: 10.0),
+      child: pw.Text(
+        'Página ${context.pageNumber} de ${context.pagesCount}',
+        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfSignatures() {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 50),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        children: [
+          pw.Column(
+            children: [
+              pw.Container(
+                width: 150,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(width: 1)),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('Secretario(a)', style: const pw.TextStyle(fontSize: 12)),
+            ],
+          ),
+          pw.Column(
+            children: [
+              pw.Container(
+                width: 150,
+                decoration: const pw.BoxDecoration(
+                  border: pw.Border(bottom: pw.BorderSide(width: 1)),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('Pastor', style: const pw.TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // EXPORTS
+  // ==========================================
   Future<void> _exportMasterToPDF(
     List<Map<String, dynamic>> displayList,
     String reportTitle,
+    Iglesia? currentIglesia,
   ) async {
-    CustomSnackBar.showInfo(context, 'Generando Reporte PDF...');
+    CustomSnackBar.showInfo(context, 'Preparando gráfico...');
+
+    setState(() => _isExportingChart = true);
+    await Future.delayed(const Duration(milliseconds: 150));
 
     Uint8List? chartBytes;
     try {
-      RenderRepaintBoundary boundary =
-          _chartExportKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      chartBytes = byteData!.buffer.asUint8List();
+      if (_chartExportKey.currentContext != null) {
+        RenderRepaintBoundary boundary =
+            _chartExportKey.currentContext!.findRenderObject()
+                as RenderRepaintBoundary;
+        ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        ByteData? byteData = await image.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        chartBytes = byteData!.buffer.asUint8List();
+      }
     } catch (e) {
       debugPrint('Chart capture failed: $e');
     }
 
+    setState(() => _isExportingChart = false);
+
+    CustomSnackBar.showInfo(context, 'Generando Documento PDF...');
     final pdf = pw.Document();
+
+    int totalPersonas = displayList.fold(
+      0,
+      (sum, item) => sum + (item['count'] as int),
+    );
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(40),
+        header: (context) => _buildPdfHeader(
+          'Resumen Demográfico: $reportTitle',
+          currentIglesia,
+        ),
+        footer: _buildPdfFooter,
         build: (pw.Context context) {
           return [
-            pw.Header(
-              level: 0,
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              margin: const pw.EdgeInsets.only(bottom: 20),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+              ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: pw.MainAxisAlignment.center,
                 children: [
                   pw.Text(
-                    'Reporte Demográfico: $reportTitle',
+                    'Total de Registros Analizados: ',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  ),
+                  pw.Text(
+                    totalPersonas.toString(),
                     style: pw.TextStyle(
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue800,
                     ),
                   ),
-                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
                 ],
               ),
             ),
-            pw.SizedBox(height: 20),
 
             if (chartBytes != null) ...[
               pw.Container(
@@ -159,29 +334,44 @@ class _ReportesSecretariaScreenState
 
             pw.TableHelper.fromTextArray(
               context: context,
-              headers: ['Categoría', 'Cantidad de Personas'],
+              columnWidths: {
+                0: const pw.FixedColumnWidth(40),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(2),
+              },
+              headers: ['#', 'Categoría / Grupo', 'Cantidad de Personas'],
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.white,
+                fontSize: 11,
               ),
               headerDecoration: const pw.BoxDecoration(
                 color: PdfColors.blue800,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                vertical: 6,
+                horizontal: 8,
               ),
               rowDecoration: const pw.BoxDecoration(
                 border: pw.Border(
                   bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
                 ),
               ),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
-              data: displayList
-                  .map(
-                    (item) => [
-                      item['name'].toString(),
-                      item['count'].toString(),
-                    ],
-                  )
-                  .toList(),
+              data: displayList.asMap().entries.map((entry) {
+                final index = entry.key + 1;
+                final item = entry.value;
+                return [
+                  index.toString(),
+                  item['name'].toString(),
+                  item['count'].toString(),
+                ];
+              }).toList(),
             ),
+
+            _buildPdfSignatures(),
           ];
         },
       ),
@@ -191,13 +381,13 @@ class _ReportesSecretariaScreenState
     final directory = await getDownloadsDirectory();
     if (directory != null) {
       final fileName =
-          'Reporte_Demografico_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+          'Reporte_Demografico_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
       if (mounted)
         CustomSnackBar.showSuccess(
           context,
-          'PDF guardado en Descargas: $fileName',
+          'PDF guardado en Descargas:\n$fileName',
         );
     }
   }
@@ -205,47 +395,42 @@ class _ReportesSecretariaScreenState
   Future<void> _exportDetailToPDF(
     List<Feligrese> targetData,
     String title,
+    Iglesia? currentIglesia,
   ) async {
-    CustomSnackBar.showInfo(context, 'Generando PDF de miembros...');
+    CustomSnackBar.showInfo(context, 'Generando PDF del directorio...');
     final pdf = pw.Document();
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.all(40),
+        header: (context) =>
+            _buildPdfHeader('Directorio Filtrado: $title', currentIglesia),
+        footer: _buildPdfFooter,
         build: (pw.Context context) {
           return [
-            pw.Header(
-              level: 0,
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Directorio: $title',
-                    style: pw.TextStyle(
-                      fontSize: 20,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.Text(DateFormat('dd MMM yyyy').format(DateTime.now())),
-                ],
+            pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              margin: const pw.EdgeInsets.only(bottom: 20),
+              child: pw.Text(
+                'Total en este grupo: ${targetData.length} personas',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
             ),
-            pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
               context: context,
               columnWidths: {
-                0: const pw.FixedColumnWidth(25), // #
-                1: const pw.FlexColumnWidth(2.5), // Nombre
-                2: const pw.FlexColumnWidth(1.2), // Teléfono
-                3: const pw.FlexColumnWidth(1.2), // Membresía
-                4: const pw.FlexColumnWidth(1.2), // Estado civil
+                0: const pw.FixedColumnWidth(30),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(1.5),
+                3: const pw.FlexColumnWidth(1.5),
+                4: const pw.FlexColumnWidth(1.5),
               },
               headers: [
                 '#',
                 'Nombre Completo',
                 'Teléfono',
-                'Tipo Membresía',
+                'Membresía',
                 'Estado Civil',
               ],
               headerStyle: pw.TextStyle(
@@ -261,10 +446,15 @@ class _ReportesSecretariaScreenState
                   bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
                 ),
               ),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey50),
               cellAlignment: pw.Alignment.centerLeft,
               cellStyle: const pw.TextStyle(fontSize: 9),
+              cellPadding: const pw.EdgeInsets.symmetric(
+                vertical: 4,
+                horizontal: 6,
+              ),
               data: targetData.asMap().entries.map((entry) {
-                final index = entry.key + 1; // Creates the sequence
+                final index = entry.key + 1;
                 final item = entry.value;
                 return [
                   index.toString(),
@@ -279,6 +469,7 @@ class _ReportesSecretariaScreenState
                 ];
               }).toList(),
             ),
+            _buildPdfSignatures(),
           ];
         },
       ),
@@ -289,13 +480,13 @@ class _ReportesSecretariaScreenState
     if (directory != null) {
       final safeTitle = title.replaceAll(' ', '_');
       final fileName =
-          'Directorio_${safeTitle}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf';
+          'Directorio_${safeTitle}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(bytes);
       if (mounted)
         CustomSnackBar.showSuccess(
           context,
-          'PDF guardado en Descargas: $fileName',
+          'PDF guardado en Descargas:\n$fileName',
         );
     }
   }
@@ -312,9 +503,10 @@ class _ReportesSecretariaScreenState
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
+
           final currentIglesia = ref.watch(currentIglesiaProvider);
           var allData = snapshot.data ?? [];
-          // FILTER ACTIVE MEMBERS AND MATCHING CHURCH
+
           allData = allData
               .where(
                 (m) =>
@@ -325,25 +517,30 @@ class _ReportesSecretariaScreenState
               .toList();
 
           if (_selectedDetailCategory != null) {
-            return _buildDetailView(allData, colorScheme, isDark);
+            return _buildDetailView(
+              allData,
+              colorScheme,
+              isDark,
+              currentIglesia,
+            );
           } else {
-            return _buildMasterGroupedView(allData, colorScheme, isDark);
+            return _buildMasterGroupedView(
+              allData,
+              colorScheme,
+              isDark,
+              currentIglesia,
+            );
           }
         },
       ),
     );
   }
 
-  // ==========================================
-  // VIEW 1: MASTER DEMOGRAPHICS (PIE CHART)
-  // ==========================================
-  // ==========================================
-  // VIEW 1: MASTER DEMOGRAPHICS (PIE CHART)
-  // ==========================================
   Widget _buildMasterGroupedView(
     List<Feligrese> data,
     ColorScheme colorScheme,
     bool isDark,
+    Iglesia? currentIglesia,
   ) {
     final groupedMap = <String, Map<String, dynamic>>{};
     for (var m in data) {
@@ -354,8 +551,42 @@ class _ReportesSecretariaScreenState
       groupedMap[key]!['count'] += 1;
     }
 
-    final displayList = groupedMap.values.toList()
-      ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
+    List<Map<String, dynamic>> displayList = groupedMap.values.toList();
+
+    // Sort logic depends on the grouping mode
+    if (_groupingMode == 5) {
+      // Custom sort for Ages
+      final ageOrder = [
+        'Niños (0-12)',
+        'Adolescentes (13-17)',
+        'Jóvenes (18-25)',
+        'Adultos (26-59)',
+        'Adultos Mayores (60+)',
+        'Edad desconocida',
+      ];
+      displayList.sort(
+        (a, b) =>
+            ageOrder.indexOf(a['name']).compareTo(ageOrder.indexOf(b['name'])),
+      );
+    } else if (_groupingMode == 4) {
+      // Custom sort for Spiritual
+      final spiritOrder = [
+        'Agua y Espíritu',
+        'Solo Agua',
+        'Solo Espíritu',
+        'No Bautizados',
+      ];
+      displayList.sort(
+        (a, b) => spiritOrder
+            .indexOf(a['name'])
+            .compareTo(spiritOrder.indexOf(b['name'])),
+      );
+    } else {
+      // Descending count for others
+      displayList.sort(
+        (a, b) => (b['count'] as int).compareTo(a['count'] as int),
+      );
+    }
 
     String getReportTitle() {
       switch (_groupingMode) {
@@ -366,32 +597,370 @@ class _ReportesSecretariaScreenState
         case 3:
           return 'Tipo de Membresía';
         case 4:
-          return 'Bautismos (Agua)';
+          return 'Estado Espiritual';
+        case 5:
+          return 'Generaciones (Edades)';
         default:
           return 'Reporte';
       }
     }
 
-    // --- ROBUST COLOR MATCHER ---
-    Color getCategoryColor(String categoryName) {
-      final normalized = categoryName.toLowerCase().replaceAll('é', 'e').trim();
-      final Map<String, Color> colors = {
-        'soltero': const Color(0xFF00C9FF),
-        'casado': const Color(0xFFFF007F),
-        'divorciado': Colors.orangeAccent,
-        'viudo': Colors.purpleAccent,
-        'union libre': Colors.greenAccent,
-        'masculino': Colors.blueAccent,
-        'femenino': Colors.pinkAccent,
-        'feligres': const Color(0xFF00C9FF),
-        'simpatizante': Colors.orangeAccent,
-        'visita': Colors.greenAccent,
-        'bautizado': Colors.blueAccent,
-        'no bautizado': Colors.grey,
-        'no especificado': Colors.blueGrey,
-      };
-      return colors[normalized] ??
-          colorScheme.primary; // Fallback to primary if not found
+    // PDF EXPORT THEME FORCING
+    final effectiveIsDark = _isExportingChart ? false : isDark;
+    final chartBgColor = effectiveIsDark
+        ? const Color(0xFF1E1E2C)
+        : Colors.white;
+    final textColor = effectiveIsDark ? Colors.white70 : Colors.black87;
+    final gridColor = effectiveIsDark ? Colors.white10 : Colors.black12;
+
+    int maxY = 10;
+    for (var item in displayList) {
+      if (item['count'] > maxY) maxY = item['count'] as int;
+    }
+
+    // =====================================
+    // DYNAMIC CHART RENDERER
+    // =====================================
+    Widget buildDynamicChart() {
+      if (displayList.isEmpty) return const Center(child: Text('Sin datos'));
+
+      // 1. PIE & DONUT CHARTS (Civil Status & Gender)
+      if (_groupingMode == 1 || _groupingMode == 2) {
+        return Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: PieChart(
+                PieChartData(
+                  sectionsSpace: 2,
+                  centerSpaceRadius: _groupingMode == 1
+                      ? 40
+                      : 0, // Donut for Civil, Solid for Gender
+                  sections: displayList.map((item) {
+                    final double percentage =
+                        (item['count'] / data.length) * 100;
+                    final categoryColor = _getCategoryColor(
+                      item['name'],
+                      colorScheme,
+                    );
+                    return PieChartSectionData(
+                      value: item['count'].toDouble(),
+                      color: categoryColor,
+                      title:
+                          '${item['count']}\n(${percentage.toStringAsFixed(1)}%)',
+                      radius: _groupingMode == 1 ? 50 : 80,
+                      titleStyle: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 11,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 1,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: displayList.map((item) {
+                  final categoryColor = _getCategoryColor(
+                    item['name'],
+                    colorScheme,
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: categoryColor,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item['name'],
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        );
+      }
+      // 3. VERTICAL BAR CHART (Membership)
+      else if (_groupingMode == 3) {
+        return BarChart(
+          BarChartData(
+            barTouchData: BarTouchData(
+              touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (group) => Colors.blueGrey.shade800,
+                getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                  return BarTooltipItem(
+                    '${rod.toY.toInt()} personas',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
+              ),
+            ),
+            alignment: BarChartAlignment.spaceAround,
+            maxY: maxY * 1.2,
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 30,
+                  getTitlesWidget: (value, meta) {
+                    if (value % 1 != 0 || value == 0)
+                      return const SizedBox.shrink();
+                    return Text(
+                      value.toInt().toString(),
+                      style: TextStyle(color: textColor, fontSize: 11),
+                    );
+                  },
+                ),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  getTitlesWidget: (value, meta) {
+                    if (value.toInt() < 0 ||
+                        value.toInt() >= displayList.length)
+                      return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        displayList[value.toInt()]['name'],
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+            ),
+            borderData: FlBorderData(show: false),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (value) =>
+                  FlLine(color: gridColor, strokeWidth: 1, dashArray: [5, 5]),
+            ),
+            barGroups: displayList.asMap().entries.map((entry) {
+              return BarChartGroupData(
+                x: entry.key,
+                barRods: [
+                  BarChartRodData(
+                    toY: entry.value['count'].toDouble(),
+                    color: _getCategoryColor(entry.value['name'], colorScheme),
+                    width: 25,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        );
+      }
+      // 4. HORIZONTAL CUSTOM BAR CHART (Spiritual Status)
+      else if (_groupingMode == 4) {
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: displayList.map((item) {
+            double pct = data.isEmpty
+                ? 0
+                : (item['count'] as int) / data.length;
+            Color barColor = _getCategoryColor(item['name'], colorScheme);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        item['name'],
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textColor,
+                        ),
+                      ),
+                      Text(
+                        '${item['count']} (${(pct * 100).toStringAsFixed(1)}%)',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: barColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Stack(
+                    children: [
+                      Container(
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: gridColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      FractionallySizedBox(
+                        widthFactor: pct,
+                        child: Container(
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: barColor,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      }
+      // 5. AREA LINE CHART (Generations / Age Ranges)
+      else {
+        List<FlSpot> spots = [];
+        for (int i = 0; i < displayList.length; i++) {
+          spots.add(FlSpot(i.toDouble(), displayList[i]['count'].toDouble()));
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: LineChart(
+            LineChartData(
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (spot) => Colors.blueGrey.shade800,
+                  getTooltipItems: (touchedSpots) => touchedSpots
+                      .map(
+                        (spot) => LineTooltipItem(
+                          '${spot.y.toInt()} personas',
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                getDrawingHorizontalLine: (value) =>
+                    FlLine(color: gridColor, strokeWidth: 1, dashArray: [5, 5]),
+              ),
+              titlesData: FlTitlesData(
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    getTitlesWidget: (value, meta) {
+                      if (value % 1 != 0 || value == 0 || value == maxY * 1.2)
+                        return const SizedBox.shrink();
+                      return Text(
+                        value.toInt().toString(),
+                        style: TextStyle(color: textColor, fontSize: 11),
+                      );
+                    },
+                  ),
+                ),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 40,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      if (value.toInt() < 0 ||
+                          value.toInt() >= displayList.length)
+                        return const SizedBox.shrink();
+
+                      // Formatear textos largos para que entren en el eje X
+                      String label = displayList[value.toInt()]['name'];
+                      label = label
+                          .replaceAll(' ', '\n')
+                          .replaceAll('(', '\n(');
+
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+              ),
+              borderData: FlBorderData(show: false),
+              minX: 0,
+              maxX: (displayList.length - 1).toDouble(),
+              minY: 0,
+              maxY: maxY * 1.2,
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: colorScheme.primary,
+                  barWidth: 4,
+                  isStrokeCapRound: true,
+                  dotData: FlDotData(
+                    show: true,
+                    checkToShowDot: (spot, barData) => spot.y > 0,
+                  ),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: colorScheme.primary.withOpacity(0.2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     }
 
     return Column(
@@ -419,9 +988,12 @@ class _ReportesSecretariaScreenState
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () =>
-                        _exportMasterToPDF(displayList, getReportTitle()),
-                    icon: const Icon(Icons.download),
+                    onPressed: () => _exportMasterToPDF(
+                      displayList,
+                      getReportTitle(),
+                      currentIglesia,
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
@@ -456,9 +1028,15 @@ class _ReportesSecretariaScreenState
                     ),
                     const SizedBox(width: 8),
                     ChoiceChip(
-                      label: const Text('Bautismo'),
+                      label: const Text('E. Espiritual'),
                       selected: _groupingMode == 4,
                       onSelected: (v) => setState(() => _groupingMode = 4),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Edades'),
+                      selected: _groupingMode == 5,
+                      onSelected: (v) => setState(() => _groupingMode = 5),
                     ),
                   ],
                 ),
@@ -473,88 +1051,19 @@ class _ReportesSecretariaScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // PIE CHART
                 if (data.isNotEmpty)
                   RepaintBoundary(
                     key: _chartExportKey,
                     child: Container(
-                      height: 280,
+                      height: 290,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E1E2C) : Colors.white,
+                        color:
+                            chartBgColor, // TEMA BLANCO FORZADO PARA EXPORTAR
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: Colors.grey.withOpacity(0.2)),
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: PieChart(
-                              PieChartData(
-                                sectionsSpace: 2,
-                                centerSpaceRadius: 50,
-                                sections: displayList.map((item) {
-                                  final double percentage =
-                                      (item['count'] / data.length) * 100;
-                                  final categoryColor = getCategoryColor(
-                                    item['name'],
-                                  ); // APPLY SAFE COLOR
-                                  return PieChartSectionData(
-                                    value: item['count'].toDouble(),
-                                    color: categoryColor,
-                                    title:
-                                        '${item['count']}\n(${percentage.toStringAsFixed(1)}%)',
-                                    radius: 50,
-                                    titleStyle: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: displayList.map((item) {
-                                final categoryColor = getCategoryColor(
-                                  item['name'],
-                                ); // APPLY SAFE COLOR
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4.0,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: categoryColor,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          item['name'],
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: buildDynamicChart(),
                     ),
                   ),
 
@@ -569,9 +1078,10 @@ class _ReportesSecretariaScreenState
                 const SizedBox(height: 12),
 
                 ...displayList.map((item) {
-                  final categoryColor = getCategoryColor(
+                  final categoryColor = _getCategoryColor(
                     item['name'],
-                  ); // APPLY SAFE COLOR
+                    colorScheme,
+                  );
                   return Card(
                     elevation: 1,
                     margin: const EdgeInsets.only(bottom: 12),
@@ -621,19 +1131,16 @@ class _ReportesSecretariaScreenState
     );
   }
 
-  // ==========================================
-  // VIEW 2: DETAIL (MEMBER DIRECTORY LIST)
-  // ==========================================
   Widget _buildDetailView(
     List<Feligrese> allData,
     ColorScheme colorScheme,
     bool isDark,
+    Iglesia? currentIglesia,
   ) {
     var targetData = allData
         .where((m) => _getCategoryKey(m) == _selectedDetailCategory)
         .toList();
 
-    // Apply internal search filter
     if (_searchController.text.isNotEmpty) {
       targetData = targetData
           .where(
@@ -646,7 +1153,6 @@ class _ReportesSecretariaScreenState
 
     targetData.sort((a, b) => a.nombre.compareTo(b.nombre));
 
-    // Pagination
     final totalDetailPages = (targetData.length / _itemsPerPage).ceil() == 0
         ? 1
         : (targetData.length / _itemsPerPage).ceil();
@@ -687,7 +1193,7 @@ class _ReportesSecretariaScreenState
                     child: Text(
                       'Directorio: $_selectedDetailCategory',
                       style: GoogleFonts.poppins(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -696,14 +1202,14 @@ class _ReportesSecretariaScreenState
                     onPressed: () => _exportDetailToPDF(
                       targetData,
                       _selectedDetailCategory!,
+                      currentIglesia,
                     ),
-                    icon: const Icon(Icons.download),
+                    icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Exportar PDF'),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
-              // SEARCH FILTER ONLY IN DETAIL VIEW
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -791,7 +1297,6 @@ class _ReportesSecretariaScreenState
                 ),
         ),
 
-        // Detail Pagination Controls
         if (targetData.isNotEmpty)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
@@ -831,9 +1336,11 @@ class _ReportesSecretariaScreenState
                       ? () => setState(() => _detailCurrentPage--)
                       : null,
                 ),
-                Text(
-                  'Pág $_detailCurrentPage de $totalDetailPages',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                Flexible(
+                  child: Text(
+                    'Pág $_detailCurrentPage de $totalDetailPages',
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.chevron_right),
