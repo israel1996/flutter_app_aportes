@@ -30,24 +30,23 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
 
-  // ESTADO PARA MOSTRAR/OCULTAR FILTROS
   bool _showFilters = false;
 
   DateTimeRange? _dateRange;
-  int _groupingMode =
-      1; // 0 = Sin agrupación, 1 = Mensual, 2 = Feligrés, 3 = Tipo
+  int _groupingMode = 1;
 
   bool _isExportingChart = false;
 
   late String _masterSortBy;
   List<String> _getSortOptionsForMode(int mode) {
-    if (mode == 0)
+    if (mode == 0) {
       return [
         'Más reciente primero',
         'Más antiguo primero',
         'Más alto primero',
         'Más bajo primero',
       ];
+    }
     if (mode == 1) return ['De enero a diciembre', 'De diciembre a enero'];
     if (mode == 2) return ['Nombre (A-Z)', 'Nombre (Z-A)'];
     if (mode == 3) return ['Menores aportes primero', 'Mayor aportes primero'];
@@ -377,14 +376,35 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ];
               }).toList(),
             ),
-
             _buildSignatureLines(),
           ];
         },
       ),
     );
-
     await _saveAndNotifyPDF(pdf, 'Reporte_General');
+  }
+
+  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
+    final bytes = await pdf.save();
+    final directory = await getDownloadsDirectory();
+
+    if (directory != null) {
+      final fileName =
+          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+      if (mounted)
+        CustomSnackBar.showSuccess(
+          context,
+          'PDF guardado en Descargas:\n$fileName',
+        );
+    } else {
+      if (mounted)
+        CustomSnackBar.showError(
+          context,
+          'No se pudo encontrar la carpeta de Descargas',
+        );
+    }
   }
 
   Future<void> _exportDetailToPDF(
@@ -470,7 +490,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ],
               ),
             ),
-
             if (chartBytes != null) ...[
               pw.Container(
                 height: 180,
@@ -482,7 +501,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
               pw.SizedBox(height: 25),
             ],
-
             pw.Text(
               'Desglose de Transacciones',
               style: pw.TextStyle(
@@ -492,7 +510,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               ),
             ),
             pw.SizedBox(height: 10),
-
             pw.TableHelper.fromTextArray(
               context: context,
               columnWidths: {
@@ -538,37 +555,12 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ];
               }).toList(),
             ),
-
             _buildSignatureLines(),
           ];
         },
       ),
     );
-
     await _saveAndNotifyPDF(pdf, 'Detalle_${title.replaceAll(' ', '_')}');
-  }
-
-  Future<void> _saveAndNotifyPDF(pw.Document pdf, String baseName) async {
-    final bytes = await pdf.save();
-    final directory = await getDownloadsDirectory();
-
-    if (directory != null) {
-      final fileName =
-          '${baseName}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(bytes);
-      if (mounted)
-        CustomSnackBar.showSuccess(
-          context,
-          'PDF guardado en Descargas:\n$fileName',
-        );
-    } else {
-      if (mounted)
-        CustomSnackBar.showError(
-          context,
-          'No se pudo encontrar la carpeta de Descargas',
-        );
-    }
   }
 
   @override
@@ -576,6 +568,9 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIglesia = ref.watch(currentIglesiaProvider);
+
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final displayFilters = isDesktop || _showFilters;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -599,7 +594,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
             final isNumber =
                 double.tryParse(query.replaceAll(RegExp(r'[^\d.]'), '')) !=
                 null;
-
             allData = allData.where((item) {
               final matchName = item.feligres.nombre.toLowerCase().contains(
                 query,
@@ -638,6 +632,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
               colorScheme,
               isDark,
               currentIglesia,
+              displayFilters,
+              isDesktop,
             );
           }
         },
@@ -650,6 +646,8 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
     ColorScheme colorScheme,
     bool isDark,
     Iglesia? currentIglesia,
+    bool displayFilters,
+    bool isDesktop,
   ) {
     final groupedMap = <String, Map<String, dynamic>>{};
 
@@ -824,40 +822,41 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // BOTÓN PARA MOSTRAR/OCULTAR FILTROS Y PDF
-                  Container(
-                    height: 48,
-                    width: 48,
-                    decoration: BoxDecoration(
-                      color: _hasActiveFilters()
-                          ? colorScheme.primary
-                          : (isDark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade200),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.tune,
+                  if (!isDesktop) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
                         color: _hasActiveFilters()
-                            ? Colors.white
-                            : (isDark ? Colors.white : Colors.black87),
+                            ? colorScheme.primary
+                            : (isDark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade200),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _showFilters = !_showFilters;
-                        });
-                      },
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.tune,
+                          color: _hasActiveFilters()
+                              ? Colors.white
+                              : (isDark ? Colors.white : Colors.black87),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _showFilters = !_showFilters;
+                          });
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
 
-              // SECCIÓN DESPLEGABLE
+              // SECCIÓN DESPLEGABLE DE FILTROS
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 300),
-                crossFadeState: _showFilters
+                crossFadeState: displayFilters
                     ? CrossFadeState.showSecond
                     : CrossFadeState.showFirst,
                 firstChild: const SizedBox(width: double.infinity),
@@ -1150,6 +1149,7 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                 ),
         ),
 
+        // PAGINACIÓN MAESTRA
         if (displayList.isNotEmpty)
           Container(
             padding: const EdgeInsets.only(
@@ -2004,7 +2004,6 @@ class _ReportesScreenState extends ConsumerState<ReportesScreen> {
                           onChanged: (val) => setState(() {
                             _itemsPerPage = val!;
                             _detailCurrentPage = 1;
-                            _masterCurrentPage = 1;
                           }),
                         ),
                         const Spacer(),

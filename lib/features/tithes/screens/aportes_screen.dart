@@ -21,7 +21,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
 
-  // NUEVO: Estado para mostrar/ocultar filtros avanzados
   bool _showFilters = false;
 
   DateTimeRange? _dateRange;
@@ -76,7 +75,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
     }
   }
 
-  // --- WIDGET PARA INDICADOR DE FILTROS ACTIVOS ---
   bool _hasActiveFilters() {
     return _sortBy != 'Más recientes primero' || _dateRange != null;
   }
@@ -86,6 +84,9 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIglesia = ref.watch(currentIglesiaProvider);
+
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final displayFilters = isDesktop || _showFilters;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -165,7 +166,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
           }).toList();
 
           filtered.sort((a, b) {
-            // Prioritize the exact moment it was touched in the system (Modified -> Created -> Transaction Date)
             final timeA =
                 a.aporte.fechaModificacion ??
                 a.aporte.fechaRegistro ??
@@ -201,7 +201,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
 
           return Column(
             children: [
-              // --- HEADER COMPACTO CON FILTROS OCULTABLES ---
               Container(
                 padding: const EdgeInsets.only(
                   left: 20,
@@ -224,7 +223,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // SEARCH BAR & FILTER TOGGLE BUTTON
                     Row(
                       children: [
                         Expanded(
@@ -262,45 +260,43 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        // BOTÓN DE FILTROS AVANZADOS
-                        Container(
-                          height: 48,
-                          width: 48,
-                          decoration: BoxDecoration(
-                            color: _hasActiveFilters()
-                                ? colorScheme.primary
-                                : (isDark
-                                      ? Colors.grey.shade800
-                                      : Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.tune,
+                        if (!isDesktop) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            height: 48,
+                            width: 48,
+                            decoration: BoxDecoration(
                               color: _hasActiveFilters()
-                                  ? Colors.white
-                                  : (isDark ? Colors.white : Colors.black87),
+                                  ? colorScheme.primary
+                                  : (isDark
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _showFilters = !_showFilters;
-                              });
-                            },
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.tune,
+                                color: _hasActiveFilters()
+                                    ? Colors.white
+                                    : (isDark ? Colors.white : Colors.black87),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _showFilters = !_showFilters;
+                                });
+                              },
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
 
-                    // SECCIÓN DE FILTROS OCULTABLES (Se expande suavemente)
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 300),
-                      crossFadeState: _showFilters
+                      crossFadeState: displayFilters
                           ? CrossFadeState.showSecond
                           : CrossFadeState.showFirst,
-                      firstChild: const SizedBox(
-                        width: double.infinity,
-                      ), // Oculto
+                      firstChild: const SizedBox(width: double.infinity),
                       secondChild: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -414,7 +410,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                             ],
                           ),
 
-                          // Active Date Filter Chip
                           if (_dateRange != null) ...[
                             const SizedBox(height: 12),
                             Container(
@@ -480,8 +475,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.only(
-                          bottom:
-                              80, // Espacio extra para que no estorbe el Botón Flotante (FAB)
+                          bottom: 80,
                           top: 16,
                           left: 16,
                           right: 16,
@@ -528,7 +522,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Column(
@@ -579,7 +572,7 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                 Container(
                   padding: const EdgeInsets.only(
                     top: 12,
-                    bottom: 24, // Ajustado para vista móvil
+                    bottom: 24,
                     left: 20,
                     right: 20,
                   ),
@@ -655,7 +648,6 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                             ? () => setState(() => _currentPage++)
                             : null,
                       ),
-                      // ESPACIO EN BLANCO PARA EVITAR QUE EL BOTÓN FLOTANTE TAPE LA FLECHA DERECHA
                       const SizedBox(width: 60),
                     ],
                   ),

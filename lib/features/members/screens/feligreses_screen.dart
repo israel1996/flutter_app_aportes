@@ -27,9 +27,8 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
   late TextEditingController _searchController;
   late FocusNode _searchFocusNode;
-  bool _showDeleted = false; // Vista de "Inactivos"
+  bool _showDeleted = false;
 
-  // Estado para mostrar/ocultar filtros avanzados
   bool _showFilters = false;
 
   String _sortBy = 'Más Recientes';
@@ -120,14 +119,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
             pw.TableHelper.fromTextArray(
               context: context,
               columnWidths: {
-                0: const pw.FixedColumnWidth(25), // #
-                1: const pw.FlexColumnWidth(2.5), // Nombre
-                2: const pw.FlexColumnWidth(1.2), // Teléfono
-                3: const pw.FlexColumnWidth(1), // Género
-                4: const pw.FlexColumnWidth(1.2), // Estado Civil
-                5: const pw.FlexColumnWidth(1.2), // Membresía
-                6: const pw.FlexColumnWidth(1.5), // Bautizado
-                7: const pw.FlexColumnWidth(1), // Discapacidad
+                0: const pw.FixedColumnWidth(25),
+                1: const pw.FlexColumnWidth(2.5),
+                2: const pw.FlexColumnWidth(1.2),
+                3: const pw.FlexColumnWidth(1),
+                4: const pw.FlexColumnWidth(1.2),
+                5: const pw.FlexColumnWidth(1.2),
+                6: const pw.FlexColumnWidth(1.5),
+                7: const pw.FlexColumnWidth(1),
               },
               headers: [
                 '#',
@@ -199,7 +198,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     }
   }
 
-  // --- WIDGET PARA INDICADOR DE FILTROS ACTIVOS ---
   bool _hasActiveFilters() {
     return _filterTipo != 'Todos' ||
         _filterGenero != 'Todos' ||
@@ -213,6 +211,10 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentIglesia = ref.watch(currentIglesiaProvider);
+
+    // DETECTA SI ES ESCRITORIO / PANTALLA ANCHA
+    final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final displayFilters = isDesktop || _showFilters;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -335,7 +337,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
 
           return Column(
             children: [
-              // --- HEADER COMPACTO ---
               Container(
                 padding: const EdgeInsets.only(
                   left: 20,
@@ -357,7 +358,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                 ),
                 child: Column(
                   children: [
-                    // ACTIVE / INACTIVES TOGGLE (Más compacto)
                     Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(3),
@@ -439,7 +439,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ),
                     ),
 
-                    // SEARCH BAR & FILTER TOGGLE BUTTON
                     Row(
                       children: [
                         Expanded(
@@ -477,45 +476,45 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        // BOTÓN DE FILTROS AVANZADOS
-                        Container(
-                          height: 48,
-                          width: 48,
-                          decoration: BoxDecoration(
-                            color: _hasActiveFilters()
-                                ? colorScheme.primary
-                                : (isDark
-                                      ? Colors.grey.shade800
-                                      : Colors.grey.shade200),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.tune,
+                        // OCULTAR EL BOTÓN DE FILTROS EN ESCRITORIO
+                        if (!isDesktop) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            height: 48,
+                            width: 48,
+                            decoration: BoxDecoration(
                               color: _hasActiveFilters()
-                                  ? Colors.white
-                                  : (isDark ? Colors.white : Colors.black87),
+                                  ? colorScheme.primary
+                                  : (isDark
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade200),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _showFilters = !_showFilters;
-                              });
-                            },
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.tune,
+                                color: _hasActiveFilters()
+                                    ? Colors.white
+                                    : (isDark ? Colors.white : Colors.black87),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _showFilters = !_showFilters;
+                                });
+                              },
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
 
-                    // SECCIÓN DE FILTROS OCULTABLES (Se expande suavemente)
+                    // SECCIÓN DE FILTROS ANIMADA O FIJA SEGÚN RESOLUCIÓN
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 300),
-                      crossFadeState: _showFilters
+                      crossFadeState: displayFilters
                           ? CrossFadeState.showSecond
                           : CrossFadeState.showFirst,
-                      firstChild: const SizedBox(
-                        width: double.infinity,
-                      ), // Oculto
+                      firstChild: const SizedBox(width: double.infinity),
                       secondChild: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -559,7 +558,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: [
-                                // Sort
                                 SizedBox(
                                   width: 140,
                                   height: 45,
@@ -597,7 +595,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Type
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -637,7 +634,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Gender
                                 SizedBox(
                                   width: 120,
                                   height: 45,
@@ -677,7 +673,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Estado Civil
                                 SizedBox(
                                   width: 130,
                                   height: 45,
@@ -717,7 +712,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Estado Espiritual
                                 SizedBox(
                                   width: 150,
                                   height: 45,
@@ -760,7 +754,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          // BOTÓN DE EXPORTAR MOVIDO AQUÍ PARA AHORRAR ESPACIO
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(
@@ -815,7 +808,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.only(
-                          bottom: 80, // Espacio extra para el botón flotante
+                          bottom: 80,
                           top: 16,
                           left: 16,
                           right: 16,
@@ -924,12 +917,12 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                       ),
               ),
 
-              // --- PAGINATION CONTROLS (Fijo abajo) ---
+              // --- PAGINATION CONTROLS ---
               if (filteredMembers.isNotEmpty)
                 Container(
                   padding: const EdgeInsets.only(
                     top: 12,
-                    bottom: 24, // Ajustado para móviles
+                    bottom: 24,
                     left: 20,
                     right: 20,
                   ),
@@ -1005,7 +998,6 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             ? () => setState(() => _currentPage++)
                             : null,
                       ),
-                      // ESPACIO INVISIBLE PARA EL BOTÓN FLOTANTE
                       const SizedBox(width: 60),
                     ],
                   ),
