@@ -104,6 +104,7 @@ class SyncService {
           'bautizado_espiritu': local.bautizadoEspiritu,
           'tipo_feligres': local.tipoFeligres,
           'activo': local.activo,
+          'is_deleted': false, // Asegurar que al pushear sea false
           // created_at y updated_at son generados por Supabase
         });
 
@@ -213,44 +214,52 @@ class SyncService {
     await database.batch((batch) {
       for (final row in cloudData) {
         try {
-          batch.insert(
-            database.feligreses,
-            FeligresesCompanion.insert(
-              id: row['id'],
-              iglesiaId: drift.Value(row['iglesia_id']),
-              nombre: row['nombre'] ?? 'Sin Nombre',
-              telefono: drift.Value(row['telefono']),
-              fechaNacimiento: drift.Value(
-                row['fechanacimiento'] != null
-                    ? DateTime.parse(row['fechanacimiento']).toLocal()
-                    : null,
+          // --- NUEVO: CONDICIONAL DE DELTA-SYNC PARA FELIGRESES ---
+          if (row['is_deleted'] == true) {
+            batch.deleteWhere(
+              database.feligreses,
+              (tbl) => tbl.id.equals(row['id']),
+            );
+          } else {
+            batch.insert(
+              database.feligreses,
+              FeligresesCompanion.insert(
+                id: row['id'],
+                iglesiaId: drift.Value(row['iglesia_id']),
+                nombre: row['nombre'] ?? 'Sin Nombre',
+                telefono: drift.Value(row['telefono']),
+                fechaNacimiento: drift.Value(
+                  row['fechanacimiento'] != null
+                      ? DateTime.parse(row['fechanacimiento']).toLocal()
+                      : null,
+                ),
+                genero: drift.Value(row['genero']),
+                cedula: drift.Value(row['cedula']),
+                estadoCivil: drift.Value(row['estado_civil']),
+                poseeDiscapacidad: drift.Value(
+                  row['posee_discapacidad'] ?? false,
+                ),
+                bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
+                bautizadoEspiritu: drift.Value(
+                  row['bautizado_espiritu'] ?? false,
+                ),
+                tipoFeligres: drift.Value(row['tipo_feligres']),
+                activo: drift.Value(row['activo'] ?? 1),
+                fechaRegistro: drift.Value(
+                  row['created_at'] != null
+                      ? DateTime.parse(row['created_at']).toLocal()
+                      : null,
+                ),
+                fechaModificacion: drift.Value(
+                  row['updated_at'] != null
+                      ? DateTime.parse(row['updated_at']).toLocal()
+                      : null,
+                ),
+                syncStatus: const drift.Value(1),
               ),
-              genero: drift.Value(row['genero']),
-              cedula: drift.Value(row['cedula']),
-              estadoCivil: drift.Value(row['estado_civil']),
-              poseeDiscapacidad: drift.Value(
-                row['posee_discapacidad'] ?? false,
-              ),
-              bautizadoAgua: drift.Value(row['bautizado_agua'] ?? false),
-              bautizadoEspiritu: drift.Value(
-                row['bautizado_espiritu'] ?? false,
-              ),
-              tipoFeligres: drift.Value(row['tipo_feligres']),
-              activo: drift.Value(row['activo'] ?? 1),
-              fechaRegistro: drift.Value(
-                row['created_at'] != null
-                    ? DateTime.parse(row['created_at']).toLocal()
-                    : null,
-              ),
-              fechaModificacion: drift.Value(
-                row['updated_at'] != null
-                    ? DateTime.parse(row['updated_at']).toLocal()
-                    : null,
-              ),
-              syncStatus: const drift.Value(1),
-            ),
-            mode: drift.InsertMode.insertOrReplace,
-          );
+              mode: drift.InsertMode.insertOrReplace,
+            );
+          }
         } catch (e) {
           debugPrint("Skipping bad Feligres row ${row['id']}: $e");
         }

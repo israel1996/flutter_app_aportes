@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
+import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/auth/screens/register_screen.dart';
 import 'package:flutter_app_aportes/features/auth/widgets/recovery_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,16 +26,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // 1. Verificar si la app está bloqueada por intentos fallidos
     final prefs = await SharedPreferences.getInstance();
-    final lockedUntil = prefs.getInt('lockout_time') ?? 0;
+    final lockedUntil = prefs.getInt('login_lockout_time') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
 
     if (now < lockedUntil) {
       final minutes = DateTime.fromMillisecondsSinceEpoch(
         lockedUntil,
       ).difference(DateTime.now()).inMinutes;
-      // Mostrar alerta por encima
       CustomSnackBar.showError(
         context,
         'Demasiados intentos fallidos. Intente de nuevo en ${minutes > 0 ? minutes : 1} minuto(s).',
@@ -45,71 +44,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 2. Intento de inicio de sesión
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final email = _emailController.text.trim();
+
+      // --- PRE-VALIDACIÓN (EVITA LA REDIRECCIÓN AL HOMESCREEN) ---
+      final estado = await Supabase.instance.client.rpc(
+        'obtener_estado_usuario',
+        params: {'correo': email},
       );
 
-      // Si el login es exitoso, reseteamos el contador de fallos
-      await prefs.setInt('failed_attempts', 0);
-
-      // 3. Verificamos el estado del usuario en la base de datos (usuarios_app)
-      final userData = await Supabase.instance.client
-          .from('usuarios_app')
-          .select('estado')
-          .eq('id', response.user!.id)
-          .maybeSingle();
-
-      if (userData != null) {
-        final estado = userData['estado'];
-        if (estado == 'pendiente' || estado == 'inactivo') {
-          await Supabase.instance.client.auth.signOut(); // Expulsar
-          if (mounted) {
-            CustomSnackBar.showError(
-              context,
-              'Para solicitar activación contactarse al correo mx.u7000@gmail.com',
-            );
-          }
-          return;
+      if (estado == 'pendiente' ||
+          estado == 'inactivo' ||
+          estado == 'solicita_reseteo') {
+        if (mounted) {
+          CustomSnackBar.showError(
+            context,
+            'Para solicitar activación contactarse al correo mx.u7000@gmail.com',
+          );
+          setState(() => _isLoading = false);
         }
+        return; // SE CANCELA EL LOGIN AQUÍ MISMO.
       }
-    } on AuthException catch (e) {
+      // -----------------------------------------------------------
+
+      // Si pasa la validación (es activo), entonces iniciamos sesión
+      final authService = ref.read(authServiceProvider);
+      await authService.signIn(email, _passwordController.text.trim());
+
+      await prefs.setInt('login_failed_attempts', 0);
+    } catch (e) {
       if (mounted) {
-        String errorMsg = 'Ocurrió un error al ingresar.';
+        final errorMessage = e.toString();
 
-        // 4. Traducción de errores y control de intentos
-        if (e.message.contains('Invalid login credentials')) {
-          errorMsg = 'El correo o la contraseña son incorrectos.';
-
-          int attempts = (prefs.getInt('failed_attempts') ?? 0) + 1;
+        if (errorMessage.contains('Invalid login credentials')) {
+          int attempts = (prefs.getInt('login_failed_attempts') ?? 0) + 1;
           if (attempts >= 5) {
-            // Bloquear por 15 minutos (ejemplo) al 5to intento fallido
             await prefs.setInt(
-              'lockout_time',
+              'login_lockout_time',
               DateTime.now()
                   .add(const Duration(minutes: 15))
                   .millisecondsSinceEpoch,
             );
-            await prefs.setInt('failed_attempts', 0);
-            errorMsg = 'Demasiados intentos. Cuenta bloqueada temporalmente.';
+            await prefs.setInt('login_failed_attempts', 0);
+            CustomSnackBar.showError(
+              context,
+              'Demasiados intentos. Cuenta bloqueada por 15 minutos.',
+            );
           } else {
-            await prefs.setInt('failed_attempts', attempts);
-            errorMsg += ' (Intento $attempts de 5)';
+            await prefs.setInt('login_failed_attempts', attempts);
+            CustomSnackBar.showError(
+              context,
+              'El correo o la contraseña son incorrectos. (Intento $attempts de 5)',
+            );
           }
-        } else if (e.message.contains('Email not confirmed')) {
-          errorMsg =
-              'Por favor, verifique su correo electrónico mediante el enlace que se le envió.';
+        } else if (errorMessage.contains('Email not confirmed')) {
+          CustomSnackBar.showError(
+            context,
+            'Por favor, verifique su correo electrónico antes de ingresar.',
+          );
+        } else {
+          CustomSnackBar.showError(context, 'Error al iniciar sesión.');
         }
-
-        CustomSnackBar.showError(context, errorMsg);
       }
-    } catch (e) {
-      if (mounted)
-        CustomSnackBar.showError(
-          context,
-          'Error de conexión. Intente nuevamente.',
-        );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -198,6 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
+
                       Text(
                         'Bienvenido',
                         style: GoogleFonts.montserrat(
@@ -216,6 +212,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
+
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -238,6 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
+
                       TextFormField(
                         controller: _passwordController,
                         obscureText: _obscurePassword,
@@ -257,15 +255,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   : Icons.visibility,
                               color: Colors.grey,
                             ),
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
+                            onPressed: () {
+                              setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              );
+                            },
                           ),
                         ),
                         validator: (value) => value!.isEmpty
                             ? 'La contraseña es obligatoria'
                             : null,
                       ),
+
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
@@ -289,6 +290,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
+
                       SizedBox(
                         width: double.infinity,
                         height: 55,
@@ -347,7 +349,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 24),
+
                       TextButton(
                         onPressed: () {
                           Navigator.push(

@@ -46,7 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _checkIfUserNeedsChurch();
+        _checkIfUserNeedsChurch(); // Triggered here
         _checkAndSync();
       }
     });
@@ -73,7 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       }
     } catch (e) {
-      debugPrint("Error verifying live status: $e");
+      debugPrint("Error verificando estado en vivo: $e");
     }
   }
 
@@ -108,14 +108,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       }
 
-      if (!mounted) return; // Prevent crashes if unmounted
+      if (!mounted) return;
 
       if (targetId != null) {
         final savedChurch = await (database.select(
           database.iglesias,
         )..where((tbl) => tbl.id.equals(targetId!))).getSingleOrNull();
 
-        if (!mounted) return; // Safety check
+        if (!mounted) return;
 
         if (savedChurch != null) {
           ref.read(currentIglesiaProvider.notifier).state = savedChurch;
@@ -131,7 +131,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ..limit(1))
                 .getSingleOrNull();
 
-        if (!mounted) return; // Safety check
+        if (!mounted) return;
 
         if (firstChurch != null) {
           ref.read(currentIglesiaProvider.notifier).state = firstChurch;
@@ -148,25 +148,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final user = supabase.auth.currentUser;
       if (user == null) return;
 
-      final userData = await supabase
-          .from('usuarios_app')
-          .select('estado')
-          .eq('id', user.id)
-          .maybeSingle();
+      final database = ref.read(databaseProvider);
 
-      if (!mounted) return; // Safety check
+      // 1. Verificación Local
+      final localChurches = await (database.select(
+        database.iglesias,
+      )..where((tbl) => tbl.userId.equals(user.id))).get();
 
-      if (userData != null && userData['estado'] == 'pendiente') {
-        return;
-      }
+      if (localChurches.isNotEmpty) return;
 
+      // 2. Verificación en Nube (Se asegura de no traer las eliminadas)
       final response = await supabase
           .from('iglesias')
           .select('id')
           .eq('user_id', user.id)
+          .isFilter(
+            'is_deleted',
+            false,
+          ) // Usamos isFilter por si el valor es nulo en BD antiguas
           .limit(1);
 
-      if (!mounted) return; // Prevent loading dialog if logged out
+      if (!mounted) return;
 
       if (response.isEmpty) {
         showModalBottomSheet(
@@ -208,7 +210,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         return;
       }
 
-      // Check if user is still logged in before syncing
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
@@ -216,7 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       final syncService = SyncService(database);
 
       await syncService.syncAll();
-      if (!mounted) return; // Cancel if the screen was destroyed during sync
+      if (!mounted) return;
 
       await _cargarIglesiaPreferida(offline: false);
       if (!mounted) return;
@@ -788,13 +789,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           builder: (context, snapshot) {
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
-            if (iglesias.isEmpty) return const SizedBox.shrink();
+
+            // ELIMINAMOS LA REGLA QUE ABRÍA EL MODAL A LA FUERZA AQUÍ
+            if (iglesias.isEmpty) {
+              return const SizedBox.shrink();
+            }
 
             if (currentIglesia != null &&
                 iglesias.any((i) => i.id == currentIglesia.id)) {
               validDropdownValue = iglesias.firstWhere(
                 (i) => i.id == currentIglesia.id,
               );
+            } else {
+              validDropdownValue = iglesias.first;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted)
+                  ref.read(currentIglesiaProvider.notifier).state =
+                      iglesias.first;
+              });
             }
 
             return Container(
@@ -820,7 +832,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         value: validDropdownValue,
                         isExpanded: true,
                         hint: Text(
-                          'Cargando...',
+                          'Seleccione Sede',
                           style: GoogleFonts.poppins(color: Colors.grey),
                         ),
                         icon: const Icon(Icons.arrow_drop_down),
@@ -1044,12 +1056,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             final iglesias = snapshot.data ?? [];
             Iglesia? validDropdownValue;
 
-            if (iglesias.isNotEmpty &&
-                currentIglesia != null &&
+            // ELIMINAMOS LA REGLA QUE ABRÍA EL MODAL A LA FUERZA AQUÍ TAMBIÉN
+            if (iglesias.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            if (currentIglesia != null &&
                 iglesias.any((i) => i.id == currentIglesia.id)) {
               validDropdownValue = iglesias.firstWhere(
                 (i) => i.id == currentIglesia.id,
               );
+            } else {
+              validDropdownValue = iglesias.first;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted)
+                  ref.read(currentIglesiaProvider.notifier).state =
+                      iglesias.first;
+              });
             }
 
             return Padding(
@@ -1081,7 +1104,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           isExpanded: true,
                           dropdownColor: colorScheme.surface,
                           hint: Text(
-                            'Cargando...',
+                            'Seleccione Sede',
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               color: Colors.grey,
