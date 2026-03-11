@@ -29,7 +29,7 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
   late FocusNode _searchFocusNode;
   bool _showDeleted = false; // Vista de "Inactivos"
 
-  // NUEVO: Estado para mostrar/ocultar filtros avanzados
+  // Estado para mostrar/ocultar filtros avanzados
   bool _showFilters = false;
 
   String _sortBy = 'Más Recientes';
@@ -1005,6 +1005,8 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                             ? () => setState(() => _currentPage++)
                             : null,
                       ),
+                      // ESPACIO INVISIBLE PARA EL BOTÓN FLOTANTE
+                      const SizedBox(width: 60),
                     ],
                   ),
                 ),
