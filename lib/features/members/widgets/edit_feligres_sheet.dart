@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
@@ -259,17 +260,28 @@ class _EditFeligresSheetState extends ConsumerState<EditFeligresSheet> {
     setState(() => _isSaving = true);
 
     try {
+      final connectivity = await Connectivity().checkConnectivity();
+      final hasInternet =
+          connectivity.contains(ConnectivityResult.mobile) ||
+          connectivity.contains(ConnectivityResult.wifi) ||
+          connectivity.contains(ConnectivityResult.ethernet);
+
+      if (!hasInternet) {
+        throw Exception(
+          'Se requiere conexión a internet para eliminar permanentemente (sincronización delta).',
+        );
+      }
+
+      // Delta-Sync: Marcamos como eliminado (soft delete) en Supabase
+      await Supabase.instance.client
+          .from('feligreses')
+          .update({'is_deleted': true})
+          .eq('id', widget.feligres.id);
+
+      // Eliminamos de la base de datos local para que desaparezca
       await database.feligreses.deleteWhere(
         (tbl) => tbl.id.equals(widget.feligres.id),
       );
-      try {
-        await Supabase.instance.client
-            .from('feligreses')
-            .delete()
-            .eq('id', widget.feligres.id);
-      } catch (e) {
-        debugPrint("Fallo al eliminar en Supabase: $e");
-      }
 
       if (mounted) {
         Navigator.pop(context);

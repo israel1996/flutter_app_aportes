@@ -66,7 +66,6 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
     });
   }
 
-  // --- NUEVA LÓGICA DIRECTA Y SEGURA ---
   Future<void> _verifyEmail() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -74,20 +73,21 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
     try {
       final email = _emailController.text.trim();
 
-      // Enviamos el correo de recuperación directamente
-      // (Estándar de seguridad de Supabase, no da error si no existe para evitar enumeración)
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      // Llamamos a la función segura en Supabase
+      await Supabase.instance.client.rpc(
+        'solicitar_recuperacion_clave',
+        params: {'correo_usuario': email},
+      );
 
-      // Bloqueamos la interfaz por 2 minutos para evitar Spam de correos
       final prefs = await SharedPreferences.getInstance();
       final lockTime = DateTime.now().add(const Duration(minutes: 2));
       await prefs.setInt('recovery_lockout', lockTime.millisecondsSinceEpoch);
 
       if (mounted) {
-        Navigator.pop(context); // Cerramos el modal PRIMERO
+        Navigator.pop(context); // Cierra la ventana de diálogo
         CustomSnackBar.showSuccess(
           context,
-          'Si el correo está registrado, recibirá un enlace de recuperación. Por favor, revise su bandeja de entrada.',
+          'Si el correo es válido, se ha notificado al administrador para la recuperación.',
         );
       }
     } catch (e) {
@@ -95,7 +95,7 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
         Navigator.pop(context);
         CustomSnackBar.showError(
           context,
-          'Error al intentar enviar el enlace.',
+          'Error al intentar enviar la solicitud.',
         );
       }
     } finally {
@@ -157,7 +157,7 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Ingrese su correo registrado. Le enviaremos un enlace mágico para restablecer su contraseña.',
+                'Ingrese su correo registrado. Notificaremos al administrador para restablecer su acceso.',
                 style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey),
               ),
               const SizedBox(height: 20),
@@ -242,7 +242,7 @@ class _RecoveryDialogState extends State<RecoveryDialog> {
                     ),
                   )
                 : const Text(
-                    'Enviar Enlace',
+                    'Enviar Solicitud',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

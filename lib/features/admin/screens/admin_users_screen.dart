@@ -32,7 +32,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     } catch (e) {
       debugPrint('Error fetching users: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -49,9 +49,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           'Estado actualizado a $nuevoEstado',
         );
       }
-      _fetchUsuarios(); // Refresh list
+      _fetchUsuarios(); // Refrescar la lista
     } catch (e) {
       debugPrint('Error updating status: $e');
+      if (mounted) CustomSnackBar.showError(context, 'Error al actualizar');
     }
   }
 
@@ -69,13 +70,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               itemBuilder: (context, index) {
                 final user = _usuarios[index];
 
-                // Define the states
+                // Definición de todos los estados posibles
                 final isPending = user['estado'] == 'pendiente';
                 final isActive = user['estado'] == 'activo';
-                final isResetRequested =
-                    user['estado'] == 'solicita_reseteo'; // NEW STATE!
+                final isResetRequested = user['estado'] == 'solicita_reseteo';
+                final isInactive = user['estado'] == 'inactivo'; // NUEVO ESTADO
 
-                // Prevent superadmin from locking themselves out
+                // Evitar que el superadmin se bloquee a sí mismo
                 if (user['rol'] == 'superadmin') return const SizedBox.shrink();
 
                 return Container(
@@ -85,7 +86,6 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        // Make it glow red if a reset is requested!
                         color: isResetRequested
                             ? Colors.redAccent.withOpacity(0.4)
                             : Colors.black.withOpacity(0.1),
@@ -93,14 +93,16 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                       ),
                     ],
                     border: isResetRequested
-                        ? Border.all(
-                            color: Colors.redAccent,
-                            width: 2,
-                          ) // Bold Red Border
+                        ? Border.all(color: Colors.redAccent, width: 2)
                         : isPending
                         ? Border.all(
                             color: Colors.orangeAccent.withOpacity(0.5),
                             width: 2,
+                          )
+                        : isInactive
+                        ? Border.all(
+                            color: Colors.grey.withOpacity(0.3),
+                            width: 1,
                           )
                         : null,
                   ),
@@ -114,21 +116,25 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                           ? Colors.redAccent.withOpacity(0.2)
                           : isPending
                           ? Colors.orange.withOpacity(0.2)
-                          : (isActive
-                                ? Colors.green.withOpacity(0.2)
-                                : Colors.grey.withOpacity(0.2)),
+                          : isInactive
+                          ? Colors.grey.withOpacity(0.2)
+                          : Colors.green.withOpacity(0.2),
                       child: Icon(
                         isResetRequested
-                            ? Icons
-                                  .lock_reset // Special key alert icon
+                            ? Icons.lock_reset
                             : isPending
                             ? Icons.hourglass_empty
-                            : (isActive ? Icons.check : Icons.block),
+                            : isInactive
+                            ? Icons
+                                  .block // Ícono de bloqueado
+                            : Icons.check, // Ícono de activo
                         color: isResetRequested
                             ? Colors.redAccent
                             : isPending
                             ? Colors.orange
-                            : (isActive ? Colors.green : Colors.grey),
+                            : isInactive
+                            ? Colors.grey
+                            : Colors.green,
                       ),
                     ),
                     title: Column(
@@ -144,10 +150,24 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                               letterSpacing: 1,
                             ),
                           ),
+                        if (isInactive)
+                          Text(
+                            'USUARIO INACTIVO',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
                         Text(
                           user['nombre'] ?? 'Sin nombre',
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.bold,
+                            decoration: isInactive
+                                ? TextDecoration.lineThrough
+                                : null, // Tachado si está inactivo
+                            color: isInactive ? Colors.grey : null,
                           ),
                         ),
                       ],
@@ -162,12 +182,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Show Approve Button for Pending users
-                        if (isPending)
+                        // BOTÓN 1: ACTIVAR / APROBAR (Aparece si está inactivo o pendiente)
+                        if (isPending || isInactive)
                           IconButton(
-                            tooltip: 'Aprobar Acceso',
-                            icon: const Icon(
-                              Icons.check_circle,
+                            tooltip: isInactive
+                                ? 'Reactivar Usuario'
+                                : 'Aprobar Acceso',
+                            icon: Icon(
+                              isInactive ? Icons.lock_open : Icons.check_circle,
                               color: Colors.green,
                               size: 28,
                             ),
@@ -175,11 +197,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                 _cambiarEstado(user['id'], 'activo'),
                           ),
 
-                        // Show Reset Password Button (For Active OR Reset Requested users)
-                        if (isActive || isResetRequested)
+                        // BOTÓN 2: RESTABLECER CONTRASEÑA (Para cualquier usuario que no sea pendiente)
+                        if (!isPending)
                           IconButton(
                             tooltip: 'Restablecer Contraseña (Iglesia2026)',
-                            // Make the icon pulse or stand out if requested
                             icon: Icon(
                               Icons.lock_reset,
                               color: isResetRequested
@@ -224,12 +245,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                                       'new_password': 'Iglesia2026',
                                     },
                                   );
-                                  if (mounted)
+                                  if (mounted) {
                                     CustomSnackBar.showSuccess(
                                       context,
                                       'Contraseña restablecida a Iglesia2026',
                                     );
-                                  _fetchUsuarios(); // Refresh list to remove the red glow!
+                                  }
+                                  _fetchUsuarios();
                                 } catch (e) {
                                   if (mounted)
                                     CustomSnackBar.showError(
@@ -241,14 +263,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
                             },
                           ),
 
-                        // Block Button (Hide it if they just requested a reset to keep UI clean)
-                        if ((isActive || isPending) && !isResetRequested)
+                        // BOTÓN 3: BLOQUEAR / DESACTIVAR (Solo aparece si NO está ya inactivo)
+                        if (!isInactive)
                           IconButton(
                             tooltip: 'Desactivar/Bloquear',
                             icon: const Icon(
                               Icons.cancel,
-                              color: Colors.grey,
-                              size: 24,
+                              color: Colors.redAccent,
+                              size: 26,
                             ),
                             onPressed: () =>
                                 _cambiarEstado(user['id'], 'inactivo'),

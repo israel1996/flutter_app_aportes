@@ -37,8 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   void initState() {
     super.initState();
-    _checkIfUserNeedsChurch();
-    _checkUserStatus(); // <-- VERIFICACIÓN DE ESTADO EN TIEMPO REAL AÑADIDA
+    _checkUserStatus();
 
     _syncAnimationController = AnimationController(
       vsync: this,
@@ -46,11 +45,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndSync();
+      if (mounted) {
+        _checkIfUserNeedsChurch();
+        _checkAndSync();
+      }
     });
   }
 
-  // --- NUEVA FUNCIÓN: VERIFICA SI EL ADMIN LO BLOQUEÓ MIENTRAS USABA LA APP ---
   Future<void> _checkUserStatus() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
@@ -61,6 +62,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .eq('id', user.id)
           .maybeSingle();
 
+      if (!mounted) return;
+
       if (userData != null) {
         final estado = userData['estado'];
         if (estado == 'inactivo' ||
@@ -70,7 +73,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       }
     } catch (e) {
-      debugPrint("Error verificando estado en vivo: $e");
+      debugPrint("Error verifying live status: $e");
     }
   }
 
@@ -105,12 +108,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       }
 
+      if (!mounted) return; // Prevent crashes if unmounted
+
       if (targetId != null) {
         final savedChurch = await (database.select(
           database.iglesias,
         )..where((tbl) => tbl.id.equals(targetId!))).getSingleOrNull();
 
-        if (savedChurch != null && mounted) {
+        if (!mounted) return; // Safety check
+
+        if (savedChurch != null) {
           ref.read(currentIglesiaProvider.notifier).state = savedChurch;
           return;
         }
@@ -124,7 +131,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ..limit(1))
                 .getSingleOrNull();
 
-        if (firstChurch != null && mounted) {
+        if (!mounted) return; // Safety check
+
+        if (firstChurch != null) {
           ref.read(currentIglesiaProvider.notifier).state = firstChurch;
         }
       }
@@ -145,6 +154,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .eq('id', user.id)
           .maybeSingle();
 
+      if (!mounted) return; // Safety check
+
       if (userData != null && userData['estado'] == 'pendiente') {
         return;
       }
@@ -155,19 +166,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .eq('user_id', user.id)
           .limit(1);
 
-      if (response.isEmpty && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            showModalBottomSheet(
-              context: context,
-              isDismissible: false,
-              enableDrag: false,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => const AddIglesiaSheet(),
-            );
-          }
-        });
+      if (!mounted) return; // Prevent loading dialog if logged out
+
+      if (response.isEmpty) {
+        showModalBottomSheet(
+          context: context,
+          isDismissible: false,
+          enableDrag: false,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => const AddIglesiaSheet(),
+        );
       }
     } catch (e) {
       debugPrint('Error verifying cloud churches: $e');
@@ -175,11 +184,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Future<void> _checkAndSync() async {
+    if (!mounted) return;
     setState(() => _isSyncing = true);
     _syncAnimationController.repeat();
 
     try {
       await _cargarIglesiaPreferida(offline: true);
+      if (!mounted) return;
 
       final connectivity = await Connectivity().checkConnectivity();
       final hasInternet =
@@ -188,26 +199,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           connectivity.contains(ConnectivityResult.ethernet);
 
       if (!hasInternet) {
-        if (mounted)
+        if (mounted) {
           CustomSnackBar.showWarning(
             context,
             'Modo Offline: Sin conexión a Internet',
           );
+        }
         return;
       }
 
-      final authService = ref.read(authServiceProvider);
-      if (authService.currentUser == null) return;
+      // Check if user is still logged in before syncing
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
 
       final database = ref.read(databaseProvider);
       final syncService = SyncService(database);
 
       await syncService.syncAll();
-      await _cargarIglesiaPreferida(offline: false);
+      if (!mounted) return; // Cancel if the screen was destroyed during sync
 
-      if (mounted) {
-        CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
-      }
+      await _cargarIglesiaPreferida(offline: false);
+      if (!mounted) return;
+
+      CustomSnackBar.showSuccess(context, 'Datos sincronizados con la nube');
     } catch (e) {
       if (mounted)
         CustomSnackBar.showError(context, 'Error al sincronizar: $e');
@@ -262,20 +276,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       await database.delete(database.feligreses).go();
       await database.delete(database.iglesias).go();
 
-      ref.read(currentIglesiaProvider.notifier).state = null;
+      if (mounted) ref.read(currentIglesiaProvider.notifier).state = null;
 
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
     } catch (e) {
       debugPrint('Error al cerrar sesión: $e');
-    }
-
-    if (mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
-      );
     }
   }
 
@@ -317,9 +323,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ];
 
         if (selectedIndex >= pages.length) {
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => ref.read(navIndexProvider.notifier).state = 0,
-          );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) ref.read(navIndexProvider.notifier).state = 0;
+          });
         }
 
         return Scaffold(

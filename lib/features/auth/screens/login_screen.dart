@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_app_aportes/core/utils/custom_snackbar.dart';
-import 'package:flutter_app_aportes/features/auth/providers/auth_provider.dart';
 import 'package:flutter_app_aportes/features/auth/screens/register_screen.dart';
 import 'package:flutter_app_aportes/features/auth/widgets/recovery_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,49 +64,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (userData != null) {
         final estado = userData['estado'];
         if (estado == 'pendiente' || estado == 'inactivo') {
-          await Supabase.instance.client.auth
-              .signOut(); // Expulsarlo inmediatamente
-
+          await Supabase.instance.client.auth.signOut(); // Expulsar
           if (mounted) {
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      color: Colors.orange,
-                      size: 28,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Cuenta $estado',
-                        style: GoogleFonts.montserrat(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                content: Text(
-                  'Pronto su cuenta estará activada.\nPara solicitar activación o soporte, contactarse al correo:\nmx.u7000@gmail.com',
-                  style: GoogleFonts.poppins(fontSize: 14),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Entendido',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
+            CustomSnackBar.showError(
+              context,
+              'Para solicitar activación contactarse al correo mx.u7000@gmail.com',
             );
           }
           return;
