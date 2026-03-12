@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 import '../../../core/database/database.dart';
 import '../../../providers.dart';
@@ -18,7 +19,6 @@ final _axisFormat = NumberFormat.currency(
   decimalDigits: 0,
 );
 
-// Cambiamos a ConsumerStatefulWidget para optimizar la reconstrucción
 class DashboardSummary extends ConsumerStatefulWidget {
   const DashboardSummary({super.key});
 
@@ -27,7 +27,6 @@ class DashboardSummary extends ConsumerStatefulWidget {
 }
 
 class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
-  // 1. OPTIMIZACIÓN: Caché de Streams
   late Stream<List<AporteConFeligres>> _historyStream;
   late Stream<List<Feligrese>> _membersStream;
 
@@ -154,6 +153,7 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
             }
 
             return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -167,7 +167,7 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                             const SizedBox(height: 16),
                             _buildMonthlyIncomeCard(dineroEsteMes),
                             const SizedBox(height: 16),
-                            _buildActivityCard(aportesEsteMes.toString()),
+                            _buildActivityCard(aportesEsteMes.toDouble()),
                           ],
                         );
                       }
@@ -181,7 +181,7 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                           const SizedBox(width: 20),
                           Expanded(
                             child: _buildActivityCard(
-                              aportesEsteMes.toString(),
+                              aportesEsteMes.toDouble(),
                             ),
                           ),
                         ],
@@ -195,23 +195,31 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                     builder: (context, constraints) {
                       final isStacked = constraints.maxWidth < 800;
 
-                      // 2. OPTIMIZACIÓN: RepaintBoundary para aislar los pasteles
-                      final top5Widget = _buildTop5Card(
-                        top5,
-                        panelColor,
-                        textPrimary,
-                        isDark,
-                        Theme.of(context).colorScheme,
-                        isStacked,
-                      );
-                      final genderPieWidget = RepaintBoundary(
-                        child: _buildGenderPieChart(
-                          totalMasculino,
-                          totalFemenino,
+                      final top5Widget = _VisibilityAnimator(
+                        id: 'top5',
+                        builder: (context, isVisible) => _buildTop5Card(
+                          top5,
                           panelColor,
                           textPrimary,
                           isDark,
+                          Theme.of(context).colorScheme,
                           isStacked,
+                          isVisible,
+                        ),
+                      );
+
+                      final genderPieWidget = RepaintBoundary(
+                        child: _VisibilityAnimator(
+                          id: 'genderPie',
+                          builder: (context, isVisible) => _buildGenderPieChart(
+                            totalMasculino,
+                            totalFemenino,
+                            panelColor,
+                            textPrimary,
+                            isDark,
+                            isStacked,
+                            isVisible,
+                          ),
                         ),
                       );
 
@@ -239,226 +247,42 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                   ),
 
                   const SizedBox(height: 40),
-                  // RepaintBoundary para aislar gráfico de barras
+
                   RepaintBoundary(
-                    child: _buildAgeBracketChart(
-                      ninos,
-                      adolescentes,
-                      jovenes,
-                      adultos,
-                      mayores,
-                      panelColor,
-                      textPrimary,
-                      isDark,
-                      Theme.of(context).colorScheme,
+                    child: _VisibilityAnimator(
+                      id: 'ageBar',
+                      builder: (context, isVisible) => _buildAgeBracketChart(
+                        ninos,
+                        adolescentes,
+                        jovenes,
+                        adultos,
+                        mayores,
+                        panelColor,
+                        textPrimary,
+                        isDark,
+                        Theme.of(context).colorScheme,
+                        isVisible,
+                        maxY,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 40),
 
-                  // RepaintBoundary para aislar la línea de tendencia anual
                   RepaintBoundary(
-                    child: Container(
-                      height: 400,
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: panelColor,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(
-                              isDark ? 0.4 : 0.05,
-                            ),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Tendencia de Aportes Anual',
-                                  style: GoogleFonts.poppins(
-                                    color: textPrimary,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _currencyFormat.format(totalAnual),
-                                style: GoogleFonts.montserrat(
-                                  color: const Color(0xFF00C9FF),
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 30),
-
-                          Expanded(
-                            child: LineChart(
-                              LineChartData(
-                                lineTouchData: LineTouchData(
-                                  enabled: true,
-                                  touchTooltipData: LineTouchTooltipData(
-                                    getTooltipItems: (touchedSpots) {
-                                      return touchedSpots
-                                          .map(
-                                            (spot) => LineTooltipItem(
-                                              _currencyFormat.format(spot.y),
-                                              const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          )
-                                          .toList();
-                                    },
-                                  ),
-                                ),
-                                gridData: FlGridData(
-                                  show: true,
-                                  drawVerticalLine: false,
-                                  horizontalInterval: maxY / 4 == 0
-                                      ? 1
-                                      : maxY / 4,
-                                  getDrawingHorizontalLine: (value) => FlLine(
-                                    color: isDark
-                                        ? Colors.white10
-                                        : Colors.black12,
-                                    strokeWidth: 1,
-                                    dashArray: [5, 5],
-                                  ),
-                                ),
-                                titlesData: FlTitlesData(
-                                  show: true,
-                                  rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false),
-                                  ),
-                                  bottomTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 30,
-                                      interval: 1,
-                                      getTitlesWidget: (value, meta) {
-                                        const style = TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey,
-                                        );
-                                        final months = [
-                                          'Ene',
-                                          'Feb',
-                                          'Mar',
-                                          'Abr',
-                                          'May',
-                                          'Jun',
-                                          'Jul',
-                                          'Ago',
-                                          'Sep',
-                                          'Oct',
-                                          'Nov',
-                                          'Dic',
-                                        ];
-                                        int idx = value.toInt();
-                                        if (idx >= 0 && idx < 12)
-                                          return SideTitleWidget(
-                                            meta: meta,
-                                            child: Text(
-                                              months[idx],
-                                              style: style,
-                                            ),
-                                          );
-                                        return const SizedBox.shrink();
-                                      },
-                                    ),
-                                  ),
-                                  leftTitles: AxisTitles(
-                                    sideTitles: SideTitles(
-                                      showTitles: true,
-                                      reservedSize: 55,
-                                      getTitlesWidget: (value, meta) {
-                                        if (value == maxY || value == 0)
-                                          return const SizedBox.shrink();
-                                        return Text(
-                                          _axisFormat.format(value),
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                                borderData: FlBorderData(show: false),
-                                minX: 0,
-                                maxX: 11,
-                                minY: 0,
-                                maxY: maxY,
-                                lineBarsData: [
-                                  LineChartBarData(
-                                    spots: List.generate(
-                                      12,
-                                      (index) => FlSpot(
-                                        index.toDouble(),
-                                        monthlyData[index],
-                                      ),
-                                    ),
-                                    isCurved: true,
-                                    color: const Color(0xFF00C9FF),
-                                    barWidth: 4,
-                                    isStrokeCapRound: true,
-                                    dotData: FlDotData(
-                                      show: true,
-                                      getDotPainter:
-                                          (spot, percent, barData, index) =>
-                                              FlDotCirclePainter(
-                                                radius: 4,
-                                                color: panelColor,
-                                                strokeWidth: 2,
-                                                strokeColor: const Color(
-                                                  0xFF00C9FF,
-                                                ),
-                                              ),
-                                    ),
-                                    belowBarData: BarAreaData(
-                                      show: true,
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          const Color(
-                                            0xFF00C9FF,
-                                          ).withOpacity(0.4),
-                                          const Color(
-                                            0xFF00C9FF,
-                                          ).withOpacity(0.0),
-                                        ],
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                    child: _VisibilityAnimator(
+                      id: 'annualLine',
+                      builder: (context, isVisible) => _buildAnnualTrendChart(
+                        monthlyData,
+                        totalAnual,
+                        maxY,
+                        panelColor,
+                        textPrimary,
+                        isDark,
+                        isVisible,
                       ),
                     ),
                   ),
+                  const SizedBox(height: 40),
                 ],
               ),
             );
@@ -475,6 +299,7 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
     bool isDark,
     ColorScheme colorScheme,
     bool isStacked,
+    bool isVisible,
   ) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -526,7 +351,6 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                 int index = entry.key;
                 String nameAndType = entry.value.key;
                 double amount = entry.value.value;
-
                 Color rankColor = index == 0
                     ? Colors.amber
                     : (index == 1
@@ -535,42 +359,51 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
                                 ? Colors.brown.shade300
                                 : colorScheme.primary));
 
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: rankColor.withOpacity(0.2),
-                    child: Text(
-                      '#${index + 1}',
-                      style: TextStyle(
-                        color: rankColor,
-                        fontWeight: FontWeight.bold,
+                return AnimatedOpacity(
+                  opacity: isVisible ? 1.0 : 0.0,
+                  duration: Duration(milliseconds: 400 + (index * 200)),
+                  child: AnimatedSlide(
+                    offset: isVisible ? Offset.zero : const Offset(0, 0.3),
+                    duration: Duration(milliseconds: 400 + (index * 200)),
+                    curve: Curves.easeOutQuart,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: rankColor.withOpacity(0.2),
+                        child: Text(
+                          '#${index + 1}',
+                          style: TextStyle(
+                            color: rankColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  title: Text(
-                    nameAndType.split(' - ').first,
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    nameAndType.split(' - ').last,
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Text(
-                    _currencyFormat.format(amount),
-                    style: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.greenAccent,
-                      fontSize: 16,
+                      title: Text(
+                        nameAndType.split(' - ').first,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        nameAndType.split(' - ').last,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Text(
+                        _currencyFormat.format(amount),
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.greenAccent,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
                 );
@@ -588,6 +421,7 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
     Color textPrimary,
     bool isDark,
     bool isStacked,
+    bool isVisible,
   ) {
     final double total = masculino + femenino;
     final double pctMasc = total == 0 ? 0 : (masculino / total) * 100;
@@ -630,65 +464,74 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
               ),
             )
           else
-            SizedBox(
-              height: 200,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  PieChart(
-                    PieChartData(
-                      sectionsSpace: 4,
-                      centerSpaceRadius: 60,
-                      sections: [
-                        if (masculino > 0)
-                          PieChartSectionData(
-                            value: masculino,
-                            color: const Color(0xFF00C9FF),
-                            title:
-                                '${pctMasc.toStringAsFixed(1)}%\n${_currencyFormat.format(masculino)}',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        if (femenino > 0)
-                          PieChartSectionData(
-                            value: femenino,
-                            color: const Color(0xFFFF007F),
-                            title:
-                                '${pctFem.toStringAsFixed(1)}%\n${_currencyFormat.format(femenino)}',
-                            radius: 45,
-                            titleStyle: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
+            AnimatedScale(
+              scale: isVisible ? 1.0 : 0.6,
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeOutBack,
+              child: AnimatedOpacity(
+                opacity: isVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 800),
+                child: SizedBox(
+                  height: 200,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      Text(
-                        'Total',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey,
+                      PieChart(
+                        PieChartData(
+                          sectionsSpace: 4,
+                          centerSpaceRadius: 60,
+                          sections: [
+                            if (masculino > 0)
+                              PieChartSectionData(
+                                value: masculino,
+                                color: const Color(0xFF00C9FF),
+                                title:
+                                    '${pctMasc.toStringAsFixed(1)}%\n${_currencyFormat.format(masculino)}',
+                                radius: 45,
+                                titleStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            if (femenino > 0)
+                              PieChartSectionData(
+                                value: femenino,
+                                color: const Color(0xFFFF007F),
+                                title:
+                                    '${pctFem.toStringAsFixed(1)}%\n${_currencyFormat.format(femenino)}',
+                                radius: 45,
+                                titleStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      Text(
-                        _currencyFormat.format(total),
-                        style: GoogleFonts.montserrat(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Total',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            _currencyFormat.format(total),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           const SizedBox(height: 30),
@@ -727,10 +570,418 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
     );
   }
 
+  Widget _buildAnnualTrendChart(
+    List<double> monthlyData,
+    double totalAnual,
+    double maxY,
+    Color panelColor,
+    Color textPrimary,
+    bool isDark,
+    bool isVisible,
+  ) {
+    return Container(
+      height: 400,
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Tendencia de Aportes Anual',
+                  style: GoogleFonts.poppins(
+                    color: textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: isVisible ? totalAnual : 0),
+                duration: const Duration(milliseconds: 1500),
+                curve: Curves.easeOutQuart,
+                builder: (context, val, _) {
+                  return Text(
+                    _currencyFormat.format(val),
+                    style: GoogleFonts.montserrat(
+                      color: const Color(0xFF00C9FF),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 30),
+          Expanded(
+            child: LineChart(
+              LineChartData(
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots
+                          .map(
+                            (spot) => LineTooltipItem(
+                              _currencyFormat.format(spot.y),
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                          .toList();
+                    },
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4 == 0 ? 1 : maxY / 4,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: isDark ? Colors.white10 : Colors.black12,
+                    strokeWidth: 1,
+                    dashArray: [5, 5],
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        const style = TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        );
+                        final months = [
+                          'Ene',
+                          'Feb',
+                          'Mar',
+                          'Abr',
+                          'May',
+                          'Jun',
+                          'Jul',
+                          'Ago',
+                          'Sep',
+                          'Oct',
+                          'Nov',
+                          'Dic',
+                        ];
+                        int idx = value.toInt();
+                        if (idx >= 0 && idx < 12)
+                          return SideTitleWidget(
+                            meta: meta,
+                            child: Text(months[idx], style: style),
+                          );
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 55,
+                      getTitlesWidget: (value, meta) {
+                        if (value == maxY || value == 0)
+                          return const SizedBox.shrink();
+                        return Text(
+                          _axisFormat.format(value),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                minX: 0,
+                maxX: 11,
+                minY: 0,
+                maxY: maxY,
+                lineBarsData: [
+                  LineChartBarData(
+                    // Aquí la animación desliza la gráfica desde 0
+                    spots: List.generate(
+                      12,
+                      (index) => FlSpot(
+                        index.toDouble(),
+                        isVisible ? monthlyData[index] : 0.0,
+                      ),
+                    ),
+                    isCurved: true,
+                    color: const Color(0xFF00C9FF),
+                    barWidth: 4,
+                    isStrokeCapRound: true,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) =>
+                          FlDotCirclePainter(
+                            radius: 4,
+                            color: panelColor,
+                            strokeWidth: 2,
+                            strokeColor: const Color(0xFF00C9FF),
+                          ),
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF00C9FF).withOpacity(0.4),
+                          const Color(0xFF00C9FF).withOpacity(0.0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(milliseconds: 1200),
+              curve: Curves.easeOutQuart,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAgeBracketChart(
+    double ninos,
+    double adolescentes,
+    double jovenes,
+    double adultos,
+    double mayores,
+    Color panelColor,
+    Color textPrimary,
+    bool isDark,
+    ColorScheme colorScheme,
+    bool isVisible,
+    double globalMaxY,
+  ) {
+    final double maxVal = [
+      ninos,
+      adolescentes,
+      jovenes,
+      adultos,
+      mayores,
+    ].reduce((a, b) => a > b ? a : b);
+    final double chartMaxY = maxVal == 0 ? 100 : maxVal * 1.2;
+
+    return Container(
+      height: 400,
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Aportes por Grupos de Edad (Mes Actual)',
+            style: GoogleFonts.poppins(
+              color: textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 30),
+          Expanded(
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: chartMaxY,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                        BarTooltipItem(
+                          _currencyFormat.format(rod.toY),
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        const style = TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                        );
+                        String text;
+                        switch (value.toInt()) {
+                          case 0:
+                            text = 'Niños\n(0-11)';
+                            break;
+                          case 1:
+                            text = 'Adolesc.\n(12-17)';
+                            break;
+                          case 2:
+                            text = 'Jóvenes\n(18-29)';
+                            break;
+                          case 3:
+                            text = 'Adultos\n(30-59)';
+                            break;
+                          case 4:
+                            text = 'Mayores\n(60+)';
+                            break;
+                          default:
+                            text = '';
+                            break;
+                        }
+                        return SideTitleWidget(
+                          meta: meta,
+                          space: 12,
+                          child: Text(
+                            text,
+                            style: style,
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      },
+                      reservedSize: 45,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 55,
+                      getTitlesWidget: (value, meta) {
+                        if (value == 0 || value >= chartMaxY)
+                          return const SizedBox.shrink();
+                        return Text(
+                          _axisFormat.format(value),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: isDark ? Colors.white10 : Colors.black12,
+                    strokeWidth: 1,
+                    dashArray: [5, 5],
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: [
+                  _buildBarGroup(
+                    0,
+                    isVisible ? ninos : 0,
+                    const Color(0xFF92FE9D),
+                  ),
+                  _buildBarGroup(
+                    1,
+                    isVisible ? adolescentes : 0,
+                    const Color(0xFF00C9FF),
+                  ),
+                  _buildBarGroup(
+                    2,
+                    isVisible ? jovenes : 0,
+                    const Color(0xFF4FACFE),
+                  ),
+                  _buildBarGroup(
+                    3,
+                    isVisible ? adultos : 0,
+                    const Color(0xFF89216B),
+                  ),
+                  _buildBarGroup(
+                    4,
+                    isVisible ? mayores : 0,
+                    const Color(0xFFFF007F),
+                  ),
+                ],
+              ),
+              swapAnimationDuration: const Duration(milliseconds: 1000),
+              swapAnimationCurve: Curves.easeOutQuart,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  BarChartGroupData _buildBarGroup(int x, double y, Color color) {
+    return BarChartGroupData(
+      x: x,
+      barRods: [
+        BarChartRodData(
+          toY: y,
+          color: color,
+          width: 24,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(8),
+            topRight: Radius.circular(8),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTotalCard({double total = 0}) {
     return GradientSummaryCard(
       title: 'Total Histórico',
-      value: _currencyFormat.format(total),
+      targetValue: total,
+      valueFormatter: (val) => _currencyFormat.format(val),
       subtitle: 'Acumulado global',
       gradient: const LinearGradient(
         colors: [Color(0xFF89216B), Color(0xFFDA4453)],
@@ -744,7 +995,8 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
   Widget _buildMonthlyIncomeCard(double amount) {
     return GradientSummaryCard(
       title: 'Ingresos del Mes',
-      value: _currencyFormat.format(amount),
+      targetValue: amount,
+      valueFormatter: (val) => _currencyFormat.format(val),
       subtitle: 'Recaudado este mes',
       gradient: const LinearGradient(
         colors: [Color(0xFF00C9FF), Color(0xFF92FE9D)],
@@ -755,10 +1007,11 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
     );
   }
 
-  Widget _buildActivityCard(String count) {
+  Widget _buildActivityCard(double count) {
     return GradientSummaryCard(
       title: 'Aportes del Mes',
-      value: count,
+      targetValue: count,
+      valueFormatter: (val) => val.toInt().toString(),
       subtitle: DateFormat(
         'MMMM yyyy',
         'es',
@@ -773,187 +1026,11 @@ class _DashboardSummaryState extends ConsumerState<DashboardSummary> {
   }
 }
 
-Widget _buildAgeBracketChart(
-  double ninos,
-  double adolescentes,
-  double jovenes,
-  double adultos,
-  double mayores,
-  Color panelColor,
-  Color textPrimary,
-  bool isDark,
-  ColorScheme colorScheme,
-) {
-  final double maxVal = [
-    ninos,
-    adolescentes,
-    jovenes,
-    adultos,
-    mayores,
-  ].reduce((a, b) => a > b ? a : b);
-  final double chartMaxY = maxVal == 0 ? 100 : maxVal * 1.2;
-
-  return Container(
-    height: 400,
-    width: double.infinity,
-    padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(
-      color: panelColor,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
-          blurRadius: 15,
-          offset: const Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Aportes por Grupos de Edad (Mes Actual)',
-          style: GoogleFonts.poppins(
-            color: textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 30),
-        Expanded(
-          child: BarChart(
-            BarChartData(
-              alignment: BarChartAlignment.spaceAround,
-              maxY: chartMaxY,
-              barTouchData: BarTouchData(
-                enabled: true,
-                touchTooltipData: BarTouchTooltipData(
-                  getTooltipItem: (group, groupIndex, rod, rodIndex) =>
-                      BarTooltipItem(
-                        _currencyFormat.format(rod.toY),
-                        const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                ),
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    getTitlesWidget: (value, meta) {
-                      const style = TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      );
-                      String text;
-                      switch (value.toInt()) {
-                        case 0:
-                          text = 'Niños\n(0-11)';
-                          break;
-                        case 1:
-                          text = 'Adolesc.\n(12-17)';
-                          break;
-                        case 2:
-                          text = 'Jóvenes\n(18-29)';
-                          break;
-                        case 3:
-                          text = 'Adultos\n(30-59)';
-                          break;
-                        case 4:
-                          text = 'Mayores\n(60+)';
-                          break;
-                        default:
-                          text = '';
-                          break;
-                      }
-                      return SideTitleWidget(
-                        meta: meta,
-                        space: 12,
-                        child: Text(
-                          text,
-                          style: style,
-                          textAlign: TextAlign.center,
-                        ),
-                      );
-                    },
-                    reservedSize: 45,
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 55,
-                    getTitlesWidget: (value, meta) {
-                      if (value == 0 || value >= chartMaxY)
-                        return const SizedBox.shrink();
-                      return Text(
-                        _axisFormat.format(value),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      );
-                    },
-                  ),
-                ),
-              ),
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                getDrawingHorizontalLine: (value) => FlLine(
-                  color: isDark ? Colors.white10 : Colors.black12,
-                  strokeWidth: 1,
-                  dashArray: [5, 5],
-                ),
-              ),
-              borderData: FlBorderData(show: false),
-              barGroups: [
-                _buildBarGroup(0, ninos, const Color(0xFF92FE9D)),
-                _buildBarGroup(1, adolescentes, const Color(0xFF00C9FF)),
-                _buildBarGroup(2, jovenes, const Color(0xFF4FACFE)),
-                _buildBarGroup(3, adultos, const Color(0xFF89216B)),
-                _buildBarGroup(4, mayores, const Color(0xFFFF007F)),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-BarChartGroupData _buildBarGroup(int x, double y, Color color) {
-  return BarChartGroupData(
-    x: x,
-    barRods: [
-      BarChartRodData(
-        toY: y,
-        color: color,
-        width: 24,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(8),
-          topRight: Radius.circular(8),
-        ),
-      ),
-    ],
-  );
-}
-
+// --- WIDGET PARA ANIMAR NÚMEROS EN LAS TARJETAS ---
 class GradientSummaryCard extends StatelessWidget {
   final String title;
-  final String value;
+  final double targetValue;
+  final String Function(double) valueFormatter;
   final String subtitle;
   final LinearGradient gradient;
   final IconData icon;
@@ -961,7 +1038,8 @@ class GradientSummaryCard extends StatelessWidget {
   const GradientSummaryCard({
     super.key,
     required this.title,
-    required this.value,
+    required this.targetValue,
+    required this.valueFormatter,
     required this.subtitle,
     required this.gradient,
     required this.icon,
@@ -1014,20 +1092,27 @@ class GradientSummaryCard extends StatelessWidget {
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: GoogleFonts.montserrat(
-                color: Colors.white,
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: targetValue),
+              duration: const Duration(milliseconds: 1500),
+              curve: Curves.easeOutQuart,
+              builder: (context, val, child) {
+                return Text(
+                  valueFormatter(val),
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white,
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 5),
@@ -1041,6 +1126,37 @@ class GradientSummaryCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// --- CLASE AYUDANTE PARA DETECTAR EL SCROLL ---
+class _VisibilityAnimator extends StatefulWidget {
+  final String id;
+  final Widget Function(BuildContext context, bool isVisible) builder;
+
+  const _VisibilityAnimator({required this.id, required this.builder});
+
+  @override
+  __VisibilityAnimatorState createState() => __VisibilityAnimatorState();
+}
+
+class __VisibilityAnimatorState extends State<_VisibilityAnimator> {
+  bool _isVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return VisibilityDetector(
+      key: Key(widget.id),
+      onVisibilityChanged: (info) {
+        if (!_isVisible && info.visibleFraction > 0.05) {
+          // Se activa cuando se ve al menos un 5%
+          setState(() {
+            _isVisible = true;
+          });
+        }
+      },
+      child: widget.builder(context, _isVisible),
     );
   }
 }

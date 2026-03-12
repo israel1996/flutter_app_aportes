@@ -34,6 +34,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   open_filex: ^4.7.0
+  visibility_detector: ^0.4.0+2
 
 dev_dependencies:
   flutter_test:
