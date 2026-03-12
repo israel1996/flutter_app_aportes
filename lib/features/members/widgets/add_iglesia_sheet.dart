@@ -14,7 +14,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../sync/services/sync_service.dart';
 
 class AddIglesiaSheet extends ConsumerStatefulWidget {
-  final Iglesia? iglesiaParaEditar; // Parameter to know if we are editing
+  final Iglesia? iglesiaParaEditar;
 
   const AddIglesiaSheet({super.key, this.iglesiaParaEditar});
 
@@ -44,7 +44,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
   @override
   void initState() {
     super.initState();
-    // If we are editing, preload the data
     _nombreController = TextEditingController(
       text: widget.iglesiaParaEditar?.nombre ?? '',
     );
@@ -69,16 +68,13 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
       setState(() => _isSaving = true);
 
-      // Capture the navigator BEFORE async operations
       final navigator = Navigator.of(context);
-
       final database = ref.read(databaseProvider);
       final authService = ref.read(authServiceProvider);
       final userId = authService.currentUser?.id ?? '';
 
       try {
         if (widget.iglesiaParaEditar == null) {
-          // MODE: CREATE NEW
           final newId = const Uuid().v4();
 
           final nuevaIglesia = IglesiasCompanion.insert(
@@ -92,33 +88,28 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
             syncStatus: const drift.Value(0),
           );
 
-          // 1. Insert locally
           await database.into(database.iglesias).insert(nuevaIglesia);
 
           final iglesiaGuardada = await (database.select(
             database.iglesias,
           )..where((tbl) => tbl.id.equals(newId))).getSingle();
 
-          // 2. Update UI instantly
           ref.read(currentIglesiaProvider.notifier).state = iglesiaGuardada;
 
-          // 3. FORCE SYNC AND WAIT BEFORE UPDATING PREFERENCE
           final syncService = SyncService(database);
           await syncService.syncAll().catchError(
             (e) => debugPrint("Background sync failed: $e"),
           );
 
-          // 4. SAFELY UPDATE CLOUD PREFERENCE
           try {
             await Supabase.instance.client
                 .from('usuarios_app')
                 .update({'ultima_iglesia_id': newId})
                 .eq('id', userId);
           } catch (e) {
-            debugPrint('Preference update skipped (offline/sync delay): $e');
+            debugPrint('Preference update skipped: $e');
           }
         } else {
-          // MODE: EDIT EXISTING
           await database
               .update(database.iglesias)
               .replace(
@@ -132,14 +123,12 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                 ),
               );
 
-          // Attempt background sync
           final syncService = SyncService(database);
           syncService.syncAll().catchError(
             (e) => debugPrint("Background sync failed: $e"),
           );
         }
 
-        // Close window safely
         navigator.pop();
         CustomSnackBar.showSuccess(
           context,
@@ -177,7 +166,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
     final database = ref.read(databaseProvider);
 
-    // 1. SAFEGUARD: Check if there are linked parishioners
     final feligresesVinculados =
         await (database.select(database.feligreses)..where(
               (tbl) => tbl.iglesiaId.equals(widget.iglesiaParaEditar!.id),
@@ -186,34 +174,231 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
 
     if (feligresesVinculados.isNotEmpty) {
       if (mounted) {
-        CustomSnackBar.showWarning(
-          context,
-          'No se puede eliminar. Hay ${feligresesVinculados.length} feligrés(es) vinculado(s) a esta sede. Transfiérelos o elimínalos primero.',
+        showDialog(
+          context: context,
+          builder: (context) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final colorScheme = Theme.of(context).colorScheme;
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                ), // Constraint added here
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withOpacity(isDark ? 0.4 : 0.2),
+                      blurRadius: 20,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                  border: isDark
+                      ? Border.all(
+                          color: Colors.orange.withOpacity(0.3),
+                          width: 1,
+                        )
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        boxShadow: isDark
+                            ? [
+                                BoxShadow(
+                                  color: Colors.orange.withOpacity(0.2),
+                                  blurRadius: 10,
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                        size: 40,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Acción Denegada',
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No se puede eliminar esta sede porque tiene ${feligresesVinculados.length} feligrés(es) vinculado(s).',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.grey,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 45,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'ENTENDIDO',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       }
       return;
     }
 
-    // 2. CONFIRMATION DIALOG
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('¿Eliminar Sede?'),
-        content: const Text(
-          'Esta acción eliminará la iglesia de forma permanente. ¿Desea continuar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final colorScheme = Theme.of(context).colorScheme;
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 400,
+            ), // Constraint added here
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.redAccent.withOpacity(isDark ? 0.4 : 0.2),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+              border: isDark
+                  ? Border.all(
+                      color: Colors.redAccent.withOpacity(0.3),
+                      width: 1,
+                    )
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    boxShadow: isDark
+                        ? [
+                            BoxShadow(
+                              color: Colors.redAccent.withOpacity(0.2),
+                              blurRadius: 10,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: const Icon(
+                    Icons.delete_forever_rounded,
+                    color: Colors.redAccent,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  '¿Eliminar Sede?',
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Esta acción eliminará la iglesia de forma permanente y no se podrá deshacer.\n\n¿Desea continuar?',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: Colors.grey,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(
+                          'Cancelar',
+                          style: GoogleFonts.poppins(
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () => Navigator.pop(context, true),
+                        child: Text(
+                          'ELIMINAR',
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+        );
+      },
     );
 
     if (confirm != true) return;
@@ -221,7 +406,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
     setState(() => _isSaving = true);
 
     try {
-      // 1. Check internet connection
       final connectivity = await Connectivity().checkConnectivity();
       final hasInternet =
           connectivity.contains(ConnectivityResult.mobile) ||
@@ -234,7 +418,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
         );
       }
 
-      // 2. DELTA SYNC FLAG: Soft delete from Supabase FIRST
       final supabase = Supabase.instance.client;
       await supabase
           .from('iglesias')
@@ -244,25 +427,20 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
           })
           .eq('id', widget.iglesiaParaEditar!.id);
 
-      // 3. Hard delete from local SQLite
       await (database.delete(
         database.iglesias,
       )..where((tbl) => tbl.id.equals(widget.iglesiaParaEditar!.id))).go();
 
-      // 4. If the user deleted the church they currently had selected, reset the state
       final currentSelected = ref.read(currentIglesiaProvider);
       if (currentSelected?.id == widget.iglesiaParaEditar!.id) {
         ref.read(currentIglesiaProvider.notifier).state = null;
       }
 
-      if (mounted) Navigator.pop(context);
-
-      ref.read(currentIglesiaProvider.notifier).state = null;
-
-      if (mounted)
+      if (mounted) {
+        Navigator.pop(context);
         CustomSnackBar.showWarning(context, 'Sede eliminada con éxito');
+      }
 
-      // 5. Trigger background sync
       Future.microtask(() {
         final authService = ref.read(authServiceProvider);
         if (authService.currentUser != null) {
@@ -317,8 +495,7 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (widget.iglesiaParaEditar !=
-                        null) // Close button only if not mandatory
+                    if (widget.iglesiaParaEditar != null)
                       IconButton(
                         icon: const Icon(Icons.close),
                         onPressed: () => Navigator.pop(context),
@@ -327,7 +504,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                 ),
                 const SizedBox(height: 20),
 
-                // Name (Required)
                 TextFormField(
                   controller: _nombreController,
                   decoration: InputDecoration(
@@ -343,7 +519,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                 ),
                 const SizedBox(height: 24),
 
-                // Aesthetic District Selector (Wrap with Chips)
                 Text(
                   'Distrito Asignado *',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
@@ -384,7 +559,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                 ),
                 const SizedBox(height: 24),
 
-                // Category (Optional)
                 DropdownButtonFormField<String>(
                   value: _categoriaSeleccionada,
                   decoration: InputDecoration(
@@ -402,7 +576,6 @@ class _AddIglesiaSheetState extends ConsumerState<AddIglesiaSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // Dates (Optional)
                 Row(
                   children: [
                     Expanded(
