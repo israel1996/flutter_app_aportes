@@ -320,9 +320,10 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
           return Column(
             children: [
               Container(
-                padding: const EdgeInsets.only(
-                  left: 20,
-                  right: 20,
+                // FIX 2: ALIGN MARGIN TO 16 ON MOBILE
+                padding: EdgeInsets.only(
+                  left: isDesktop ? 20 : 16,
+                  right: isDesktop ? 20 : 16,
                   bottom: 16,
                   top: 10,
                 ),
@@ -823,14 +824,14 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.only(
+                        padding: EdgeInsets.only(
                           bottom: 80,
                           top: 16,
-                          left: 16,
-                          right: 16,
+                          left: isDesktop ? 20 : 16,
+                          right: isDesktop ? 20 : 16,
                         ),
                         itemCount: paginatedList.length,
-                        itemExtent: 95.0, // <-- OPTIMIZACIÓN DE RENDIMIENTO
+                        // ITEM EXTENT REMOVED to allow dynamic height for long names
                         itemBuilder: (context, index) {
                           final member = paginatedList[index];
                           return Container(
@@ -848,85 +849,107 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
                                 ),
                               ],
                             ),
-                            child: ListTile(
-                              onTap: () => showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (context) =>
-                                    EditFeligresSheet(feligres: member),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              leading: CircleAvatar(
-                                backgroundColor: _showDeleted
-                                    ? Colors.orangeAccent.withOpacity(0.1)
-                                    : colorScheme.primary.withOpacity(0.1),
-                                child: Icon(
-                                  Icons.person,
-                                  color: _showDeleted
-                                      ? Colors.orange
-                                      : colorScheme.primary,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (context) =>
+                                      EditFeligresSheet(feligres: member),
                                 ),
-                              ),
-                              title: Text(
-                                member.nombre,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      member.telefono ?? 'Sin teléfono',
-                                      style: GoogleFonts.poppins(
-                                        color: Colors.grey,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      member.fechaModificacion != null
-                                          ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaModificacion!)}'
-                                          : member.fechaRegistro != null
-                                          ? 'Creado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaRegistro!)}'
-                                          : 'Creado: Desc.',
-                                      style: GoogleFonts.poppins(
-                                        color: colorScheme.primary.withOpacity(
-                                          0.7,
+                                borderRadius: BorderRadius.circular(16),
+                                // FIX 3: PERFECT VERTICAL CENTERING WITH CUSTOM ROW
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: _showDeleted
+                                            ? Colors.orangeAccent.withOpacity(
+                                                0.1,
+                                              )
+                                            : colorScheme.primary.withOpacity(
+                                                0.1,
+                                              ),
+                                        child: Icon(
+                                          Icons.person,
+                                          color: _showDeleted
+                                              ? Colors.orange
+                                              : colorScheme.primary,
                                         ),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              member.nombre,
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                                color: colorScheme.onSurface,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              member.telefono ?? 'Sin teléfono',
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.grey,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              member.fechaModificacion != null
+                                                  ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaModificacion!)}'
+                                                  : member.fechaRegistro != null
+                                                  ? 'Creado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(member.fechaRegistro!)}'
+                                                  : 'Creado: Desc.',
+                                              style: GoogleFonts.poppins(
+                                                color: colorScheme.primary
+                                                    .withOpacity(0.7),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            member.tipoFeligres ?? 'Feligres',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              color: colorScheme.primary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Icon(
+                                            Icons.edit_outlined,
+                                            size: 18,
+                                            color: Colors.grey.withOpacity(0.5),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    member.tipoFeligres ?? 'Feligres',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Icon(
-                                    Icons.edit_outlined,
-                                    size: 18,
-                                    color: Colors.grey.withOpacity(0.5),
-                                  ),
-                                ],
                               ),
                             ),
                           );
@@ -935,11 +958,11 @@ class _FeligresesScreenState extends ConsumerState<FeligresesScreen> {
               ),
               if (filteredMembers.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.only(
+                  padding: EdgeInsets.only(
                     top: 12,
                     bottom: 24,
-                    left: 20,
-                    right: 20,
+                    left: isDesktop ? 20 : 16,
+                    right: isDesktop ? 20 : 16,
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,

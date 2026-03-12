@@ -562,7 +562,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                        // --- FIX 1: PADDING IS 0 ON MOBILE TO ALLOW FULL WIDTH ---
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isDesktop ? 32.0 : 0.0,
+                        ),
                         child: currentIglesia == null
                             ? Center(
                                 child: Column(
@@ -613,7 +616,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                   ],
                                 ),
                               )
-                            // --- OPTIMIZACIÓN 1: INDEXED STACK ---
                             : IndexedStack(
                                 index: selectedIndex < pages.length
                                     ? selectedIndex
@@ -701,7 +703,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildActionButtons(ColorScheme colorScheme, bool isDark) {
     return Row(
       children: [
-        // --- OPTIMIZACIÓN 2: REPAINT BOUNDARY ---
         RepaintBoundary(
           child: Container(
             margin: const EdgeInsets.only(right: 16),

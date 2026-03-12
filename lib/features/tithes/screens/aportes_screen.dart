@@ -202,9 +202,10 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
           return Column(
             children: [
               Container(
-                padding: const EdgeInsets.only(
-                  left: 20,
-                  right: 20,
+                // FIX 2: ALIGN MARGIN TO 16 ON MOBILE
+                padding: EdgeInsets.only(
+                  left: isDesktop ? 20 : 16,
+                  right: isDesktop ? 20 : 16,
                   bottom: 16,
                   top: 10,
                 ),
@@ -474,14 +475,14 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                         ),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.only(
+                        padding: EdgeInsets.only(
                           bottom: 80,
                           top: 16,
-                          left: 16,
-                          right: 16,
+                          left: isDesktop ? 20 : 16,
+                          right: isDesktop ? 20 : 16,
                         ),
                         itemCount: paginatedList.length,
-                        itemExtent: 95.0, // <-- OPTIMIZACIÓN DE RENDIMIENTO
+                        // ITEM EXTENT REMOVED to allow dynamic height for long names
                         itemBuilder: (context, index) {
                           final item = paginatedList[index];
                           return Container(
@@ -497,69 +498,89 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
                                 ),
                               ],
                             ),
-                            child: ListTile(
-                              onTap: () => showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (context) =>
-                                    EditAporteSheet(aporteItem: item),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              leading: CircleAvatar(
-                                backgroundColor: colorScheme.secondary
-                                    .withOpacity(0.1),
-                                child: Icon(
-                                  Icons.monetization_on,
-                                  color: colorScheme.secondary,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (context) =>
+                                      EditAporteSheet(aporteItem: item),
                                 ),
-                              ),
-                              title: Text(
-                                item.feligres.nombre,
-                                style: GoogleFonts.poppins(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Aporte del: ${DateFormat('dd MMM yyyy').format(item.aporte.fecha)} • ${item.aporte.tipo}',
-                                      style: GoogleFonts.poppins(
-                                        color: Colors.grey,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.aporte.fechaModificacion != null
-                                          ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaModificacion!)}'
-                                          : item.aporte.fechaRegistro != null
-                                          ? 'Registrado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaRegistro!)}'
-                                          : 'Registrado: Desc.',
-                                      style: GoogleFonts.poppins(
-                                        color: colorScheme.primary.withOpacity(
-                                          0.7,
+                                borderRadius: BorderRadius.circular(16),
+                                // FIX 3: PERFECT VERTICAL CENTERING WITH CUSTOM ROW
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: colorScheme.secondary
+                                            .withOpacity(0.1),
+                                        child: Icon(
+                                          Icons.monetization_on,
+                                          color: colorScheme.secondary,
                                         ),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              trailing: Text(
-                                _currencyFormat.format(item.aporte.monto),
-                                style: GoogleFonts.montserrat(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: colorScheme.secondary,
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item.feligres.nombre,
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Aporte del: ${DateFormat('dd MMM yyyy').format(item.aporte.fecha)} • ${item.aporte.tipo}',
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.grey,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              item.aporte.fechaModificacion !=
+                                                      null
+                                                  ? 'Modificado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaModificacion!)}'
+                                                  : item.aporte.fechaRegistro !=
+                                                        null
+                                                  ? 'Registrado: ${DateFormat('dd MMM yy, hh:mm a', 'es').format(item.aporte.fechaRegistro!)}'
+                                                  : 'Registrado: Desc.',
+                                              style: GoogleFonts.poppins(
+                                                color: colorScheme.primary
+                                                    .withOpacity(0.7),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        _currencyFormat.format(
+                                          item.aporte.monto,
+                                        ),
+                                        style: GoogleFonts.montserrat(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: colorScheme.secondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -571,11 +592,11 @@ class _AportesScreenState extends ConsumerState<AportesScreen> {
               // --- PAGINATION COMPACTA ---
               if (filtered.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.only(
+                  padding: EdgeInsets.only(
                     top: 12,
                     bottom: 24,
-                    left: 20,
-                    right: 20,
+                    left: isDesktop ? 20 : 16,
+                    right: isDesktop ? 20 : 16,
                   ),
                   decoration: BoxDecoration(
                     color: colorScheme.surface,
