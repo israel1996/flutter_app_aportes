@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // Added localization import
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -33,17 +33,13 @@ class MyApp extends ConsumerWidget {
       darkTheme: darkTheme,
       themeMode: themeMode,
 
-      // --- ADDED LOCALIZATION DELEGATES FOR SPANISH CALENDARS ---
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('es', 'ES'), // Force Spanish
-      ],
+      supportedLocales: const [Locale('es', 'ES')],
 
-      // ---------------------------------------------------------
       home: authStateAsync.when(
         data: (state) {
           final session = state.session;
@@ -55,8 +51,20 @@ class MyApp extends ConsumerWidget {
         },
         loading: () =>
             const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (err, stack) =>
-            Scaffold(body: Center(child: Text('Error: $err'))),
+        error: (err, stack) {
+          debugPrint('Auth Stream Error (Offline Mode Triggered): $err');
+          
+          // --- OFFLINE FALLBACK LOGIC ---
+          // If the token refresh fails due to no internet, check if we still 
+          // have a user cached locally. If yes, let them in offline.
+          final currentUser = Supabase.instance.client.auth.currentUser;
+          
+          if (currentUser != null) {
+            return const HomeScreen(); 
+          } else {
+            return const LoginScreen(); 
+          }
+        },
       ),
     );
   }

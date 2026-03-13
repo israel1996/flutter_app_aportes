@@ -107,17 +107,22 @@ class _ReportesSecretariaScreenState
       s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
 
   Color _getCategoryColor(String categoryName, ColorScheme colorScheme) {
+    // --- SOLUCIÓN DEL COLOR: Ahora también reemplazamos correctamente á, ó, ú ---
     final normalized = categoryName
         .toLowerCase()
+        .replaceAll('á', 'a')
         .replaceAll('é', 'e')
         .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
         .trim();
+
     final Map<String, Color> colors = {
       'soltero(a)': const Color(0xFF00C9FF),
       'casado(a)': const Color(0xFFFF007F),
       'divorciado(a)': Colors.orangeAccent,
       'viudo(a)': Colors.purpleAccent,
-      'union libre': Colors.greenAccent,
+      'union libre': Colors.greenAccent, // Ahora sí coincidirá
       'masculino': Colors.blueAccent,
       'femenino': Colors.pinkAccent,
       'feligres': const Color(0xFF00C9FF),
@@ -612,7 +617,6 @@ class _ReportesSecretariaScreenState
       }
     }
 
-    // PDF EXPORT THEME FORCING
     final effectiveIsDark = _isExportingChart ? false : isDark;
     final chartBgColor = effectiveIsDark
         ? const Color(0xFF1E1E2C)
@@ -631,7 +635,7 @@ class _ReportesSecretariaScreenState
     Widget buildDynamicChart() {
       if (displayList.isEmpty) return const Center(child: Text('Sin datos'));
 
-      // 1. PIE & DONUT CHARTS (Civil Status, Gender, Discapacidad)
+      // 1. PIE CHARTS (Solo para variables dicotómicas como Género o Discapacidad)
       if (_groupingMode == 1 || _groupingMode == 2 || _groupingMode == 6) {
         return Column(
           children: [
@@ -639,7 +643,8 @@ class _ReportesSecretariaScreenState
               child: PieChart(
                 PieChartData(
                   sectionsSpace: 2,
-                  centerSpaceRadius: _groupingMode == 1 ? 40 : 0,
+                  // Efecto Dona (hueco en el centro) solo para Estado Civil
+                  centerSpaceRadius: _groupingMode == 1 ? 50 : 0,
                   sections: displayList.map((item) {
                     final double percentage =
                         (item['count'] / data.length) * 100;
@@ -652,7 +657,7 @@ class _ReportesSecretariaScreenState
                       color: categoryColor,
                       title:
                           '${item['count']}\n(${percentage.toStringAsFixed(1)}%)',
-                      radius: _groupingMode == 1 ? 60 : 90,
+                      radius: _groupingMode == 1 ? 55 : 90, // Grosor de la dona
                       titleStyle: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -699,7 +704,7 @@ class _ReportesSecretariaScreenState
           ],
         );
       }
-      // 3. VERTICAL BAR CHART (Membership)
+      // 2. VERTICAL BAR CHART (Membership)
       else if (_groupingMode == 3) {
         return BarChart(
           BarChartData(
@@ -785,70 +790,74 @@ class _ReportesSecretariaScreenState
           ),
         );
       }
-      // 4. HORIZONTAL CUSTOM BAR CHART (Spiritual Status)
-      else if (_groupingMode == 4) {
-        return Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: displayList.map((item) {
-            double pct = data.isEmpty
-                ? 0
-                : (item['count'] as int) / data.length;
-            Color barColor = _getCategoryColor(item['name'], colorScheme);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        item['name'],
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: textColor,
+      // 3. HORIZONTAL CUSTOM BAR CHART (Spiritual Status & ESTADO CIVIL)
+      else if (_groupingMode == 4 || _groupingMode == 1) {
+        // --- SOLUCIÓN DE REEMPLAZO A BARRAS
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: displayList.map((item) {
+              double pct = data.isEmpty
+                  ? 0
+                  : (item['count'] as int) / data.length;
+              Color barColor = _getCategoryColor(item['name'], colorScheme);
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          item['name'],
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: textColor,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${item['count']} (${(pct * 100).toStringAsFixed(1)}%)',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: barColor,
+                        Text(
+                          '${item['count']} (${(pct * 100).toStringAsFixed(1)}%)',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: barColor,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Stack(
-                    children: [
-                      Container(
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: gridColor,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: pct,
-                        child: Container(
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Stack(
+                      children: [
+                        Container(
                           height: 14,
                           decoration: BoxDecoration(
-                            color: barColor,
+                            color: gridColor,
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                        FractionallySizedBox(
+                          widthFactor: pct,
+                          child: Container(
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: barColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
         );
       }
-      // 5. AREA LINE CHART (Generations / Age Ranges)
+      // 4. AREA LINE CHART (Generations / Age Ranges)
       else {
         List<FlSpot> spots = [];
         for (int i = 0; i < displayList.length; i++) {
