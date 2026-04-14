@@ -53,16 +53,12 @@ class MyApp extends ConsumerWidget {
             const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (err, stack) {
           debugPrint('Auth Stream Error (Offline Mode Triggered): $err');
-          
-          // --- OFFLINE FALLBACK LOGIC ---
-          // If the token refresh fails due to no internet, check if we still 
-          // have a user cached locally. If yes, let them in offline.
           final currentUser = Supabase.instance.client.auth.currentUser;
-          
+
           if (currentUser != null) {
-            return const HomeScreen(); 
+            return const HomeScreen();
           } else {
-            return const LoginScreen(); 
+            return const LoginScreen();
           }
         },
       ),

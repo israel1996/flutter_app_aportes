@@ -15,14 +15,14 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
   ThemeModeNotifier.new,
 );
 
-// 2. MODERN DARK THEME (Neon/Cyberpunk)
+// Tema oscuro
 final darkTheme = ThemeData(
   brightness: Brightness.dark,
   scaffoldBackgroundColor: const Color(0xFF151521),
   colorScheme: const ColorScheme.dark(
-    primary: Color(0xFF00C9FF), // Neon Cyan
-    secondary: Color(0xFFFF4081), // Neon Pink
-    surface: Color(0xFF1E1E2C), // Panel color
+    primary: Color(0xFF00C9FF),
+    secondary: Color(0xFFFF4081),
+    surface: Color(0xFF1E1E2C),
     onSurface: Colors.white,
   ),
   textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
@@ -47,13 +47,13 @@ final darkTheme = ThemeData(
   ),
 );
 
-// 3. CLEAN LIGHT THEME (Minimalist/Corporate)
+// Tema claro
 final lightTheme = ThemeData(
   brightness: Brightness.light,
   scaffoldBackgroundColor: const Color(0xFFF4F5F9),
   colorScheme: const ColorScheme.light(
-    primary: Color(0xFF3F51B5), // Deep Indigo
-    secondary: Color(0xFFE91E63), // Pink
+    primary: Color(0xFF3F51B5),
+    secondary: Color(0xFFE91E63),
     surface: Colors.white,
     onSurface: Color(0xFF2D3142),
   ),

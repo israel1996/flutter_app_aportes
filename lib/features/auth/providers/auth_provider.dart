@@ -23,10 +23,6 @@ final userRoleProvider = FutureProvider.autoDispose<String>((ref) async {
         .eq('id', user.id)
         .single();
 
-    if (data['estado'] == 'requiere_cambio_clave') {
-      return 'requiere_cambio_clave';
-    }
-
     return data['rol'] as String;
   } catch (e) {
     return 'usuario';

@@ -46,7 +46,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final email = _emailController.text.trim();
 
-      // --- PRE-VALIDACIÓN CON MODAL ESTILIZADO Y RESTRINGIDO EN TAMAÑO ---
       final estado = await Supabase.instance.client.rpc(
         'obtener_estado_usuario',
         params: {'correo': email},
@@ -72,9 +71,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 backgroundColor: colorScheme.surface,
                 elevation: 8,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 420,
-                  ), // <-- ESTO EVITA QUE OCUPE TODA LA PANTALLA EN DESKTOP
+                  constraints: const BoxConstraints(maxWidth: 420),
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
@@ -217,7 +214,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
         return;
       }
-      // -----------------------------------------------------------
 
       final authService = ref.read(authServiceProvider);
       await authService.signIn(email, _passwordController.text.trim());
@@ -233,13 +229,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             await prefs.setInt(
               'login_lockout_time',
               DateTime.now()
-                  .add(const Duration(minutes: 15))
+                  .add(const Duration(minutes: 3))
                   .millisecondsSinceEpoch,
             );
             await prefs.setInt('login_failed_attempts', 0);
             CustomSnackBar.showError(
               context,
-              'Demasiados intentos. Cuenta bloqueada por 15 minutos.',
+              'Demasiados intentos. Cuenta bloqueada por 3 minutos.',
             );
           } else {
             await prefs.setInt('login_failed_attempts', attempts);

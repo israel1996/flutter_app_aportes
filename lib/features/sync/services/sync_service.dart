@@ -44,10 +44,6 @@ class SyncService {
     });
   }
 
-  // =========================================================================
-  // PUSH PHASE - EL SERVIDOR (SUPABASE) SE ENCARGA DE LAS FECHAS DE REGISTRO
-  // =========================================================================
-
   Future<void> _pushLocalChanges() async {
     await _pushIglesias();
     await _pushFeligreses();
@@ -70,7 +66,6 @@ class SyncService {
           'fecha_salida': local.fechaSalida?.toUtc().toIso8601String(),
           'user_id': _supabase.auth.currentUser!.id,
           'is_deleted': false,
-          // created_at y updated_at son generados por Supabase
         });
 
         await (database.update(database.iglesias)
@@ -104,8 +99,7 @@ class SyncService {
           'bautizado_espiritu': local.bautizadoEspiritu,
           'tipo_feligres': local.tipoFeligres,
           'activo': local.activo,
-          'is_deleted': false, // Asegurar que al pushear sea false
-          // created_at y updated_at son generados por Supabase
+          'is_deleted': false,
         });
 
         await (database.update(database.feligreses)

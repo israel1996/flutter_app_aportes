@@ -6,7 +6,6 @@ class AuthService {
   User? get currentUser => _supabase.auth.currentUser;
 
   Future<AuthResponse> signIn(String email, String password) async {
-    // Ya no verificamos el estado aquí, el LoginScreen lo hará antes de llamar a esta función.
     return await _supabase.auth.signInWithPassword(
       email: email,
       password: password,
